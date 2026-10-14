@@ -1,0 +1,27 @@
+ALTER TYPE "public"."InventoryMovementKind" ADD VALUE 'RETURN_RECEIPT';
+ALTER TYPE "public"."LedgerEntryKind" ADD VALUE 'SALES_RETURN';
+ALTER TYPE "public"."LedgerEntryKind" ADD VALUE 'CASH_REFUND';
+CREATE TYPE "public"."CustomerReturnState" AS ENUM ('REQUESTED','APPROVED','RECEIVED','COMPLETED');
+CREATE TYPE "public"."CreditNoteState" AS ENUM ('DRAFT','POSTED','VOID');
+CREATE TYPE "public"."CustomerRefundState" AS ENUM ('REQUESTED','POSTED','VOID');
+
+CREATE TABLE "public"."customer_returns" ("id" UUID NOT NULL,"company_id" UUID NOT NULL,"customer_id" UUID NOT NULL,"sales_invoice_id" UUID,"state" "public"."CustomerReturnState" NOT NULL DEFAULT 'REQUESTED',"reason" TEXT NOT NULL,"idempotency_key" TEXT NOT NULL,"created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,"created_by_id" UUID NOT NULL,CONSTRAINT "customer_returns_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "customer_returns_company_idempotency_key_key" ON "public"."customer_returns"("company_id","idempotency_key");
+CREATE TABLE "public"."customer_return_lines" ("id" UUID NOT NULL,"customer_return_id" UUID NOT NULL,"delivery_receipt_line_id" UUID NOT NULL,"quantity" DECIMAL(24,10) NOT NULL,"unit_price" DECIMAL(24,8) NOT NULL,"quarantine_locator_id" UUID NOT NULL,"batch_no" TEXT NOT NULL,CONSTRAINT "customer_return_lines_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "customer_return_lines_return_receipt_line_key" ON "public"."customer_return_lines"("customer_return_id","delivery_receipt_line_id");
+CREATE TABLE "public"."credit_notes" ("id" UUID NOT NULL,"company_id" UUID NOT NULL,"customer_return_id" UUID NOT NULL,"sales_invoice_id" UUID NOT NULL,"number" TEXT NOT NULL,"amount" DECIMAL(24,8) NOT NULL,"state" "public"."CreditNoteState" NOT NULL DEFAULT 'DRAFT',"created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,"posted_at" TIMESTAMPTZ(6),CONSTRAINT "credit_notes_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "credit_notes_company_number_key" ON "public"."credit_notes"("company_id","number");
+CREATE UNIQUE INDEX "credit_notes_return_key" ON "public"."credit_notes"("customer_return_id");
+CREATE TABLE "public"."customer_refunds" ("id" UUID NOT NULL,"company_id" UUID NOT NULL,"credit_note_id" UUID NOT NULL,"amount" DECIMAL(24,8) NOT NULL,"state" "public"."CustomerRefundState" NOT NULL DEFAULT 'REQUESTED',"idempotency_key" TEXT NOT NULL,"created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "customer_refunds_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "customer_refunds_company_idempotency_key_key" ON "public"."customer_refunds"("company_id","idempotency_key");
+ALTER TABLE "public"."customer_returns" ADD CONSTRAINT "customer_returns_company_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."customer_returns" ADD CONSTRAINT "customer_returns_customer_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."customer_returns" ADD CONSTRAINT "customer_returns_invoice_fkey" FOREIGN KEY ("sales_invoice_id") REFERENCES "public"."sales_invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."customer_return_lines" ADD CONSTRAINT "customer_return_lines_return_fkey" FOREIGN KEY ("customer_return_id") REFERENCES "public"."customer_returns"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."customer_return_lines" ADD CONSTRAINT "customer_return_lines_receipt_line_fkey" FOREIGN KEY ("delivery_receipt_line_id") REFERENCES "public"."delivery_receipt_lines"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."customer_return_lines" ADD CONSTRAINT "customer_return_lines_locator_fkey" FOREIGN KEY ("quarantine_locator_id") REFERENCES "public"."locators"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."credit_notes" ADD CONSTRAINT "credit_notes_company_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."credit_notes" ADD CONSTRAINT "credit_notes_return_fkey" FOREIGN KEY ("customer_return_id") REFERENCES "public"."customer_returns"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."credit_notes" ADD CONSTRAINT "credit_notes_invoice_fkey" FOREIGN KEY ("sales_invoice_id") REFERENCES "public"."sales_invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."customer_refunds" ADD CONSTRAINT "customer_refunds_company_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."customer_refunds" ADD CONSTRAINT "customer_refunds_credit_note_fkey" FOREIGN KEY ("credit_note_id") REFERENCES "public"."credit_notes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

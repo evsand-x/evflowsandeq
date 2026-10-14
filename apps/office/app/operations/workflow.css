@@ -1,0 +1,89 @@
+.otc-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.otc-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 16px;
+}
+.otc-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-block: 20px;
+}
+.otc-kpis strong {
+  font-size: 24px;
+  font-weight: 600;
+}
+.otc-summary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.otc-workspace [data-slot="tabs-content"] {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+@media (max-width: 720px) {
+  .otc-form-grid,
+  .otc-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.otc-workspace .crm-actions [data-slot="button"] {
+  min-height: 40px;
+}
+.otc-workspace .web-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.otc-workspace [data-slot="card"] {
+  border-radius: var(--ev-radius-card);
+  box-shadow: none;
+}
+.otc-workspace [data-slot="card-content"] {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.otc-workspace .crm-table-toolbar input {
+  max-width: 360px;
+}
+.otc-evidence {
+  max-width: min(100%, 640px);
+  max-height: 640px;
+  object-fit: contain;
+  margin-top: 16px;
+}
+.otc-document {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.otc-document dt {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.otc-document dd {
+  margin-left: 16px;
+  overflow-wrap: anywhere;
+}
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .otc-printable,
+  .otc-printable * {
+    visibility: visible;
+  }
+  .otc-printable {
+    position: absolute;
+    inset: 0;
+    padding: 24px;
+  }
+}

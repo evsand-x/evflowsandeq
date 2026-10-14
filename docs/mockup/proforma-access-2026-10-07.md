@@ -1,0 +1,21 @@
+# Akses Proforma — 7 Oktober 2026
+
+Pengguna meminta melengkapi akses Proforma. OTC-05/APP-03: tambah Sales & Marketing → Pesanan Pelanggan → Proforma, daftar lintas SO yang dapat dicari nomor Proforma/SO/pelanggan, pagination, detail/cetak dan kembali ke daftar atau SO sumber. Data berasal dari dokumen alokasi yang telah diterbitkan; tidak membuat Proforma manual. Izin sales_order.read dan scope company tetap otoritatif. Tidak mengubah schema, stok, keuangan atau command penerbitan. API read-only daftar/detail, Office TanStack Query/Table dan tema bersama. QA: daftar/detail/search/empty/back-navigation, typecheck/lint/validator dan scope/permission endpoint.
+
+QA: API direstart oleh pengguna setelah backend build. Browser menampilkan empat Proforma nyata, pencarian Nusantara dan DEV-SO-2026-000008 menghasilkan dokumen 000004, pencarian tidak cocok menghasilkan empty state. Detail 000004 menampilkan jumlah 76, subtotal 19.000.000, pajak 2.090.000, total 21.090.000 dari snapshot; tautan daftar kembali benar. Empat unit test akses lulus (izin kosong/scope sempit/perusahaan lain ditolak, baca sales tanpa warehouse diterima, permission detail, filter company+kind). Office/backend typecheck, backend build, ESLint, formatting dan validator lulus. Tidak ada migration/mutasi transaksi. Preview cetak OS dan paging lebih dari 25 dokumen belum diuji karena data lokal hanya empat dokumen. Stack Query/Table, shared tokens dan komponen Office digunakan; Sonner tidak relevan untuk aksi read-only.
+
+## Tinjau Proforma sebagai halaman penuh
+
+Keputusan pengguna: ganti modal dengan halaman detail seperti SO/Invoice, desktop Office. Route `/operations/orders/:orderId/proforma/:batchId`; tombol hijau tetap di toolbar SO. OTC-05/APP-03: gunakan preview backend, izin proforma.issue, version dan idempotency saat penerbitan. Cakupan: informasi SO/pelanggan, produk teralokasi, ringkasan nilai, kembali, muat ulang, terbitkan/buka dokumen yang sudah ada, loading/error/denied. Tidak mengubah aturan transaksi atau database. Query/Table dan komponen/token Office dipakai; Sonner untuk konfirmasi server. QA: navigasi nyata, preview existing, typecheck/lint/validator; tidak menerbitkan transaksi hanya untuk visual QA.
+
+Koreksi pengguna: tidak ada halaman tinjau terpisah. Tombol SO membuka workspace Detail Proforma lewat `/operations/proformas/from-order/:orderId/:batchId`. Mode belum terbit memakai data preview backend dan aksi Terbitkan; dokumen existing langsung diarahkan ke detail `/operations/proformas/:id` dengan aksi cetak. Modal dihapus. Izin, idempotency, dan version tetap dipertahankan. Office typecheck lulus.
+
+## Penyamaan Detail Proforma dengan Detail SO
+
+Pengguna meminta layout sama persis dengan Detail SO. Terapkan kelas bersama: header Detail Proforma, toolbar so-detail-actions, identitas so-detail-overview, informasi pelanggan dan tabel pada so-detail-main, nilai dan catatan pada so-detail-aside. Berlaku untuk detail diterbitkan dan belum terbit; isi tetap snapshot/preview backend. Tidak menambahkan tab pemenuhan atau riwayat fiktif. Kriteria: struktur dan ukuran panel sama pada desktop, tanpa modal, status/izin/cetak/penerbitan tetap berfungsi.
+
+## Ongkir terhubung SO–Proforma–Surat Jalan–Invoice — keputusan 7 Oktober 2026
+
+Keputusan pengguna: ongkir penjualan fleksibel dan terhubung lintas dokumen. Basis default per pengiriman; setiap Surat Jalan memiliki satu nilai ongkir yang menggantikan nilai sebelumnya saat diedit, tidak menambahkan nilai lama. SO menyimpan ketentuan awal/estimasi. Proforma dan Invoice meneruskan ongkir dari pengiriman terkait tanpa menggandakan charge. Pengguna meminta dua mode pajak ongkir: Tidak kena PPN dan Kena PPN; mode kena PPN harus memakai tax policy/rule snapshot backend, bukan tarif hardcode.
+
+Backend ongkir dibangun pada migration `20261007210000_sales_freight_backend`: SalesOrder menyimpan terms/estimasi, setiap FulfillmentBatch menyimpan satu nilai ongkir dan tax snapshot yang dapat diganti sebelum dispatch, dan Proforma/Invoice mewarisi snapshot shipment satu kali. Command memakai locking, idempotency, audit, validasi state dan tax rule aktif; UI tetap harus menampilkan nilai dari backend operasional dan tidak mengarang nilai.

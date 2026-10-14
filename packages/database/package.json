@@ -1,0 +1,36 @@
+{
+  "name": "@evflow/database",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "require": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@prisma/client": "6.16.2"
+  },
+  "devDependencies": {
+    "dotenv-cli": "8.0.0",
+    "prisma": "6.16.2",
+    "tsx": "4.20.5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "scripts": {
+    "generate": "dotenv -e ../../.env -- prisma generate",
+    "validate": "dotenv -e ../../.env -- prisma validate",
+    "migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
+    "migrate:create": "dotenv -e ../../.env -- prisma migrate dev --name foundation --create-only",
+    "migrate:sql": "dotenv -e ../../.env -- prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script",
+    "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "seed": "dotenv -e ../../.env -- prisma db seed",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

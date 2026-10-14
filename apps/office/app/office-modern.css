@@ -1,0 +1,110 @@
+/* Shared desktop surfaces across the operational Office modules. */
+.office-modern :is(.crm-content, .otc-workspace, .permission-matrix-main) {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.office-modern :is(.crm-content, .otc-workspace) [data-slot="card"],
+.office-modern [data-sidebar="inset"] > main [data-slot="card"] {
+  border-radius: var(--ev-radius-card);
+  border-color: hsl(var(--border));
+  box-shadow: 0 2px 4px #142c2003;
+}
+.office-modern .crm-table-panel {
+  border-radius: var(--ev-radius-card);
+  overflow: hidden;
+}
+.office-modern .crm-table-panel th {
+  background: hsl(var(--muted));
+  height: 44px;
+  padding-block: 12px;
+  font-size: 11px;
+}
+.office-modern .crm-table-panel td {
+  padding-block: 16px;
+  height: 64px;
+  font-size: 12px;
+}
+.office-modern .crm-table-panel tbody tr:hover {
+  background: hsl(var(--accent) / 0.45);
+}
+.office-modern .crm-table-toolbar {
+  padding: 20px 24px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.office-modern .crm-table-footer {
+  padding: 16px 24px;
+}
+.office-modern .crm-record-link strong {
+  font-weight: 600;
+}
+.office-modern :is(.crm-content, .otc-workspace) [data-slot="input-group"],
+.office-modern :is(.crm-content, .otc-workspace) [data-slot="select-trigger"] {
+  border-radius: var(--ev-radius-control);
+  min-height: 40px;
+}
+.office-modern .crm-kpis [data-slot="card"] {
+  padding: 24px;
+  min-height: 142px;
+}
+.office-modern .crm-subtitle {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.office-modern .crm-actions {
+  gap: 10px;
+}
+.office-modern .web-form [data-slot="card"] {
+  padding: 24px;
+}
+.office-modern :is(.web-form, .otc-workspace) [data-slot="field-label"] {
+  font-size: 12px;
+}
+.office-modern [data-slot="button"] {
+  border-radius: var(--ev-radius-control);
+}
+.office-modern [data-slot="button"][data-variant="outline"] {
+  color: hsl(var(--foreground));
+}
+.office-modern :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
+  border-radius: var(--ev-radius-control);
+}
+.office-modern
+  :is(
+    [data-slot="dialog-content"],
+    [data-slot="alert-dialog-content"],
+    [data-slot="popover-content"]
+  ) {
+  border-radius: var(--ev-radius-card);
+}
+.office-modern [data-slot="tabs-list"] {
+  background: hsl(var(--muted));
+  border-radius: 10px;
+  padding: 4px;
+}
+.office-modern [data-slot="tabs-trigger"] {
+  border-radius: 7px;
+}
+.office-modern [data-slot="tabs-trigger"][data-state="active"] {
+  color: hsl(var(--primary));
+  background: hsl(var(--card));
+}
+.office-modern .permission-matrix-main {
+  padding: 32px;
+}
+.office-modern .so-workspace {
+  padding: 32px 36px;
+}
+.office-modern .so-workspace [data-slot="card"] {
+  border-radius: var(--ev-radius-card);
+}
+.office-modern .so-workspace .crm-table-toolbar {
+  padding: 20px 24px;
+}
+.office-modern .so-workspace .so-kpis [data-slot="card"] {
+  min-height: 144px;
+}
+.office-modern .web-form :is(input, textarea):focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}

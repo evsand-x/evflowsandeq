@@ -1,0 +1,592 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  Headers,
+  Req,
+  Inject,
+  UseGuards,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from "@nestjs/common";
+import { z } from "zod";
+import { prisma } from "@evflow/database";
+import { AuthGuard } from "../identity/auth.guard";
+import { PermissionGuard } from "../identity/permission.guard";
+import { RequirePermissions } from "../identity/permissions.decorator";
+import type { AuthenticatedRequest } from "../identity/auth.types";
+import { OperationsService } from "./operations.service";
+import { previewProforma } from "./proforma";
+import { requestException, decideException, manageException } from "./exception-controls";
+import { OtcPtpService } from "../otc-ptp.service";
+import { processExceptionEvaluations } from "./exception-evaluation";
+import { shipmentSchema } from "@evflow/contracts";
+
+const uuid = (v: string) => z.string().uuid().parse(v);
+const key = (v?: string) => {
+  if (!v || v.length < 8 || v.length > 200)
+    throw new BadRequestException("Idempotency-Key wajib (8–200 karakter).");
+  return v;
+};
+const readPermission: Record<string, string> = {
+  WAREHOUSE_CONTROL: "fulfillment.read",
+  SALES_ORDER: "sales_order.read",
+  POD: "delivery_receipt.read",
+  PAYMENT: "customer_receipt.read",
+  TAX: "tax_component.read",
+};
+const writePermission: Record<string, string> = {
+  WAREHOUSE_CONTROL: "fulfillment.check",
+  SALES_ORDER: "sales_order.create",
+  POD: "delivery_receipt.confirm",
+  PAYMENT: "customer_receipt.post",
+  TAX: "tax_component.create",
+};
+function allowed(req: AuthenticatedRequest, permission: string) {
+  if (
+    !req.auth.permissions.some(
+      (p) =>
+        p.code === permission &&
+        ["company", "privileged"].includes(p.scope_type) &&
+        (!p.scope_id || p.scope_id === req.auth.company_id),
+    )
+  )
+    throw new ForbiddenException();
+}
+function allowedAny(req: AuthenticatedRequest, permissions: string[]) {
+  if (!permissions.some((permission) => hasPermission(req, permission)))
+    throw new ForbiddenException();
+}
+function hasPermission(req: AuthenticatedRequest, permission: string) {
+  return req.auth.permissions.some(
+    (p) =>
+      p.code === permission &&
+      ["company", "privileged"].includes(p.scope_type) &&
+      (!p.scope_id || p.scope_id === req.auth.company_id),
+  );
+}
+@Controller("operations")
+@UseGuards(AuthGuard, PermissionGuard)
+export class OperationsController {
+  constructor(
+    @Inject(OperationsService) private readonly service: OperationsService,
+    @Inject(OtcPtpService) private readonly otc: OtcPtpService,
+  ) {}
+  @Get("fulfillment-batches/:id/proforma-preview")
+  @RequirePermissions("proforma.issue")
+  async previewProforma(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: await previewProforma(req.auth.company_id, uuid(id)) };
+  }
+  @Post("fulfillment-batches/:id/proforma-preview")
+  @RequirePermissions("proforma.issue")
+  async previewProformaFreight(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return { data: await previewProforma(req.auth.company_id, uuid(id), body) };
+  }
+  @Get("backorders")
+  @RequirePermissions("sales_order.read")
+  async backorders(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const q = z
+      .object({
+        page: z.coerce.number().int().min(1).max(10000).default(1),
+        search: z.string().max(100).default(""),
+      })
+      .strict()
+      .parse(query);
+    const where = {
+      companyId: req.auth.company_id,
+      backorderQuantity: { gt: 0 },
+      salesOrder: {
+        state: "OPEN" as const,
+        OR: [
+          { number: { contains: q.search, mode: "insensitive" as const } },
+          { customer: { name: { contains: q.search, mode: "insensitive" as const } } },
+        ],
+      },
+    };
+    const [rows, total] = await prisma.$transaction([
+      prisma.salesOrderLine.findMany({
+        where,
+        skip: (q.page - 1) * 25,
+        take: 25,
+        orderBy: { id: "asc" },
+        select: {
+          id: true,
+          orderedQuantity: true,
+          backorderQuantity: true,
+          product: { select: { name: true } },
+          salesOrder: {
+            select: { id: true, number: true, version: true, customer: { select: { name: true } } },
+          },
+        },
+      }),
+      prisma.salesOrderLine.count({ where }),
+    ]);
+    return { data: { rows, total } };
+  }
+  @Get("orders/:id/exceptions")
+  @RequirePermissions("sales_order.read")
+  async exceptions(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    const rows = await prisma.salesExceptionRequest.findMany({
+      where: { companyId: req.auth.company_id, salesOrderId: uuid(id) },
+      orderBy: { createdAt: "desc" },
+    });
+    const actions = await prisma.transactionApprovalAction.findMany({
+      where: { companyId: req.auth.company_id, sourceId: { in: rows.map((r) => r.id) } },
+      orderBy: { createdAt: "asc" },
+    });
+    const evaluations = await prisma.$queryRaw<
+      { id: string; state: string; last_error: string | null }[]
+    >`
+      SELECT id, state, last_error FROM sales_exception_evaluations
+      WHERE company_id=${req.auth.company_id}::uuid AND sales_order_id=${id}::uuid`;
+    return {
+      data: rows.map((r) => ({
+        ...r,
+        actions: actions.filter((a) => a.sourceId === r.id),
+        evaluation: evaluations.find((e) => e.id === r.id),
+      })),
+    };
+  }
+  @Post("orders/:id/exceptions")
+  async requestException(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") k: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = z
+      .object({
+        kind: z.enum(["SALES_ORDER_UNLOCK", "SPECIAL_PRICE"]),
+        version: z.number().int().positive(),
+        line_id: z.string().uuid().optional(),
+        reasons: z
+          .array(z.enum(["CREDIT_HOLD", "CUSTOMER_PAST_DUE", "CUSTOMER_CREDIT_FROZEN"]))
+          .max(3),
+        reason: z.string().trim().min(1).max(1000),
+        evidence_id: z.string().uuid(),
+        amount_limit: z.string().regex(/^\d+(\.\d{1,8})?$/),
+      })
+      .strict()
+      .parse(body);
+    allowed(
+      req,
+      input.kind === "SPECIAL_PRICE" ? "price_request.submit" : "sales_order.unlock.request",
+    );
+    return {
+      data: await requestException(req.auth.company_id, req.auth.user_id, uuid(id), input, key(k)),
+    };
+  }
+  @Post("exceptions/:id/decisions")
+  async decide(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") k: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = z
+      .object({
+        decision: z.enum(["APPROVED", "REJECTED", "REVISION_REQUIRED"]),
+        reason: z.string().trim().min(1).max(1000),
+      })
+      .strict()
+      .parse(body);
+    const ref = await prisma.salesExceptionRequest.findFirst({
+      where: { companyId: req.auth.company_id, id: uuid(id) },
+    });
+    if (!ref) throw new NotFoundException();
+    allowed(
+      req,
+      ref.kind === "SPECIAL_PRICE" ? "price_request.approve" : "sales_order.unlock.approve",
+    );
+    const decision = await decideException(
+      req.auth.company_id,
+      req.auth.user_id,
+      id,
+      input,
+      key(k),
+    );
+    if (decision.state !== "APPROVED") return { data: decision };
+    const evaluation = await processExceptionEvaluations(req.auth.company_id, decision.id);
+    return {
+      data: {
+        ...decision,
+        evaluation,
+        ...(evaluation?.state !== "COMPLETED"
+          ? {
+              evaluation_error:
+                evaluation?.last_error ?? "Evaluasi dijadwalkan; periksa kembali status SO.",
+            }
+          : {}),
+      },
+    };
+  }
+  @Post("exceptions/:id/manage")
+  async manage(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") k: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = z
+      .object({
+        action: z.enum(["CANCEL", "DELEGATE"]),
+        reason: z.string().trim().min(1).max(1000),
+        delegate_id: z.string().uuid().optional(),
+      })
+      .strict()
+      .parse(body);
+    const ref = await prisma.salesExceptionRequest.findFirst({
+      where: { companyId: req.auth.company_id, id: uuid(id) },
+    });
+    if (!ref) throw new NotFoundException();
+    allowed(
+      req,
+      ref.kind === "SPECIAL_PRICE"
+        ? input.action === "CANCEL"
+          ? "price_request.submit"
+          : "price_request.approve"
+        : input.action === "CANCEL"
+          ? "sales_order.unlock.request"
+          : "sales_order.unlock.approve",
+    );
+    return {
+      data: await manageException(req.auth.company_id, req.auth.user_id, id, input, key(k)),
+    };
+  }
+  @Get("warehouse/:id/funding")
+  @RequirePermissions("customer_receipt.read")
+  async funding(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    const batch = await prisma.fulfillmentBatch.findFirst({
+      where: { id: uuid(id), companyId: req.auth.company_id },
+      include: {
+        salesOrder: {
+          select: { id: true, customerId: true, currency: true, paymentSnapshot: true },
+        },
+        customerReceipts: {
+          where: { state: "POSTED" },
+          select: {
+            id: true,
+            amount: true,
+            unallocatedAmount: true,
+            currency: true,
+            bankReference: true,
+            receivedAt: true,
+          },
+        },
+      },
+    });
+    if (!batch) throw new NotFoundException();
+    return { data: batch };
+  }
+  @Post("orders/:id/reallocate")
+  @RequirePermissions("sales_order.reallocate")
+  async reallocate(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") k: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = z.object({ version: z.number().int().positive() }).strict().parse(body);
+    return {
+      data: await this.otc.submitSalesOrder(
+        req.auth.company_id,
+        req.auth.user_id,
+        uuid(id),
+        key(k),
+        input.version,
+      ),
+    };
+  }
+  @Post("evidence")
+  async upload(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
+    const i = z
+      .object({
+        purpose: z.enum(["SALES_ORDER", "POD", "PAYMENT", "TAX", "WAREHOUSE_CONTROL"]),
+        name: z.string().min(1).max(200),
+        base64: z
+          .string()
+          .min(1)
+          .max(2800000)
+          .regex(/^[A-Za-z0-9+/]*={0,2}$/),
+      })
+      .strict()
+      .parse(body);
+    allowed(req, writePermission[i.purpose]!);
+    return {
+      data: await this.service.upload(
+        req.auth.company_id,
+        req.auth.user_id,
+        i.purpose,
+        i.name,
+        i.base64,
+      ),
+    };
+  }
+  @Get("evidence/:id")
+  async evidence(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    const metadata = await prisma.transactionEvidence.findFirst({
+      where: { companyId: req.auth.company_id, id: uuid(id) },
+    });
+    if (!metadata) throw new NotFoundException();
+    allowed(req, readPermission[metadata.purpose]!);
+    return { data: await this.service.evidence(req.auth.company_id, id) };
+  }
+  @Get("lookups")
+  @RequirePermissions("sales_order.create")
+  async lookups(@Req() req: AuthenticatedRequest) {
+    return { data: await this.service.lookups(req.auth.company_id) };
+  }
+  @Get("order-options")
+  async orderOptions(@Req() req: AuthenticatedRequest) {
+    const canCreate = req.auth.permissions.some(
+      (p) =>
+        p.code === "sales_order.create" &&
+        ["company", "privileged"].includes(p.scope_type) &&
+        (!p.scope_id || p.scope_id === req.auth.company_id),
+    );
+    allowed(req, canCreate ? "sales_order.create" : "sales_order.update");
+    return { data: await this.service.lookups(req.auth.company_id) };
+  }
+  @Get("control-options/:kind")
+  async controlOptions(@Param("kind") kind: string, @Req() req: AuthenticatedRequest) {
+    const type = z.enum(["credit", "tax", "approval", "quality"]).parse(kind);
+    allowed(
+      req,
+      {
+        credit: "customer.payment_policy.manage",
+        tax: "sales_tax_rule.manage",
+        approval: "transaction_approval.manage",
+        quality: "inventory.quality.decide",
+      }[type],
+    );
+    const c = req.auth.company_id;
+    if (type === "approval")
+      return {
+        data: {
+          users: await prisma.companyMembership.findMany({
+            where: { companyId: c, active: true, user: { active: true } },
+            select: { user: { select: { id: true, displayName: true } } },
+            take: 250,
+          }),
+        },
+      };
+    if (type === "quality")
+      return {
+        data: {
+          lots: await prisma.stockLot.findMany({
+            where: { companyId: c },
+            select: {
+              id: true,
+              batchNo: true,
+              qualityState: true,
+              quantityOnHand: true,
+              expiryDate: true,
+              product: { select: { name: true } },
+              locator: { select: { name: true } },
+            },
+            take: 250,
+            orderBy: { createdAt: "desc" },
+          }),
+        },
+      };
+    return { data: await this.service.lookups(c) };
+  }
+  @Post("tax-rules")
+  @RequirePermissions("sales_tax_rule.manage")
+  async tax(
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+    @Headers("idempotency-key") k: string | undefined,
+  ) {
+    const i = z
+      .object({
+        customer_id: z.string().uuid(),
+        product_id: z.string().uuid(),
+        name: z.string().min(1).max(200),
+        legal_reference: z.string().min(1).max(500),
+        taxable_event: z.enum(["POD", "ADVANCE"]).optional(),
+        rate: z.string().regex(/^\d+(\.\d{1,8})?$/),
+        dpp_factor: z.string().regex(/^\d+(\.\d{1,8})?$/),
+        decimal_places: z.number().int().min(0).max(8),
+        rounding: z.enum(["HALF_UP", "HALF_EVEN", "DOWN"]),
+        effective_from: z.string().datetime(),
+        effective_to: z.string().datetime(),
+      })
+      .strict()
+      .parse(body);
+    return { data: await this.service.tax(req.auth.company_id, req.auth.user_id, i, key(k)) };
+  }
+  @Post("approval-policies")
+  @RequirePermissions("transaction_approval.manage")
+  async approval(
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+    @Headers("idempotency-key") k: string | undefined,
+  ) {
+    const i = z
+      .object({
+        currency: z.string().regex(/^[A-Z]{3}$/),
+        document_kind: z
+          .enum([
+            "PURCHASE_REQUEST",
+            "SALES_ORDER_UNLOCK",
+            "SPECIAL_PRICE",
+            "BANK_TRANSACTION",
+            "TAX_CORRECTION",
+            "CUSTOMER_REFUND",
+            "SOURCE_REVERSAL",
+            "FINANCE_CLOSE",
+            "TAX_RULE_CHANGE",
+            "ADVANCE_REFUND",
+          ])
+          .optional(),
+        allowed_reasons: z
+          .array(z.enum(["CREDIT_HOLD", "CUSTOMER_PAST_DUE", "CUSTOMER_CREDIT_FROZEN"]))
+          .max(3)
+          .optional(),
+        grant_hours: z.number().int().min(1).max(8760).optional(),
+        maximum_amount: z.string().regex(/^\d+(\.\d{1,8})?$/),
+        steps: z
+          .array(
+            z
+              .object({
+                mode: z.enum(["ANY", "ALL"]),
+                user_ids: z.array(z.string().uuid()).min(1).max(20),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(10),
+        effective_from: z.string().datetime(),
+        effective_to: z.string().datetime(),
+      })
+      .strict()
+      .parse(body);
+    return {
+      data: await this.service.approvalPolicy(req.auth.company_id, req.auth.user_id, i, key(k)),
+    };
+  }
+  @Get("lists/:kind")
+  async list(
+    @Param("kind") kind: string,
+    @Query() query: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const type = z.enum(["orders", "warehouse", "pick-slips", "invoices", "proformas"]).parse(kind);
+    if (type === "proformas") allowedAny(req, ["sales_order.read", "proforma.issue"]);
+    else
+      allowed(
+        req,
+        {
+          orders: "sales_order.read",
+          warehouse: "fulfillment.read",
+          "pick-slips": "fulfillment.read",
+          invoices: "sales_invoice.read",
+        }[type],
+      );
+    const q = z
+      .object({
+        page: z.coerce.number().int().min(1).max(10000).default(1),
+        search: z.string().max(100).default(""),
+        state: z.enum(["DRAFT", "OPEN", "CLOSED", "CANCELLED"]).optional(),
+      })
+      .strict()
+      .parse(query);
+    return { data: await this.service.list(req.auth.company_id, type, q.page, q.search, q.state) };
+  }
+  @Get("proformas/:id")
+  async proforma(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    allowedAny(req, ["sales_order.read", "proforma.issue"]);
+    return { data: await this.service.proforma(req.auth.company_id, uuid(id)) };
+  }
+  @Get("orders/:id")
+  @RequirePermissions("sales_order.read")
+  async order(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: await this.service.order(req.auth.company_id, uuid(id)) };
+  }
+  @Get("warehouse/:id")
+  @RequirePermissions("fulfillment.read")
+  async batch(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: await this.service.batch(req.auth.company_id, uuid(id)) };
+  }
+  @Get("invoices/:id")
+  @RequirePermissions("sales_invoice.read", "customer_receipt.read")
+  async invoice(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: await this.service.invoice(req.auth.company_id, uuid(id)) };
+  }
+  @Post("warehouse/:id/shipment")
+  @RequirePermissions("fulfillment.dispatch")
+  async shipment(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") k: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const i = shipmentSchema.parse(body);
+    return {
+      data: await this.service.shipment(req.auth.company_id, req.auth.user_id, uuid(id), i, key(k)),
+    };
+  }
+  @Post("stock/:id/quality")
+  @RequirePermissions("inventory.quality.decide")
+  async quality(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") k: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const i = z
+      .object({
+        state: z.enum(["AVAILABLE", "HOLD", "RECALL", "QUARANTINE"]),
+        reason: z.string().trim().min(1).max(1000),
+      })
+      .strict()
+      .parse(body);
+    return {
+      data: await this.service.quality(req.auth.company_id, req.auth.user_id, uuid(id), i, key(k)),
+    };
+  }
+  @Get("documents/:id")
+  async document(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    const row = await prisma.fulfillmentDocument.findFirst({
+      where: { id: uuid(id), companyId: req.auth.company_id },
+    });
+    if (!row) throw new NotFoundException();
+    allowed(
+      req,
+      row.kind.startsWith("INVOICE")
+        ? "sales_invoice.read"
+        : row.kind.startsWith("PROFORMA")
+          ? "sales_order.read"
+          : "fulfillment.read",
+    );
+    return { data: row };
+  }
+  @Get("audit/:id")
+  @RequirePermissions("audit_event.read")
+  async audit(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return {
+      data: await prisma.auditEvent.findMany({
+        where: { companyId: req.auth.company_id, resourceId: uuid(id) },
+        select: {
+          id: true,
+          action: true,
+          actorId: true,
+          occurredAt: true,
+          beforeHash: true,
+          afterHash: true,
+        },
+        orderBy: { occurredAt: "asc" },
+        take: 200,
+      }),
+    };
+  }
+}

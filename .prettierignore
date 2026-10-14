@@ -1,0 +1,13 @@
+.codex/
+.next/
+.next-dev/
+.nuxt/
+.output/
+.turbo/
+coverage/
+dist/
+docs/
+node_modules/
+packages/database/generated/
+pnpm-lock.yaml
+**/next-env.d.ts

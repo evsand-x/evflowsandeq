@@ -1,0 +1,41 @@
+# dependencies and build output
+node_modules/
+.next/
+.next-dev/
+.next-qa/
+.nuxt/
+.output/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# mobile/native generated output
+apps/field/android/.gradle/
+apps/field/android/app/build/
+apps/field/ios/App/Pods/
+apps/field/ios/App/DerivedData/
+
+# logs and local state
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# generated private/export files
+tmp/
+exports/
+uploads/
+
+# generated Prisma client
+packages/database/generated/

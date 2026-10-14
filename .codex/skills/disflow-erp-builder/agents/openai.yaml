@@ -1,0 +1,4 @@
+interface:
+  display_name: "evflow ERP Builder"
+  short_description: "Menjaga implementasi ERP sesuai blueprint"
+  default_prompt: "Gunakan $evflow-erp-builder untuk mengimplementasikan perubahan evflow ini sesuai blueprint dan menjaga sinkronisasi dokumen."

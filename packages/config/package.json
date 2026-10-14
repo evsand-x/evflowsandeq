@@ -1,0 +1,20 @@
+{
+  "name": "@evflow/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "exports": {
+    "./env": {
+      "types": "./src/env.d.cts",
+      "require": "./dist/env.js"
+    },
+    "./tsconfig": "./tsconfig.base.json"
+  },
+  "dependencies": {
+    "zod": "3.25.76"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json"
+  }
+}

@@ -1,0 +1,401 @@
+/* Dashboard presentation; transaction routes retain their current design. */
+.office-modern body {
+  --ev-font-family: var(--font-jakarta), sans-serif;
+  font-family: var(--font-jakarta), sans-serif;
+}
+.office-modern .executive-topbar {
+  height: 68px;
+  padding-inline: 36px;
+}
+.office-modern .executive-company {
+  font-size: 13px;
+}
+.office-modern .executive-company strong {
+  max-width: 480px;
+  font-weight: 500;
+}
+.office-modern .executive-search {
+  background: hsl(var(--background));
+  border-radius: 9px;
+  border: 0;
+}
+.office-modern .executive-content {
+  padding: 32px 36px 40px;
+  max-width: 1600px;
+  min-height: calc(100dvh - 68px);
+  --executive-target: #b7d7cb;
+}
+.office-modern .executive-heading h1 {
+  font-size: clamp(24px, 2.4vw, 32px);
+  line-height: 1.3;
+  font-weight: 650;
+  letter-spacing: -1px;
+}
+.office-modern .executive-breadcrumb {
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+.modern-intro {
+  margin-top: 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  line-height: 1.6;
+}
+.office-modern .executive-controls button {
+  border-radius: 9px;
+  height: 38px;
+}
+.office-modern .executive-freshness {
+  margin: 18px 0 24px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.modern-workspace-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 28px;
+  border-radius: 16px;
+  background: hsl(var(--primary));
+  color: white;
+}
+.modern-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.7px;
+  color: #c2e6d7;
+}
+.modern-banner-copy h2 {
+  margin: 8px 0;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  line-height: 1.4;
+}
+.modern-banner-copy p {
+  font-size: 12px;
+  color: #d6ede3;
+  line-height: 1.6;
+}
+.modern-workspace-banner .modern-task-button {
+  background: white;
+  color: hsl(var(--primary));
+  border-radius: 9px;
+  height: 42px;
+  padding-inline: 18px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.modern-workspace-banner .modern-task-button:hover {
+  background: #e2f3eb;
+}
+.office-modern .executive-kpis {
+  gap: 16px;
+  margin-top: 24px;
+}
+.office-modern .executive-card {
+  border-radius: 14px;
+  box-shadow: 0 2px 4px #142c2003;
+  border-color: hsl(var(--border));
+}
+.office-modern .executive-kpi {
+  min-height: 150px;
+  padding: 22px;
+  gap: 24px;
+}
+.office-modern .executive-kpi .executive-card-header {
+  gap: 12px;
+}
+.office-modern .executive-kpi .executive-card-header svg {
+  width: 34px;
+  height: 34px;
+  padding: 8px;
+  border-radius: 10px;
+  background: hsl(var(--accent));
+  flex-shrink: 0;
+}
+.office-modern .executive-kpi .executive-card-header div {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.office-modern .executive-unavailable-value {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+.office-modern .executive-muted {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.office-modern .executive-kpi .executive-muted {
+  font-size: 11px;
+  line-height: 1.6;
+}
+.office-modern .executive-actions {
+  margin-top: 24px;
+}
+.office-modern .executive-actions .executive-card-header {
+  padding: 22px 24px 16px;
+}
+.office-modern .executive-actions .executive-card-header div,
+.office-modern .executive-history .executive-card-header div {
+  font-size: 15px;
+}
+.modern-task-empty {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: hsl(var(--background));
+  border-radius: 10px;
+}
+.modern-task-empty strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.modern-task-empty p {
+  margin-top: 4px;
+}
+.modern-task-empty > a {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+.modern-task-empty > a svg {
+  width: 15px;
+}
+.modern-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: hsl(var(--accent));
+  color: hsl(var(--primary));
+}
+.modern-empty-icon svg {
+  width: 21px;
+  height: 21px;
+}
+.office-modern .executive-performance {
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
+  gap: 20px;
+  margin-top: 24px;
+}
+.office-modern .executive-chart {
+  min-height: 336px;
+}
+.office-modern .executive-chart .executive-card-header {
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 24px;
+}
+.office-modern .modern-chart-empty {
+  flex-direction: column;
+  gap: 14px;
+  height: 220px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--background));
+  padding: 24px;
+}
+.modern-chart-empty strong {
+  color: hsl(var(--foreground));
+  font-size: 14px;
+  font-weight: 500;
+}
+.modern-chart-empty p {
+  max-width: 300px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.office-modern .executive-attention {
+  gap: 16px;
+}
+.office-modern .executive-attention .executive-card {
+  min-height: 160px;
+  padding: 22px;
+  gap: 18px;
+}
+.office-modern .executive-attention .executive-card-header div {
+  font-size: 13px;
+}
+.office-modern .executive-overdue,
+.office-modern .executive-approval {
+  margin-bottom: 10px;
+}
+.office-modern .executive-text-link {
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.modern-shortcuts {
+  margin-top: 28px;
+}
+.modern-section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+.modern-section-title h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.modern-section-title > span {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+}
+.modern-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+.modern-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--card));
+  transition:
+    border-color 150ms,
+    background 150ms;
+}
+.modern-shortcut:hover {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--accent));
+}
+.modern-shortcut-icon {
+  color: hsl(var(--primary));
+}
+.modern-shortcut-icon svg {
+  width: 20px;
+}
+.modern-shortcut strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+.modern-shortcut small {
+  display: block;
+  font-size: 10px;
+  margin-top: 4px;
+  color: hsl(var(--muted-foreground));
+}
+.modern-shortcut > svg {
+  width: 15px;
+  flex-shrink: 0;
+  margin-left: auto;
+  color: hsl(var(--muted-foreground));
+}
+.office-modern .executive-history {
+  margin-top: 28px;
+}
+.office-modern .executive-history thead {
+  background: hsl(var(--muted));
+}
+.office-modern .executive-history td {
+  height: 64px;
+}
+.office-modern .executive-table-footer {
+  padding-block: 18px;
+}
+.office-modern .ev-sidebar {
+  padding-top: 24px;
+}
+.office-modern .ev-sidebar-logo {
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: -1px;
+}
+.office-modern .ev-sidebar [data-sidebar="menu-button"] {
+  border-radius: 9px;
+  font-size: 12px;
+}
+.office-modern .ev-sidebar-sub-link {
+  border-radius: 8px;
+}
+.office-modern .ev-sidebar [data-sidebar="menu"] {
+  gap: 4px;
+}
+.office-modern .ev-sidebar [data-sidebar="menu-sub"] {
+  padding-bottom: 8px;
+}
+.office-modern .ev-sidebar-profile {
+  padding-bottom: 4px;
+}
+.office-modern body :is(.ev-sidebar-flyout, .ev-account-menu) {
+  border-radius: 12px;
+}
+@media (max-width: 1200px) {
+  .office-modern .executive-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .office-modern .executive-performance {
+    grid-template-columns: 1fr;
+  }
+  .office-modern .executive-attention {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .office-modern .executive-content {
+    padding: 24px 16px;
+  }
+  .office-modern .executive-topbar {
+    height: 60px;
+    padding-inline: 16px;
+  }
+  .office-modern .executive-company strong {
+    max-width: 210px;
+    font-size: 11px;
+  }
+  .modern-workspace-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 22px;
+    gap: 20px;
+  }
+  .modern-banner-copy h2 {
+    font-size: 20px;
+  }
+  .office-modern .executive-kpis,
+  .office-modern .executive-attention {
+    grid-template-columns: 1fr;
+  }
+  .office-modern .executive-kpi {
+    min-height: 140px;
+  }
+  .modern-task-empty {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .modern-task-empty > div {
+    flex: 1;
+    min-width: 140px;
+  }
+  .modern-task-empty > a {
+    margin-left: 60px;
+  }
+  .modern-section-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .office-modern .executive-actions .executive-card-header {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .office-modern .executive-history .executive-card-header {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+}

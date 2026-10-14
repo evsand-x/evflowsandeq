@@ -1,0 +1,293 @@
+/* Geometry from Pencil frame glsR9; scope to the Office shell. */
+.ev-sidebar {
+  background: hsl(var(--sidebar));
+  color: hsl(var(--foreground));
+  border-right: 1px solid hsl(var(--border));
+  box-shadow: none;
+  padding: 28px 16px 20px;
+}
+.ev-sidebar [data-sidebar="sidebar"] {
+  background: inherit;
+}
+.ev-sidebar [data-sidebar="header"] {
+  padding: 0 12px;
+  height: 36px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0;
+  flex-shrink: 0;
+}
+.ev-sidebar-logo {
+  color: hsl(var(--primary));
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 36px;
+  letter-spacing: 0;
+}
+.ev-sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 32px;
+  color: hsl(var(--muted-foreground));
+}
+.ev-sidebar-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+.ev-sidebar [data-sidebar="content"] {
+  margin-top: 28px;
+  padding: 0;
+  gap: 0;
+}
+.ev-sidebar [data-sidebar="group"] {
+  padding: 0;
+}
+.ev-sidebar [data-sidebar="menu"] {
+  gap: 6px;
+}
+.ev-sidebar [data-sidebar="menu-button"] {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  gap: 10px;
+  border-radius: 4px;
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  font-weight: 500;
+  line-height: normal;
+  box-shadow: none;
+}
+.ev-sidebar [data-sidebar="menu-button"] > svg {
+  width: 18px;
+  height: 18px;
+  color: hsl(var(--muted-foreground));
+}
+.ev-sidebar [data-sidebar="menu-button"] > svg:last-child {
+  width: 14px;
+  height: 14px;
+}
+.ev-sidebar [data-sidebar="menu-button"][data-active="true"] {
+  color: white;
+  background: hsl(var(--primary));
+  font-weight: 600;
+}
+.ev-sidebar [data-sidebar="menu-button"][data-active="true"] > svg {
+  color: white;
+}
+.ev-sidebar .ev-sidebar-dashboard > [data-sidebar="menu-button"] {
+  height: 42px;
+  min-height: 42px;
+  font-size: 13px;
+}
+.ev-sidebar [data-sidebar="menu-sub"] {
+  margin: 6px 0 0;
+  padding: 4px 0 8px 12px;
+  border: 0;
+  gap: 2px;
+  transform: none;
+}
+.ev-sidebar-sub-link {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  height: auto;
+  padding: 8px 10px;
+  border-radius: 4px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 400;
+  line-height: normal;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.ev-sidebar-sub-link[aria-current="page"] {
+  background: hsl(var(--accent));
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+.ev-sidebar-sub-link:hover {
+  background: hsl(var(--accent));
+}
+.ev-sidebar [data-sidebar="footer"] {
+  padding: 0;
+  gap: 16px;
+  flex-shrink: 0;
+  margin-top: auto;
+  border: 0;
+}
+.ev-sidebar-help {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  text-align: left;
+}
+.ev-sidebar-help svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.ev-sidebar-profile {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid hsl(var(--border));
+  padding: 16px 8px 0;
+}
+.ev-sidebar-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: hsl(var(--accent));
+  color: hsl(var(--primary));
+  font-size: 11px;
+  font-weight: 600;
+}
+.ev-sidebar-identity {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  line-height: normal;
+}
+.ev-sidebar-identity strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.ev-sidebar-identity span {
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+}
+.ev-sidebar-identity > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.ev-sidebar-profile > svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: hsl(var(--muted-foreground));
+}
+.ev-sidebar button {
+  cursor: pointer;
+}
+.ev-sidebar :is(button, a):focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+[data-collapsible="icon"] .ev-sidebar {
+  padding: 28px 8px 20px;
+}
+[data-collapsible="icon"] .ev-sidebar-brand {
+  padding: 0;
+  justify-content: center;
+}
+[data-collapsible="icon"]
+  :is(.ev-sidebar-logo, .ev-sidebar-identity, .ev-sidebar-profile > svg, .ev-sidebar-help span) {
+  display: none;
+}
+[data-collapsible="icon"] .ev-sidebar-profile {
+  padding: 16px 0 0;
+  justify-content: center;
+}
+[data-collapsible="icon"] .ev-sidebar-help {
+  padding: 8px;
+}
+
+.ev-sidebar [data-sidebar="content"] {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ev-account-menu {
+  min-width: 216px;
+}
+.ev-account-profile {
+  justify-content: center;
+  padding: 12px;
+  cursor: pointer;
+}
+.ev-account-logout[data-highlighted] {
+  background: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--destructive));
+}
+.ev-account-logout[data-highlighted] svg {
+  color: inherit;
+}
+.ev-sidebar-profile:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+/* Approved sidebar interaction refinement, 7 October 2026. */
+.ev-sidebar [data-sidebar="menu-button"][data-active="true"] {
+  background: hsl(var(--accent));
+  color: hsl(var(--primary));
+}
+.ev-sidebar [data-sidebar="menu-button"][data-active="true"] > svg {
+  color: inherit;
+}
+.ev-sidebar-sub-link[aria-current="page"],
+.ev-sidebar-sub-link[aria-current="page"]:hover {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.ev-sidebar-sub-link {
+  text-align: left;
+  gap: 8px;
+}
+.ev-sidebar-sub-link > svg {
+  flex-shrink: 0;
+  transition: transform 150ms;
+}
+.ev-sidebar-sub-link[data-state="closed"] > svg {
+  transform: rotate(-90deg);
+}
+.ev-sidebar-module[data-state="open"] .ev-sidebar-chevron {
+  transform: rotate(90deg);
+}
+[data-collapsible="icon"] .ev-sidebar-chevron {
+  display: none;
+}
+.ev-sidebar-flyout {
+  width: 272px;
+  max-height: var(--radix-popover-content-available-height);
+  overflow-y: auto;
+  padding: 12px;
+}
+.ev-sidebar-flyout-title {
+  padding: 4px 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ev-sidebar-flyout [data-sidebar="menu-sub"] {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: 2px;
+  transform: none;
+}
+.ev-sidebar-flyout [data-sidebar="menu-sub"] [data-sidebar="menu-sub"] {
+  padding-left: 12px;
+  margin: 4px 0 8px;
+}
+.ev-sidebar-flyout :is(button, a):focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}

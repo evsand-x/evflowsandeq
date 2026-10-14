@@ -1,0 +1,35 @@
+{
+  "name": "@evflow/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.893.0",
+    "@evflow/backend": "workspace:*",
+    "@evflow/config": "workspace:*",
+    "@evflow/contracts": "workspace:*",
+    "@evflow/database": "workspace:*",
+    "@nestjs/common": "11.1.6",
+    "@nestjs/core": "11.1.6",
+    "@nestjs/platform-express": "11.1.6",
+    "ioredis": "5.7.0",
+    "jsonwebtoken": "9.0.2",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "11.1.6",
+    "@types/express": "5.0.3",
+    "@types/jsonwebtoken": "9.0.10",
+    "@types/supertest": "6.0.3",
+    "dotenv-cli": "8.0.0",
+    "supertest": "7.1.4",
+    "tsx": "4.20.5"
+  },
+  "scripts": {
+    "dev": "dotenv -e ../../.env -- tsx watch --include \"../../packages/backend/src/**/*.ts\" --include \"../../packages/contracts/src/**/*.ts\" src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "dotenv -e ../../.env -- node dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

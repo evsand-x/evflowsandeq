@@ -1,0 +1,560 @@
+.crm-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  font-size: 12px;
+  line-height: 18px;
+}
+.crm-content > [role="alert"] {
+  margin-top: 0;
+}
+.crm-content [data-slot="card"] {
+  border-radius: var(--ev-radius-card);
+  box-shadow: none;
+}
+.crm-content > [data-slot="card"]:not(.executive-kpi) {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+}
+.crm-content > [data-slot="card"]:not(.executive-kpi) > [data-slot="card-header"],
+.crm-content > [data-slot="card"]:not(.executive-kpi) > [data-slot="card-content"] {
+  padding: 0;
+}
+.crm-content [data-slot="card-title"] {
+  letter-spacing: 0;
+}
+.crm-content [data-slot="button"][data-size="icon"] {
+  width: 38px;
+  flex: none;
+}
+.crm-table-footer [data-slot="button"],
+.crm-below-table [data-slot="button"] {
+  height: 32px;
+}
+.crm-content [data-slot="input-group"],
+.crm-content [data-slot="select-trigger"] {
+  min-height: 38px;
+  border-radius: var(--ev-radius-control);
+  box-shadow: none;
+  background: hsl(var(--card));
+}
+.crm-content [data-slot="input-group"] input {
+  font-size: 12px;
+}
+.crm-content [data-slot="select-trigger"] {
+  font-size: 12px;
+}
+.crm-content [data-slot="empty-title"] {
+  font-size: 14px;
+  line-height: 20px;
+}
+.crm-content [data-slot="empty-description"] {
+  font-size: 12px;
+  line-height: 18px;
+}
+.crm-content .executive-heading {
+  align-items: center;
+}
+.crm-content a:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+.crm-subtitle {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+.crm-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.crm-kpis [data-slot="card"] {
+  min-height: 126px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-sizing: border-box;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+.crm-kpis [data-slot="card-header"],
+.crm-kpis [data-slot="card-content"] {
+  padding: 0;
+}
+.crm-kpis [data-slot="card-header"] {
+  display: flex;
+  align-items: center;
+}
+.crm-kpis [data-slot="card-title"] {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+.crm-kpis [data-slot="card-content"] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.crm-kpis [data-slot="card-content"] strong {
+  margin: 0;
+  font-size: 24px;
+  line-height: 29px;
+  font-weight: 600;
+}
+.crm-kpis [data-slot="card-content"] strong.crm-unavailable {
+  font-size: 18px;
+  line-height: 29px;
+}
+.crm-kpis [data-slot="card-content"] p {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  line-height: 15px;
+}
+.crm-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.crm-table-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ev-radius-card);
+  min-width: 0;
+}
+.crm-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+}
+.crm-table-toolbar [data-slot="input-group"] {
+  max-width: 300px;
+}
+.crm-toolbar-filters {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.crm-table-toolbar [data-slot="select-trigger"] {
+  width: auto;
+  min-width: 130px;
+}
+.crm-table-panel th {
+  height: 38px;
+  background: hsl(var(--sidebar));
+  font-size: 11px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  padding: 12px 20px;
+  white-space: nowrap;
+}
+.crm-table-panel td {
+  height: 72px;
+  padding: 18px 20px;
+  font-size: 12px;
+}
+.crm-table-panel td small {
+  display: block;
+  margin-top: 0;
+  font-size: inherit;
+  color: inherit;
+}
+.crm-record-link {
+  color: hsl(var(--primary));
+  display: block;
+  min-width: 165px;
+}
+.crm-record-link strong {
+  font-weight: 500;
+}
+.crm-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid hsl(var(--border));
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+}
+.crm-status {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  border: 0;
+  border-radius: var(--ev-radius-control);
+  padding: 5px 8px;
+  background: var(--ev-color-neutral-soft);
+  color: hsl(var(--muted-foreground));
+}
+.crm-status-potential,
+.crm-status-active {
+  background: var(--ev-color-success-soft);
+  color: var(--ev-color-success);
+}
+.crm-status-in_progress,
+.crm-status-registered {
+  background: hsl(var(--accent));
+  color: hsl(var(--primary));
+}
+.crm-status-deferred {
+  background: var(--ev-color-warning-soft);
+  color: var(--ev-color-warning);
+}
+.crm-master-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ev-radius-card);
+  font-size: 12px;
+}
+.crm-master-callout strong {
+  margin-right: 16px;
+  font-weight: 600;
+}
+.crm-master-callout span,
+.crm-muted {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+.crm-meta {
+  display: flex;
+  gap: 10px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  margin-top: 0;
+}
+.crm-detail-actions {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.crm-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+.crm-profile-panel {
+  padding: 20px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ev-radius-card);
+}
+.crm-profile-grid span {
+  display: block;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.crm-profile-grid strong {
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.crm-detail-tabs {
+  min-width: 0;
+  gap: 20px;
+}
+.crm-detail-tabs [data-slot="tabs-list"] {
+  background: transparent;
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0;
+  height: auto;
+  border-radius: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+}
+.crm-detail-tabs [data-slot="tabs-trigger"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 10px 16px;
+  box-shadow: none;
+}
+.crm-detail-tabs [data-slot="tabs-trigger"][data-state="active"] {
+  color: hsl(var(--primary));
+  border-bottom-color: hsl(var(--primary));
+  background: transparent;
+}
+.crm-detail-tabs [data-slot="tabs-content"] {
+  min-width: 0;
+}
+.crm-below-table {
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+.crm-notice {
+  background: hsl(var(--accent) / 0.5);
+  border-color: transparent;
+  font-size: 12px;
+}
+.crm-notice [data-slot="alert-description"] {
+  font-size: 12px;
+}
+.crm-form,
+.crm-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.crm-contact-form .crm-form-section [data-slot="field-legend"] {
+  margin-bottom: 8px;
+}
+.crm-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.crm-checkboxes [data-slot="field"] {
+  width: auto;
+}
+.crm-need-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.crm-need-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.crm-stage-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+}
+.crm-stage-strip span {
+  padding: 16px 10px;
+  font-size: 12px;
+}
+.crm-loading {
+  display: grid;
+  gap: 20px;
+}
+@media (max-width: 1100px) {
+  .crm-contact-form .crm-profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .crm-table-toolbar {
+    flex-wrap: wrap;
+  }
+  .crm-toolbar-filters {
+    margin-left: 0;
+  }
+  .crm-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .crm-stage-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .crm-content {
+    padding: 20px 16px;
+    gap: 20px;
+  }
+  .crm-content .executive-heading {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .crm-form-grid,
+  .crm-contact-form .crm-form-grid,
+  .crm-profile-grid,
+  .crm-need-row {
+    grid-template-columns: 1fr;
+  }
+  .crm-table-toolbar {
+    padding: 12px;
+  }
+  .crm-toolbar-filters {
+    flex-wrap: wrap;
+  }
+  .crm-master-callout {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .crm-master-callout strong {
+    display: block;
+    margin-bottom: 8px;
+  }
+}
+
+.crm-content {
+  font-family: var(--ev-font-family);
+}
+.crm-content > .web-form {
+  min-width: 0;
+}
+.crm-content .web-form [data-slot="select-trigger"] {
+  min-height: var(--ev-input-height);
+}
+.crm-content [data-slot="button"][data-size="sm"] {
+  height: var(--ev-control-height);
+  padding: 0 14px;
+}
+.crm-table-toolbar {
+  gap: 12px;
+}
+.crm-table-toolbar [data-slot="input-group"] {
+  height: 38px;
+}
+.crm-table-toolbar [data-slot="select-trigger"] {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 14px;
+  font-weight: 600;
+  color: var(--ev-color-primary);
+}
+.crm-table-toolbar [data-slot="select-trigger"] svg {
+  color: var(--ev-color-primary);
+  opacity: 1;
+}
+.crm-columns-trigger svg {
+  color: var(--ev-color-primary);
+}
+.crm-columns-menu {
+  min-width: 220px;
+}
+.crm-table-toolbar:empty {
+  display: none;
+}
+.crm-content [data-slot="button"]:focus-visible {
+  outline: 2px solid var(--ev-color-primary);
+  outline-offset: 3px;
+}
+.crm-contact-form .web-form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px 14px;
+}
+.crm-contact-form [data-slot="field-label"] {
+  color: var(--ev-color-text-muted);
+}
+.crm-contact-form :is([data-slot="input"], [data-slot="select-trigger"], .web-multi-trigger) {
+  font-size: 13px;
+  height: 42px;
+  min-height: 42px;
+}
+.crm-form .crm-table-panel {
+  border: 0;
+  border-radius: 0;
+}
+.crm-form .crm-table-panel th {
+  padding: 12px 8px;
+}
+.crm-form .crm-table-panel td {
+  padding: 8px;
+  height: auto;
+}
+.crm-form .crm-table-footer {
+  display: none;
+}
+.crm-form .crm-table-panel [data-slot="input"] {
+  height: 40px;
+  min-height: 40px;
+}
+.crm-form .crm-table-panel [data-slot="table"] {
+  min-width: 900px;
+}
+.crm-form-note {
+  color: var(--ev-color-text-muted);
+  font-size: 12px;
+  margin: 0;
+}
+.crm-contact-form .web-form-footer {
+  grid-column: 1 / -1;
+}
+@media (max-width: 1100px) {
+  .crm-contact-form .web-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .crm-contact-form .web-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.crm-form .crm-table-panel [data-slot="field-label"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.crm-product-cell {
+  gap: 8px;
+}
+.crm-form .crm-table-panel td:first-child {
+  min-width: 230px;
+}
+.crm-form .crm-table-panel td {
+  min-width: 105px;
+  vertical-align: top;
+}
+.crm-form .crm-table-panel td:last-child {
+  min-width: 40px;
+}
+
+.crm-table-toolbar [data-slot="select-trigger"] > svg {
+  display: none;
+}
+.crm-columns-trigger {
+  min-width: 64px;
+}
+.crm-profile-panel {
+  padding: 24px;
+  gap: 24px;
+}
+.crm-master-callout {
+  padding: 20px 24px;
+}
+.crm-master-callout strong {
+  font-size: 14px;
+}
+
+.crm-table-title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  margin: 0 auto 0 0;
+}
+.crm-table-toolbar > .crm-columns-trigger:last-child {
+  margin-left: auto;
+}
+.crm-table-toolbar:has(.crm-toolbar-filters) > .crm-columns-trigger:last-child {
+  margin-left: 0;
+}
+button.crm-record-link {
+  text-align: left;
+  font: inherit;
+  font-weight: 500;
+}
+.crm-pipeline > .crm-detail-actions > .crm-actions [data-slot="select-trigger"] {
+  color: var(--ev-color-primary);
+  background: var(--ev-color-card);
+}

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TaxInvoiceBulk xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="TaxInvoice.xsd">
+  <TIN>{{SELLER_TIN}}</TIN>
+  <ListOfTaxInvoice>
+    <TaxInvoice>
+      <TaxInvoiceDate>{{YYYY-MM-DD}}</TaxInvoiceDate>
+      <TaxInvoiceOpt>{{TAX_INVOICE_OPTION}}</TaxInvoiceOpt>
+      <TrxCode>{{TRANSACTION_CODE}}</TrxCode>
+      <AddInfo />
+      <CustomDoc />
+      <RefDesc>{{SOURCE_REFERENCE}}</RefDesc>
+      <FacilityStamp />
+      <SellerIDTKU>{{SELLER_ID_TKU}}</SellerIDTKU>
+      <BuyerTin>{{BUYER_TIN}}</BuyerTin>
+      <BuyerDocument>{{BUYER_DOCUMENT_TYPE}}</BuyerDocument>
+      <BuyerCountry>{{BUYER_COUNTRY_CODE}}</BuyerCountry>
+      <BuyerDocumentNumber />
+      <BuyerName>{{BUYER_LEGAL_NAME}}</BuyerName>
+      <BuyerAdress>{{BUYER_TAX_ADDRESS}}</BuyerAdress>
+      <BuyerEmail>{{BUYER_EMAIL}}</BuyerEmail>
+      <BuyerIDTKU>{{BUYER_ID_TKU}}</BuyerIDTKU>
+      <ListOfGoodService>
+        <GoodService>
+          <Opt>{{ITEM_OPTION}}</Opt>
+          <Code>{{CORETAX_ITEM_CODE}}</Code>
+          <Name>{{ITEM_NAME}}</Name>
+          <Unit>{{CORETAX_UOM_CODE}}</Unit>
+          <Price>{{UNIT_PRICE}}</Price>
+          <Qty>{{QUANTITY}}</Qty>
+          <TotalDiscount>{{LINE_DISCOUNT}}</TotalDiscount>
+          <TaxBase>{{TAX_BASE}}</TaxBase>
+          <OtherTaxBase>{{OTHER_TAX_BASE}}</OtherTaxBase>
+          <VATRate>{{VAT_RATE}}</VATRate>
+          <VAT>{{VAT_AMOUNT}}</VAT>
+          <STLGRate>{{STLG_RATE}}</STLGRate>
+          <STLG>{{STLG_AMOUNT}}</STLG>
+        </GoodService>
+      </ListOfGoodService>
+    </TaxInvoice>
+  </ListOfTaxInvoice>
+</TaxInvoiceBulk>

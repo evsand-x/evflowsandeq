@@ -1,0 +1,13 @@
+{
+  "extends": "../packages/backend/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "seed-development.ts",
+    "seed-full-development.ts",
+    "../packages/database/prisma/dev-seed-guard.ts",
+    "grant-development-review.ts",
+    "seed-crm-development.ts"
+  ]
+}

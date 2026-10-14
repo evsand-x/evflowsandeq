@@ -1,0 +1,1 @@
+ALTER TYPE "public"."LedgerEntryKind" ADD VALUE IF NOT EXISTS 'UNBILLED_AR';

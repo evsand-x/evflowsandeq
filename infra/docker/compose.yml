@@ -1,0 +1,79 @@
+name: evflow-local
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-evflow}
+      POSTGRES_USER: ${POSTGRES_USER:-evflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in infra/docker/.env}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  minio:
+    image: ${MINIO_IMAGE:-bitnamilegacy/minio:latest}
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in infra/docker/.env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in infra/docker/.env}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  minio-init:
+    image: ${S3_CLIENT_IMAGE:-amazon/aws-cli:latest}
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in infra/docker/.env}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in infra/docker/.env}
+      AWS_DEFAULT_REGION: ap-southeast-1
+      S3_BUCKET_PRIVATE: ${S3_BUCKET_PRIVATE:-evflow-private}
+      S3_BUCKET_EXPORTS: ${S3_BUCKET_EXPORTS:-evflow-exports}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        aws --endpoint-url http://minio:9000 s3api create-bucket --bucket "$${S3_BUCKET_PRIVATE}" 2>/dev/null || true
+        aws --endpoint-url http://minio:9000 s3api create-bucket --bucket "$${S3_BUCKET_EXPORTS}" 2>/dev/null || true
+
+volumes:
+  postgres-data:
+    name: evflow-postgres-data
+  redis-data:
+    name: evflow-redis-data
+  minio-data:
+    name: evflow-minio-data
