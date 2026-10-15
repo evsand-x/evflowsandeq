@@ -497,10 +497,11 @@ export class OperationsController {
         page: z.coerce.number().int().min(1).max(10000).default(1),
         search: z.string().max(100).default(""),
         state: z.enum(["DRAFT", "OPEN", "CLOSED", "CANCELLED"]).optional(),
+        stage: z.enum(["checking", "shipping", "pod"]).optional(),
       })
       .strict()
       .parse(query);
-    return { data: await this.service.list(req.auth.company_id, type, q.page, q.search, q.state) };
+    return { data: await this.service.list(req.auth.company_id, type, q.page, q.search, q.state, q.stage) };
   }
   @Get("proformas/:id")
   async proforma(@Param("id") id: string, @Req() req: AuthenticatedRequest) {

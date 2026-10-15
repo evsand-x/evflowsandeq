@@ -189,7 +189,7 @@ export function FinanceDashboard({
       {
         accessorKey: "status",
         header: "Status",
-        cell: ({ row }) => <span className="finance-status">{row.original.status}</span>,
+        cell: ({ row }) => <span className="finance-status web-table-status" data-tone="warning">{row.original.status}</span>,
       },
     ],
     [],

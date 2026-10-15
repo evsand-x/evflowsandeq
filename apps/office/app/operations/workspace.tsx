@@ -9,6 +9,8 @@ import { Plus, Printer, ArrowLeft } from "lucide-react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { ProformaContents } from "./proforma";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -18,12 +20,15 @@ import { SelectionField } from "@/components/web/selection-field";
 import { Switch } from "@/components/ui/switch";
 import { apiRequest } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
+import { invoicePaymentStatus, invoiceDocumentNote } from "@/lib/invoice-status";
 import { useSession } from "../session-provider";
 import { DashboardSidebar } from "../dashboard-sidebar";
 import { ExecutiveTopbar } from "../dashboard-executive";
 import { DataTable } from "../crm/crm-common";
 import "../crm/crm.css";
 import "./workflow.css";
+import "./sales-order.css";
+import "./sales-order-modern.css";
 import { Controls } from "./controls";
 import { SalesExceptions, TaxComponents, FinanceWorkspace, Backorders } from "./extended-controls";
 
@@ -48,6 +53,10 @@ type Allocation = {
   };
 };
 export type Row = {
+  snapshot?: unknown;
+  issuedSnapshot?: { version?: number; notes?: string; reference?: string };
+  deliveryReceiptId?: string;
+  invoices?: { id: string; number: string; state: string }[];
   version: number;
   id: string;
   number: string;
@@ -111,6 +120,17 @@ export type Row = {
   acceptedQuantity?: string;
   receiverName?: string;
   fulfillmentBatch?: { id: string; number: string };
+  receiptLines?: {
+    acceptedQuantity: string;
+    allocation: {
+      salesOrderLine: {
+        unitPrice: string;
+        taxSnapshot?: unknown;
+        product: { code: string; name: string; baseUom?: { name: string } | null };
+        Uom?: { name: string } | null;
+      };
+    };
+  }[];
 };
 type Command = (path: string, body?: unknown) => Promise<{ data: Row }>;
 const titles: Record<string, string> = {
@@ -119,6 +139,7 @@ const titles: Record<string, string> = {
   "warehouse-backorders": "Backorder & Alokasi Stok",
   "pick-slips": "Pick Slip",
   warehouse: "Pemenuhan & POD",
+  returns: "Retur Pelanggan",
   invoices: "Tagihan",
   "invoice-create": "Buat Invoice",
   documents: "Dokumen Transaksi",
@@ -131,11 +152,6 @@ function money(value?: string | null, currency = "IDR") {
   const [integer = "0", fraction = "00"] = new Decimal(value).toFixed(2).split(".");
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `${currency} ${grouped},${fraction}`;
-}
-function taxRate(snapshot: unknown) {
-  if (!snapshot || typeof snapshot !== "object") return "—";
-  const value = (snapshot as { rate?: string | number }).rate;
-  return value == null ? "—" : `${value}%`;
 }
 export function ErrorBox({ message }: { message: string }) {
   const messages: Record<string, string> = {
@@ -294,7 +310,21 @@ export function Evidence({ id }: { id?: string | undefined }) {
     </div>
   );
 }
-export function OperationsWorkspace({ path }: { path: string[] }) {
+const warehouseStageTitles: Record<string, string> = {
+  checking: "Checking / Packing",
+  shipping: "Pengiriman",
+  pod: "POD",
+};
+
+const outboundStages = [
+  { key: "picking", label: "Picking", href: "/operations/pick-slips" },
+  { key: "checking", label: "Checking / Packing", href: "/operations/warehouse?stage=checking" },
+  { key: "shipping", label: "Pengiriman", href: "/operations/warehouse?stage=shipping" },
+  { key: "pod", label: "POD", href: "/operations/warehouse?stage=pod" },
+  { key: "returns", label: "Retur", href: "/operations/returns" },
+] as const;
+
+export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: string }) {
   const { principal, state } = useSession();
   const router = useRouter();
   const client = useQueryClient();
@@ -323,6 +353,7 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
       "warehouse-backorders": "sales_order.read",
       "pick-slips": "fulfillment.read",
       warehouse: "fulfillment.read",
+      returns: "fulfillment.read",
       invoices: "sales_invoice.read",
       "invoice-create": "sales_invoice.post",
       documents: "fulfillment.read",
@@ -359,7 +390,7 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
         ? "/receivables/invoice-candidates"
         : id && !creating
           ? `/operations/${kind === "pick-slips" ? "warehouse" : kind}/${id}`
-          : `/operations/lists/${kind === "warehouse-backorders" ? "backorders" : kind}?page=${page}&search=${encodeURIComponent(search)}`;
+          : `/operations/lists/${kind === "warehouse-backorders" ? "backorders" : kind}?page=${page}&search=${encodeURIComponent(search)}${kind === "warehouse" && stage && warehouseStageTitles[stage] ? `&stage=${stage}` : ""}`;
   const query = useQuery({
     queryKey: ["operations", principal?.user_id, principal?.company_id, endpoint],
     queryFn: () =>
@@ -370,7 +401,7 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
       !configuring &&
       !financeControl &&
       !invoiceCreation &&
-      !["backorders", "warehouse-backorders"].includes(kind),
+      !["backorders", "warehouse-backorders", "returns"].includes(kind),
   });
   const candidateQuery = useQuery({
     queryKey: ["operations", principal?.user_id, principal?.company_id, "invoice-candidates"],
@@ -427,6 +458,18 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
   const row = query.data?.data;
   const proformaDocument =
     kind === "documents" && (row as { kind?: string } | undefined)?.kind === "PROFORMA";
+  const outboundView = ["warehouse", "pick-slips", "returns"].includes(kind);
+  const outboundStage =
+    kind === "pick-slips"
+      ? "picking"
+      : kind === "returns"
+        ? "returns"
+        : kind === "warehouse"
+          ? stage && warehouseStageTitles[stage]
+            ? stage
+            : "checking"
+          : undefined;
+  const stageQuery = kind === "warehouse" && stage && warehouseStageTitles[stage] ? `?stage=${stage}` : "";
   const columns: ColumnDef<Row>[] = [
     {
       accessorKey: "number",
@@ -439,7 +482,7 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
       cell: ({ row: r }) => (
         <Link
           className="text-primary underline"
-          href={`/operations/${kind === "pick-slips" ? "warehouse" : kind}/${r.original.id}`}
+          href={`/operations/${kind === "pick-slips" ? "warehouse" : kind}/${r.original.id}${stageQuery}`}
         >
           {r.original.number}
         </Link>
@@ -451,6 +494,10 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
       cell: ({ row: r }) =>
         r.original.customer?.name ?? r.original.salesOrder?.customer?.name ?? "—",
     },
+    ...(outboundView ? [{
+      id: "salesOrder", header: "Sales Order",
+      cell: ({ row: r }: { row: { original: Row } }) => r.original.salesOrder?.number ?? "—",
+    }] : []),
     ...(kind !== "invoices"
       ? [
           {
@@ -477,9 +524,19 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
           {
             id: "invoiceState",
             header: "Status",
-            cell: ({ row: r }: { row: { original: Row } }) => (
-              <Badge variant="outline">{r.original.state}</Badge>
-            ),
+            cell: ({ row: r }: { row: { original: Row } }) => {
+              const status = invoicePaymentStatus(r.original);
+              return (
+                <Badge
+                  variant="outline"
+                  className="so-status"
+                  data-state={status ?? undefined}
+                  title={invoiceDocumentNote(r.original.state) ?? "Status pembayaran berdasarkan sisa tagihan"}
+                >
+                  {status ?? "—"}
+                </Badge>
+              );
+            },
           },
           {
             id: "outstandingAmount",
@@ -497,10 +554,18 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
             id: "description",
             header: "Keterangan",
             cell: ({ row: r }: { row: { original: Row } }) =>
-              r.original.description ?? "Belum terverifikasi",
+              invoiceDocumentNote(r.original.state) ?? r.original.description ?? "Belum terverifikasi",
           },
         ]
       : []),
+    ...(kind === "warehouse" ? [
+      { id: "pickState", header: "Status picking", cell: ({ row: r }: { row: { original: Row } }) => <Badge variant="outline">{r.original.pickList?.state ?? "Belum dibuat"}</Badge> },
+      { id: "action", header: "Tindakan", cell: ({ row: r }: { row: { original: Row } }) => (
+        <Button variant="outline" size="sm" asChild><Link href={`/operations/warehouse/${r.original.id}${stageQuery}`}>
+          {stage === "checking" ? "Periksa barang" : stage === "shipping" ? "Siapkan pengiriman" : stage === "pod" ? "Buka penerimaan" : "Buka detail"}
+        </Link></Button>
+      ) },
+    ] : []),
     ...(kind === "pick-slips"
       ? [
           {
@@ -544,8 +609,9 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
     >
       <DashboardSidebar
         principal={principal}
+        {...(outboundStage ? { outboundStage } : {})}
         activeView={
-          ["warehouse", "pick-slips", "warehouse-backorders"].includes(kind)
+          ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
             ? "warehouse"
             : kind === "invoices"
               ? "finance"
@@ -554,7 +620,7 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
         activeSection={
           ["orders", "backorders"].includes(kind) || proformaDocument
             ? "sales"
-            : ["warehouse", "pick-slips", "warehouse-backorders"].includes(kind)
+            : ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
               ? "warehouse"
               : configuring
                 ? "setting"
@@ -563,13 +629,15 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
       />
       <SidebarInset className="min-w-0">
         <ExecutiveTopbar companyName={principal.company_name} />
-        <main className="executive-content crm-content otc-workspace">
+        <main
+          className={`executive-content crm-content otc-workspace ${["invoices", "invoice-create"].includes(kind) ? "so-workspace" : ""}`}
+        >
           <header className="executive-heading">
             <div>
               <nav className="executive-breadcrumb" aria-label="Breadcrumb">
                 {["orders", "backorders"].includes(kind) || proformaDocument
                   ? "Sales & Marketing / Pesanan Pelanggan"
-                  : ["warehouse", "pick-slips", "warehouse-backorders"].includes(kind)
+                  : ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
                     ? "Warehouse & Logistik / Barang Keluar"
                     : kind.startsWith("tax-")
                       ? "Finance / Pajak"
@@ -594,14 +662,14 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
                       }[kind]
                     : creating
                       ? "Buat Sales Order"
-                      : (row?.number ?? titles[kind] ?? "Halaman tidak ditemukan")}
+                      : (row?.number ?? (kind === "warehouse" && stage ? warehouseStageTitles[stage] : undefined) ?? titles[kind] ?? "Halaman tidak ditemukan")}
               </h1>
             </div>
             <div className="crm-actions">
               {id && (
                 <Button variant="outline" asChild>
                   <Link
-                    href={`/operations/${proformaDocument ? "proformas" : kind === "documents" ? "warehouse" : kind}`}
+                    href={`/operations/${proformaDocument ? "proformas" : kind === "documents" ? "warehouse" : kind}${stageQuery}`}
                   >
                     <ArrowLeft />
                     Kembali
@@ -616,16 +684,54 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
                   </Link>
                 </Button>
               )}
-              {!id && kind === "invoices" && can("sales_invoice.post") && (
-                <Button asChild>
-                  <Link href="/operations/invoice-create">
+              {!id && kind === "invoices" && (
+                can("sales_invoice.post") ? (
+                  <Button asChild>
+                    <Link href="/operations/invoice-create">
+                      <Plus />
+                      Buat Invoice
+                    </Link>
+                  </Button>
+                ) : can("sales_invoice.read") ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled
+                    title="Memerlukan izin posting Invoice"
+                    aria-label="Buat Invoice — memerlukan izin posting Invoice"
+                  >
                     <Plus />
                     Buat Invoice
-                  </Link>
-                </Button>
+                  </Button>
+                ) : null
               )}
             </div>
           </header>
+          {outboundView && (
+            <nav className="outbound-stage-nav" aria-label="Tahap Barang Keluar">
+              {outboundStages.map((item, index) => (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className="outbound-stage-link"
+                  aria-current={outboundStage === item.key ? "page" : undefined}
+                >
+                  <span className="outbound-stage-index" aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </nav>
+          )}
+          {!id && kind === "invoices" && can("sales_invoice.read") && !can("sales_invoice.post") && (
+            <Alert className="mb-4">
+              <AlertDescription>
+                Anda dapat melihat Tagihan, tetapi belum memiliki izin posting Invoice. Hubungi
+                Administrator atau Finance Supervisor untuk mengaktifkan tindakan ini.
+              </AlertDescription>
+            </Alert>
+          )}
           {!enabled ? (
             <ErrorBox message="Izin Anda belum mencukupi untuk layar ini." />
           ) : (
@@ -634,6 +740,12 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
                 <ErrorBox message={error || String(query.error || candidateQuery.error)} />
               )}
               {query.isFetching && <p role="status">Memuat data terbaru…</p>}
+              {outboundView && !id && kind !== "returns" && (
+                <Panel title="Antrean tindakan">
+                  <p>{kind === "pick-slips" ? "Siapkan Pick Slip dan konfirmasikan pengambilan barang sesuai alokasi." : stage === "checking" ? "Periksa hasil picking sebelum menerbitkan packing dan menyiapkan pengiriman." : stage === "shipping" ? "Lengkapi pengiriman untuk barang yang sudah lolos checking. Kelayakan kirim diperiksa kembali oleh server." : stage === "pod" ? "Catat penerimaan pelanggan untuk pengiriman yang belum terselesaikan." : "Pantau seluruh tahap pemenuhan pesanan."}</p>
+                  <p role="status">{query.isError ? "Jumlah tugas belum dapat dimuat." : row ? `${row.total} tahap pemenuhan sesuai pencarian` : "Memuat jumlah tugas…"}</p>
+                </Panel>
+              )}
               {invoiceCreation ? (
                 <InvoiceCreation
                   rows={candidateQuery.data?.data ?? []}
@@ -659,6 +771,10 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
                   pending={pending}
                   onCreated={(id) => router.push(`/operations/orders/${id}`)}
                 />
+              ) : kind === "returns" ? (
+                <Panel title="Retur Pelanggan">
+                  <p role="status">Daftar dan detail retur belum tersedia pada aplikasi Office. Penerimaan fisik retur dan tindak lanjut kualitas belum dapat dikerjakan dari halaman ini.</p>
+                </Panel>
               ) : !id ? (
                 <DataTable
                   data={row?.rows ?? []}
@@ -667,7 +783,7 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
                   page={page}
                   onPage={setPage}
                   busy={query.isFetching}
-                  label={titles[kind] ?? "Transaksi"}
+                  label={(kind === "warehouse" && stage ? warehouseStageTitles[stage] : undefined) ?? titles[kind] ?? "Transaksi"}
                   toolbar={
                     <Input
                       aria-label="Cari nomor dokumen"
@@ -764,6 +880,7 @@ export function OperationsWorkspace({ path }: { path: string[] }) {
                         command={command}
                         pending={pending}
                         can={can}
+                        stage={stage ?? "checking"}
                       />
                     )}
                     {kind === "invoices" && (
@@ -933,12 +1050,17 @@ function Warehouse({
   command,
   pending,
   can,
+  stage,
 }: {
   row: Row;
   command: Command;
   pending: boolean;
   can: (p: string) => boolean;
+  stage?: string;
 }) {
+  const isChecking = stage === "checking";
+  const isShipping = stage === "shipping";
+  const isPod = stage === "pod";
   const [driver, setDriver] = useState(""),
     [vehicle, setVehicle] = useState(""),
     [receiver, setReceiver] = useState(""),
@@ -952,7 +1074,7 @@ function Warehouse({
   };
   return (
     <>
-      <Panel title="Pemenuhan">
+      <Panel title={isChecking ? "Dokumen Checking / Packing" : isShipping ? "Dokumen Pengiriman" : isPod ? "Dokumen POD" : "Dokumen Pemenuhan"}>
         <p>
           {row.salesOrder?.number} · {row.salesOrder?.customer?.name} · {row.state}
         </p>
@@ -972,7 +1094,7 @@ function Warehouse({
           { accessorKey: "inTransitQuantity", header: "Dalam perjalanan" },
         ]}
       />
-      <div className="crm-actions">
+      {isChecking && <div className="crm-actions">
         {row.state === "ALLOCATED" && !row.pickList && can("fulfillment.pick") && (
           <Button
             disabled={pending}
@@ -1004,8 +1126,8 @@ function Warehouse({
             Konfirmasi checking
           </Button>
         )}
-      </div>
-      {row.state === "ALLOCATED" && can("fulfillment.dispatch") && (
+      </div>}
+      {isShipping && row.state === "ALLOCATED" && can("fulfillment.dispatch") && (
         <form
           className="web-form"
           onSubmit={(e) => {
@@ -1071,7 +1193,7 @@ function Warehouse({
           </Panel>
         </form>
       )}
-      {["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
+      {isPod && ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
         can("delivery_receipt.confirm") && (
           <form
             className="web-form"
@@ -1107,7 +1229,7 @@ function Warehouse({
             </Panel>
           </form>
         )}
-      <Panel title="Dokumen gudang">
+      {isShipping && <Panel title="Surat Jalan">
         {row.documents?.map((doc) => (
           <p key={doc.id}>
             <Link href={`/operations/documents/${doc.id}`} className="text-primary underline">
@@ -1115,8 +1237,8 @@ function Warehouse({
             </Link>
           </p>
         ))}
-      </Panel>
-      <Panel title="POD & penagihan">
+      </Panel>}
+      {isPod && <Panel title="POD & penagihan">
         {row.deliveryReceipts?.map((pod) => (
           <div key={pod.id}>
             <p>Penerima: {pod.receiverName}</p>
@@ -1139,7 +1261,7 @@ function Warehouse({
                 )}
           </div>
         ))}
-      </Panel>
+      </Panel>}
     </>
   );
 }
@@ -1147,52 +1269,105 @@ function InvoiceCreation({
   rows,
   pending,
   command,
-  onCreated,
 }: {
   rows: Row[];
   pending: boolean;
   command: Command;
   onCreated: () => void;
 }) {
+  const router = useRouter();
+  const [selectedId, setSelectedId] = useState("");
+  const [reference, setReference] = useState("");
+  const [notes, setNotes] = useState("");
+  const selected = rows.find((row) => row.id === selectedId);
+  const existing = selected?.invoices?.find((invoice) => invoice.state !== "VOID");
+  const save = async () => {
+    if (!selected || existing) return;
+    const result = await command("/sales-invoice-drafts", {
+      delivery_receipt_id: selected.id,
+      billing_reference: reference,
+      notes,
+    });
+    router.push(`/operations/invoices/${result.data.id}`);
+  };
   return (
-    <Panel title="POD siap ditagihkan">
-      {!rows.length ? (
-        <p>Belum ada POD dengan jumlah diterima yang siap dibuatkan invoice.</p>
-      ) : (
-        <div className="space-y-3">
-          {rows.map((row) => (
-            <Card key={row.id}>
-              <CardContent className="flex items-center justify-between gap-4 pt-6">
-                <div>
-                  <p className="font-medium">
-                    {row.salesOrder?.number ?? "SO"} ·{" "}
-                    {row.salesOrder?.customer?.name ?? "Pelanggan"}
-                  </p>
-                  <p className="text-muted-foreground text-sm">
-                    POD {row.fulfillmentBatch?.number ?? row.id.slice(0, 8)} · diterima{" "}
-                    {row.acceptedQuantity ?? "—"} ·{" "}
-                    {row.acceptedAt?.slice(0, 10) ?? "tanggal belum tersedia"}
-                  </p>
-                </div>
-                <Button
-                  disabled={pending}
-                  onClick={() =>
-                    void command("/sales-invoices", { delivery_receipt_id: row.id })
-                      .then(onCreated)
-                      .catch(() => undefined)
-                  }
-                >
-                  Buat Invoice
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+    <div className="web-form">
+      <div className="so-footer so-detail-actions">
+        <Button variant="outline" asChild>
+          <Link href="/operations/invoices">
+            <ArrowLeft />
+            Daftar Invoice
+          </Link>
+        </Button>
+        {existing ? (
+          <Button asChild>
+            <Link href={`/operations/invoices/${existing.id}`}>Buka Invoice {existing.number}</Link>
+          </Button>
+        ) : (
+          <Button
+            disabled={pending || !selected}
+            onClick={() => void save().catch(() => undefined)}
+          >
+            {pending ? "Menyimpan…" : "Simpan Draft Invoice"}
+          </Button>
+        )}
+      </div>
+      <Panel title="Sumber Invoice">
+        <SelectionField
+          label="Pilih POD"
+          options={rows.map((r) => ({
+            id: r.id,
+            name: `${r.salesOrder?.number} · ${r.salesOrder?.customer?.name} · ${r.fulfillmentBatch?.number} · ${formatDate(r.acceptedAt)}`,
+          }))}
+          value={selectedId ? [selectedId] : []}
+          onChange={(values) => setSelectedId(values[0] ?? "")}
+        />
+        {!rows.length && <p>Belum ada POD yang siap ditagihkan.</p>}
+      </Panel>
+      {selected && (
+        <>
+          <div className="so-detail-overview">
+            <div>
+              <span className="so-eyebrow">INVOICE</span>
+              <h2>Draft baru</h2>
+              <p>{selected.salesOrder?.customer?.name}</p>
+            </div>
+            <Badge variant="outline">Belum disimpan</Badge>
+          </div>
+          <ProformaContents
+            documentType="Invoice"
+            snapshot={selected.snapshot}
+            batchNumber={selected.fulfillmentBatch?.number}
+            notes={
+              <div className="grid gap-4">
+                <label>
+                  Referensi tagihan
+                  <Input
+                    value={reference}
+                    maxLength={200}
+                    onChange={(e) => setReference(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Catatan
+                  <Textarea
+                    value={notes}
+                    maxLength={2000}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </label>
+                <p className="so-help">
+                  Produk, jumlah, harga, pajak, dan ongkir mengikuti dokumen sumber. Draft dapat
+                  diperbarui sebelum posting.
+                </p>
+              </div>
+            }
+          />
+        </>
       )}
-    </Panel>
+    </div>
   );
 }
-
 function Invoice({
   row,
   command,
@@ -1214,6 +1389,8 @@ function Invoice({
     enabled: can("customer_receipt.post"),
   });
   const [bank, setBank] = useState("");
+  const [draftReference, setDraftReference] = useState(row.issuedSnapshot?.reference ?? "");
+  const [draftNotes, setDraftNotes] = useState(row.issuedSnapshot?.notes ?? "");
   const [amount, setAmount] = useState(""),
     [allocationAmount, setAllocationAmount] = useState(""),
     [reference, setReference] = useState(""),
@@ -1230,8 +1407,9 @@ function Invoice({
           </div>
           <div className="so-dimensions">
             <div>
-              <span>Status</span>
-              <Badge variant="outline">{row.state}</Badge>
+              <span>Status pembayaran</span>
+              <Badge variant="outline">{invoicePaymentStatus(row) ?? "—"}</Badge>
+              {invoiceDocumentNote(row.state) && <p className="so-help">{invoiceDocumentNote(row.state)}</p>}
             </div>
             <div>
               <span>Sales Order</span>
@@ -1239,71 +1417,93 @@ function Invoice({
             </div>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <Panel title="Pelanggan">
-            <p>{row.customer?.name ?? "—"}</p>
-            <p>{row.deliveryAddress ?? "Alamat belum tersedia"}</p>
-          </Panel>
-          <Panel title="Tanggal & termin">
-            <p>Dibuat: {formatDate(row.createdAt)}</p>
-            <p>Jatuh tempo: {formatDate(row.dueDate)}</p>
-          </Panel>
-          <Panel title="Status penagihan">
-            <p>Sisa tagihan: {money(row.outstandingAmount, row.currency)}</p>
-            <p>{row.description ?? "Belum terverifikasi"}</p>
-          </Panel>
-        </div>
-        <Panel title="Detail Produk">
-          <DataTable
-            data={(row.deliveryReceipt?.lines ?? []).map((line) => ({
-              code: line.allocation.salesOrderLine.product.code,
-              product: line.allocation.salesOrderLine.product.name,
-              unit:
-                line.allocation.salesOrderLine.Uom?.name ??
-                line.allocation.salesOrderLine.product.baseUom?.name ??
-                "—",
-              quantity: line.acceptedQuantity,
-              price: line.allocation.salesOrderLine.unitPrice,
-              subtotal: new Decimal(line.acceptedQuantity)
-                .mul(line.allocation.salesOrderLine.unitPrice)
-                .toFixed(2),
-              tax: taxRate(line.allocation.salesOrderLine.taxSnapshot),
-            }))}
-            total={row.deliveryReceipt?.lines.length ?? 0}
-            columns={[
-              { accessorKey: "code", header: "Kode Produk" },
-              { accessorKey: "product", header: "Nama Produk" },
-              { accessorKey: "unit", header: "Satuan" },
-              { accessorKey: "quantity", header: "Jumlah" },
-              {
-                id: "price",
-                header: "Harga Satuan",
-                cell: ({ row: r }) => money(r.original.price, row.currency),
-              },
-              { accessorKey: "tax", header: "Pajak" },
-              {
-                id: "subtotal",
-                header: "Sub Total",
-                cell: ({ row: r }) => money(r.original.subtotal, row.currency),
-              },
-            ]}
-          />
-        </Panel>
-        <div className="ml-auto max-w-md">
-          <Panel title="Ringkasan Nilai">
-            <p>Subtotal: {money(row.subtotal, row.currency)}</p>
-            <p>Ongkos kirim: {money(row.freightAmount, row.currency)}</p>
-            <p>Pajak: {money(row.taxAmount, row.currency)}</p>
-            <strong>Total tagihan: {money(row.total, row.currency)}</strong>
-          </Panel>
-        </div>
-        {row.document && (
-          <Button variant="outline" onClick={() => window.print()}>
-            <Printer /> Cetak Invoice
+        <ProformaContents
+          documentType="Invoice"
+          snapshot={row.snapshot}
+          issuedAt={row.postedAt ?? undefined}
+          notes={
+            row.state === "DRAFT" && can("sales_invoice.post") ? (
+              <div className="grid gap-4">
+                <label>
+                  Referensi tagihan
+                  <Input
+                    value={draftReference}
+                    maxLength={200}
+                    onChange={(e) => setDraftReference(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Catatan
+                  <Textarea
+                    value={draftNotes}
+                    maxLength={2000}
+                    onChange={(e) => setDraftNotes(e.target.value)}
+                  />
+                </label>
+                <p className="so-help">
+                  Simpan draft sebelum posting. Harga, jumlah, pajak dan ongkir mengikuti sumber
+                  POD.
+                </p>
+              </div>
+            ) : (
+              <p>{row.issuedSnapshot?.notes || "Tidak ada catatan."}</p>
+            )
+          }
+        />
+      </div>
+      <div className="so-footer so-detail-actions so-no-print">
+        {row.state === "DRAFT" && can("sales_invoice.post") && row.deliveryReceiptId && (
+          <>
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() =>
+                void command(`/sales-invoice-drafts/${row.id}`, {
+                  delivery_receipt_id: row.deliveryReceiptId,
+                  billing_reference: draftReference,
+                  notes: draftNotes,
+                  version: row.issuedSnapshot?.version,
+                }).catch(() => undefined)
+              }
+            >
+              Simpan perubahan draft
+            </Button>
+            <Button
+              disabled={
+                pending ||
+                draftReference !== (row.issuedSnapshot?.reference ?? "") ||
+                draftNotes !== (row.issuedSnapshot?.notes ?? "")
+              }
+              onClick={() =>
+                void command("/sales-invoices", {
+                  delivery_receipt_id: row.deliveryReceiptId,
+                }).catch(() => undefined)
+              }
+            >
+              Terbitkan Invoice
+            </Button>
+          </>
+        )}
+        {row.state === "POSTED" && (
+          <Button onClick={() => window.print()}>
+            <Printer />
+            Cetak Invoice
           </Button>
         )}
       </div>
-      {can("customer_receipt.post") && (
+      <Panel title="Status penagihan">
+        <p>
+          Dibuat: {formatDate(row.createdAt)} · Jatuh tempo: {formatDate(row.dueDate)}
+        </p>
+        <p>
+          Sisa tagihan:{" "}
+          {row.state === "POSTED"
+            ? money(row.outstandingAmount, row.currency)
+            : "Belum membentuk piutang"}
+        </p>
+        <p>{row.description ?? "Belum terverifikasi"}</p>
+      </Panel>
+      {row.state === "POSTED" && can("customer_receipt.post") && (
         <form
           className="web-form"
           onSubmit={(e) => {
@@ -1348,10 +1548,10 @@ function Invoice({
           </Panel>
         </form>
       )}
-      {can("tax_component.read") && (
+      {row.state === "POSTED" && can("tax_component.read") && (
         <TaxComponents row={row} can={can} command={command} pending={pending} />
       )}
-      {can("customer_receipt.allocate") && (
+      {row.state === "POSTED" && can("customer_receipt.allocate") && (
         <form
           className="web-form"
           onSubmit={(e) => {

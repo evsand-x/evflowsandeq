@@ -2881,3 +2881,7 @@ Permission minimum: `tax.coretax.mapping.manage`, `tax.coretax.batch.create`, `t
 - batas jumlah faktur/ukuran file per upload bila diberlakukan Coretax.
 
 Daftar ini bukan keputusan blueprint terbuka. Generate production ditahan sampai data/evidence yang relevan tersedia dan diverifikasi.
+## Draft Invoice web — keputusan 13 Oktober 2026
+
+Draft Invoice berbasis POD dapat disimpan dan diperbarui sebelum posting. Endpoint `POST /sales-invoice-drafts` dan `POST /sales-invoice-drafts/:id` menerima `delivery_receipt_id`, `billing_reference`, `notes`, serta `version` wajib cocok pada edit. Keduanya memerlukan `sales_invoice.post` dan Idempotency-Key. Snapshot draft menyimpan versi, rincian sumber dan nilai desimal; tidak membentuk AR/jurnal. Nilai komersial mengikuti POD. Posting `POST /sales-invoices` menggunakan nomor/identitas draft yang sama dan memeriksa ulang nilai sumber. Invoice posted tidak dapat diedit melalui endpoint draft. Lihat [cakupan dan bukti UI Invoice](../development/invoice-ar-ui-2026-10-13.md).
+

@@ -473,13 +473,14 @@ export function TransactionTable({ preview = false }: { preview?: boolean }) {
                   <TableCell className="pr-4">
                     <Badge
                       variant="outline"
-                      className={
+                      className={`web-table-status ${
                         status === "Selesai"
                           ? "border-green-200 bg-green-50 text-green-700"
                           : status === "Menunggu"
                             ? "border-yellow-200 bg-yellow-50 text-yellow-700"
                             : "border-blue-200 bg-blue-50 text-blue-700"
-                      }
+                      }`}
+                      data-tone={status === "Selesai" ? "success" : status === "Menunggu" ? "warning" : "info"}
                     >
                       {status}
                     </Badge>

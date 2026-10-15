@@ -14,6 +14,7 @@ import { AuditService } from "../common/audit.service";
 import { transactionCommand } from "../common/transaction-command";
 import { orderView } from "./order-view";
 import { proformaKinds, proformaStatus } from "./proforma";
+import { lineAmounts } from "./pricing-controls";
 
 @Injectable()
 export class OperationsService {
@@ -393,6 +394,7 @@ export class OperationsService {
     page: number,
     search: string,
     state?: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED",
+    stage?: "checking" | "shipping" | "pod",
   ) {
     const skip = (page - 1) * 25,
       query = { contains: search, mode: "insensitive" as const };
@@ -530,7 +532,17 @@ export class OperationsService {
       };
     }
     if (kind === "warehouse") {
-      const where = { companyId: c, number: query };
+      const where: Prisma.FulfillmentBatchWhereInput = {
+        companyId: c,
+        OR: [{ number: query }, { salesOrder: { number: query } }, { salesOrder: { customer: { name: query } } }],
+        ...(stage === "checking"
+          ? { state: "ALLOCATED", pickList: { is: { state: "PICKED" } } }
+          : stage === "shipping"
+            ? { state: "ALLOCATED", pickList: { is: { state: "CHECKED" } } }
+            : stage === "pod"
+              ? { state: { in: ["DISPATCHED", "PARTIALLY_DELIVERED"] } }
+              : {}),
+      };
       const [rows, total] = await prisma.$transaction([
         prisma.fulfillmentBatch.findMany({
           where,
@@ -595,55 +607,48 @@ export class OperationsService {
       }),
       prisma.salesInvoice.count({ where }),
     ]);
-    const taxDocuments = await prisma.officialTaxDocument.findMany({
-      where: { companyId: c, sourceType: "SALES_INVOICE", sourceId: { in: rows.map((r) => r.id) } },
-      select: { sourceId: true, state: true },
-    });
-    const withholding = await prisma.receiptTaxComponent.findMany({
-      where: {
-        companyId: c,
-        invoiceId: { in: rows.map((r) => r.id) },
-        kind: "income_tax_withheld",
-      },
-      select: { invoiceId: true, state: true },
-    });
-    const taxByInvoice = new Map(taxDocuments.map((d) => [d.sourceId, d.state]));
-    const withholdingByInvoice = new Map(withholding.map((d) => [d.invoiceId, d.state]));
     return {
-      rows: rows.map((invoice) => {
-        const outstanding = invoice.outstandingAmount.toString();
-        const totalAmount = (invoice.total ?? invoice.subtotal.add(invoice.taxAmount)).toString();
-        const taxReported = taxByInvoice.get(invoice.id);
-        const notes = [] as string[];
-        if (invoice.state === "POSTED" && invoice.outstandingAmount.eq(0))
-          notes.push("Sudah Lunas");
-        else if (
-          invoice.state === "POSTED" &&
-          invoice.outstandingAmount.lt(invoice.total ?? invoice.subtotal)
-        )
-          notes.push("DPP Lunas");
-        if (invoice.taxAmount.gt(0) && !taxReported) notes.push("PPN keluaran belum dilaporkan");
-        if (
-          withholdingByInvoice.get(invoice.id) &&
-          withholdingByInvoice.get(invoice.id) !== "VERIFIED"
-        )
-          notes.push("SSP belum di collect");
-        return {
+      rows: await Promise.all(
+        rows.map(async (invoice) => ({
           ...invoice,
-          subtotal: invoice.subtotal.toString(),
-          taxAmount: invoice.taxAmount.toString(),
-          total: totalAmount,
-          outstandingAmount: outstanding,
-          freightAmount: invoice.freightAmount.toString(),
-          freightTaxAmount: invoice.freightTaxAmount.toString(),
-          dueDate: invoice.dueDate?.toISOString() ?? null,
-          createdAt: invoice.createdAt.toISOString(),
-          postedAt: invoice.postedAt?.toISOString() ?? null,
-          description: notes.length ? notes.join(" · ") : "Belum terverifikasi",
-        };
-      }),
+          total: invoice.total ?? invoice.subtotal.add(invoice.taxAmount),
+          description: await this.invoiceDescription(c, invoice),
+        })),
+      ),
       total,
     };
+  }
+  private async invoiceDescription(
+    c: string,
+    invoice: {
+      id: string;
+      state: string;
+      outstandingAmount: Prisma.Decimal;
+      taxAmount: Prisma.Decimal;
+    },
+  ) {
+    if (invoice.state === "DRAFT") return "Draft — belum membentuk piutang";
+    if (invoice.state === "ISSUED_WAITING_POD") return "Menunggu POD";
+    if (invoice.state === "VOID") return "Dibatalkan";
+    const notes: string[] = [];
+    const credits = await prisma.creditNote.count({
+      where: { companyId: c, salesInvoiceId: invoice.id, state: "POSTED" },
+    });
+    if (invoice.outstandingAmount.eq(0))
+      notes.push(credits ? "Saldo selesai — terdapat nota kredit" : "Sudah Lunas");
+    else if (invoice.outstandingAmount.gt(0) && invoice.outstandingAmount.eq(invoice.taxAmount))
+      notes.push("DPP Lunas");
+    else notes.push("Belum lunas");
+    const components = await prisma.receiptTaxComponent.findMany({
+      where: { companyId: c, invoiceId: invoice.id },
+      select: { kind: true, state: true },
+    });
+    if (components.some((x) => x.kind === "vat_collected_by_customer" && x.state === "PENDING"))
+      notes.push("Bukti pungut/SSP menunggu verifikasi");
+    if (components.some((x) => x.kind === "vat_collected_by_customer" && x.state === "POSTED"))
+      notes.push("PPN dipungut pelanggan — bukti diposting");
+    if (invoice.taxAmount.gt(0)) notes.push("Masih berutang pajak keluaran (belum dilaporkan)");
+    return notes.join(" · ");
   }
   async proforma(c: string, id: string) {
     const document = await prisma.fulfillmentDocument.findFirst({
@@ -761,7 +766,14 @@ export class OperationsService {
       where: { companyId: c, id },
       include: {
         customer: { select: { name: true } },
-        salesOrder: { select: { number: true, deliveryAddress: true } },
+        salesOrder: {
+          select: {
+            number: true,
+            deliveryAddress: true,
+            paymentSnapshot: true,
+            customerReference: true,
+          },
+        },
         deliveryReceipt: {
           include: {
             lines: {
@@ -794,7 +806,51 @@ export class OperationsService {
     const document = await prisma.fulfillmentDocument.findFirst({
       where: { companyId: c, kind: `INVOICE:${id}` },
     });
-    return { ...row, receipts, document };
+    const company = await prisma.company.findUniqueOrThrow({ where: { id: c } });
+    const draft = row.issuedSnapshot as { notes?: string; reference?: string } | null;
+    const postedSnapshot = document?.snapshot as {
+      lines?: unknown[];
+      company?: string;
+      customer?: string;
+      address?: string;
+      reference?: string;
+    } | null;
+    const snapshot =
+      row.state === "DRAFT"
+        ? row.issuedSnapshot
+        : {
+            company: postedSnapshot?.company ?? company.name,
+            customer: postedSnapshot?.customer ?? row.customer.name,
+            address: postedSnapshot?.address ?? row.salesOrder.deliveryAddress,
+            reference: draft?.reference ?? row.salesOrder.customerReference,
+            payment: row.salesOrder.paymentSnapshot,
+            currency: row.currency,
+            subtotal: row.subtotal,
+            tax: row.taxAmount,
+            total: row.total,
+            freight: { amount: row.freightAmount, tax: row.freightTaxAmount },
+            allocations:
+              postedSnapshot?.lines ??
+              row.deliveryReceipt?.lines.map((line) => ({
+                product_code: line.allocation.salesOrderLine.product.code,
+                product: line.allocation.salesOrderLine.product.name,
+                unit:
+                  line.allocation.salesOrderLine.Uom?.name ??
+                  line.allocation.salesOrderLine.product.baseUom.name,
+                quantity: line.acceptedQuantity,
+                unit_price: line.allocation.salesOrderLine.unitPrice,
+                tax_snapshot: line.allocation.salesOrderLine.taxSnapshot,
+                amounts: lineAmounts(line.allocation.salesOrderLine, line.acceptedQuantity),
+              })) ??
+              [],
+          };
+    return {
+      ...row,
+      receipts,
+      document,
+      snapshot,
+      description: await this.invoiceDescription(c, row),
+    };
   }
   async lookups(c: string) {
     const [customers, products, taxRules] = await Promise.all([

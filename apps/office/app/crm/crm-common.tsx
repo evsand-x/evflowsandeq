@@ -65,6 +65,20 @@ export function Choice({
     </Select>
   );
 }
+function tableColumnKind(header: unknown) {
+  if (typeof header !== "string") return undefined;
+  if (/^Status(?:\s|$)/i.test(header)) return "status";
+  if (/^Keterangan(?:\s|$)/i.test(header)) return "description";
+  return undefined;
+}
+function tableStatusTone(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const text = String(value ?? "").toLocaleLowerCase("id-ID");
+  if (/selesai|lunas|terverifikasi|aktif|cocok|diterima|siap/.test(text)) return "success";
+  if (/ditolak|gagal|dibatalkan|nonaktif|terlambat|ditahan|belum dibayar/.test(text)) return "danger";
+  if (/menunggu|proses|sebagian|backorder|belum|draft|pending|terjadwal/.test(text)) return "warning";
+  return "info";
+}
 export function DataTable<T>({
   data,
   columns,
@@ -159,7 +173,7 @@ export function DataTable<T>({
           {table.getHeaderGroups().map((group) => (
             <TableRow key={group.id}>
               {group.headers.map((header) => (
-                <TableHead key={header.id}>
+                <TableHead key={header.id} data-column-kind={tableColumnKind(header.column.columnDef.header)}>
                   {flexRender(header.column.columnDef.header, header.getContext())}
                 </TableHead>
               ))}
@@ -169,13 +183,17 @@ export function DataTable<T>({
         <TableBody>
           {table.getRowModel().rows.map((row) => (
             <TableRow key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {formTable && typeof cell.column.columnDef.cell === "function"
-                    ? cell.column.columnDef.cell(cell.getContext())
-                    : flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
+              {row.getVisibleCells().map((cell) => {
+                const kind = tableColumnKind(cell.column.columnDef.header);
+                const content = formTable && typeof cell.column.columnDef.cell === "function"
+                  ? cell.column.columnDef.cell(cell.getContext())
+                  : flexRender(cell.column.columnDef.cell, cell.getContext());
+                return (
+                  <TableCell key={cell.id} data-column-kind={kind}>
+                    {kind ? <span className={kind === "status" ? "web-table-status" : "web-table-description"} data-tone={kind === "status" ? tableStatusTone(cell.getValue()) : undefined}>{content}</span> : content}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           ))}
         </TableBody>

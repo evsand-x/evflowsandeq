@@ -6,6 +6,7 @@ import {
   confirmPodSchema,
   pickListConfirmSchema,
   postInvoiceSchema,
+  invoiceDraftSchema,
   paymentPolicySchema,
   createSupplierInvoiceSchema,
   createCustomerReceiptSchema,
@@ -316,6 +317,41 @@ export class OtcPtpController {
         commandKey(key),
       )
       .then((data) => ({ data }));
+  }
+  @Post("sales-invoice-drafts")
+  @RequirePermissions("sales_invoice.post")
+  async createInvoiceDraft(
+    @Body() body: unknown,
+    @Headers("idempotency-key") key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return {
+      data: await this.service.saveInvoiceDraft(
+        req.auth.company_id,
+        req.auth.user_id,
+        undefined,
+        parse(invoiceDraftSchema, body),
+        commandKey(key),
+      ),
+    };
+  }
+  @Post("sales-invoice-drafts/:id")
+  @RequirePermissions("sales_invoice.post")
+  async editInvoiceDraft(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return {
+      data: await this.service.saveInvoiceDraft(
+        req.auth.company_id,
+        req.auth.user_id,
+        id,
+        parse(invoiceDraftSchema, body),
+        commandKey(key),
+      ),
+    };
   }
   @Post("customers/:id/receipts")
   @RequirePermissions("customer_receipt.post")

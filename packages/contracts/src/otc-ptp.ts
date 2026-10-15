@@ -5,13 +5,15 @@ const positiveDecimal = z
   .regex(/^\d{1,14}(\.\d{1,10})?$/)
   .refine((v) => !/^0+(\.0*)?$/.test(v));
 const nonNegativeDecimal = z.string().regex(/^\d{1,14}(\.\d{1,10})?$/);
-const freightTermsSchema = z.object({
-  payer: z.enum(["CUSTOMER", "COMPANY", "CARRIER"]),
-  basis: z.literal("PER_SHIPMENT"),
-  estimate: nonNegativeDecimal,
-  tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
-  tax_rule_id: z.string().uuid().optional(),
-}).strict();
+const freightTermsSchema = z
+  .object({
+    payer: z.enum(["CUSTOMER", "COMPANY", "CARRIER"]),
+    basis: z.literal("PER_SHIPMENT"),
+    estimate: nonNegativeDecimal,
+    tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
+    tax_rule_id: z.string().uuid().optional(),
+  })
+  .strict();
 export const openingStockSchema = z
   .object({
     product_id: z.string().uuid(),
@@ -49,16 +51,21 @@ export const createSalesOrderSchema = z
       .max(100),
   })
   .strict();
-export const shipmentSchema = z.object({
-  driver: z.string().trim().min(1).max(200),
-  vehicle: z.string().trim().min(1).max(100),
-  planned_at: z.string().datetime(),
-  freight: z.object({
-    amount: nonNegativeDecimal,
-    tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
-    tax_rule_id: z.string().uuid().optional(),
-  }).strict().optional(),
-}).strict();
+export const shipmentSchema = z
+  .object({
+    driver: z.string().trim().min(1).max(200),
+    vehicle: z.string().trim().min(1).max(100),
+    planned_at: z.string().datetime(),
+    freight: z
+      .object({
+        amount: nonNegativeDecimal,
+        tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
+        tax_rule_id: z.string().uuid().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
 export const idempotencySchema = z.string().trim().min(8).max(200);
 export const confirmPodSchema = z
   .object({
@@ -81,6 +88,14 @@ export const confirmPodSchema = z
   })
   .strict();
 export const postInvoiceSchema = z.object({ delivery_receipt_id: z.string().uuid() }).strict();
+export const invoiceDraftSchema = z
+  .object({
+    delivery_receipt_id: z.string().uuid(),
+    notes: z.string().trim().max(2000).default(""),
+    billing_reference: z.string().trim().max(200).default(""),
+    version: z.number().int().positive().optional(),
+  })
+  .strict();
 export type OpeningStockInput = z.infer<typeof openingStockSchema>;
 export type CreateSalesOrderInput = z.infer<typeof createSalesOrderSchema>;
 export const approvePurchaseRequestSchema = z

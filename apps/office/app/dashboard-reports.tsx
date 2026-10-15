@@ -199,7 +199,7 @@ export function ReportsDashboard({
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => (
-          <Badge variant="secondary" className="workspace-status" data-tone={row.original.tone}>
+          <Badge variant="secondary" className="workspace-status web-table-status" data-tone={row.original.tone}>
             {row.original.status}
           </Badge>
         ),

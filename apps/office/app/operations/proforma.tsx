@@ -312,12 +312,16 @@ export function ProformaContents({
   batchNumber,
   totalsPending = false,
   freightControls,
+  documentType = "Proforma",
+  notes,
 }: {
   snapshot: unknown;
-  issuedAt?: string;
+  issuedAt?: string | undefined;
   batchNumber?: string | undefined;
   totalsPending?: boolean;
   freightControls?: ReactNode;
+  documentType?: "Proforma" | "Invoice";
+  notes?: ReactNode;
 }) {
   const data = snapshot as
     | {
@@ -387,13 +391,13 @@ export function ProformaContents({
             <Value label="Tahap pemenuhan">{batchNumber}</Value>
           </div>
         </Panel>
-        <Panel title="Detail produk Proforma">
+        <Panel title={`Detail produk ${documentType}`}>
           <div className="so-proforma-lines">
             <DataTable
               data={data.allocations}
               columns={columns}
               total={data.allocations.length}
-              label="produk Proforma"
+              label={`produk ${documentType}`}
               showColumns={false}
             />
           </div>
@@ -402,9 +406,9 @@ export function ProformaContents({
           </p>
         </Panel>
       </div>
-      <aside className="so-detail-aside" aria-label="Nilai dan catatan Proforma">
+      <aside className="so-detail-aside" aria-label={`Nilai dan catatan ${documentType}`}>
         <Panel title="Nilai Pesanan">
-          <aside className="so-totals" aria-label="Ringkasan nilai Proforma">
+          <aside className="so-totals" aria-label={`Ringkasan nilai ${documentType}`}>
             <h3>Ringkasan nilai</h3>
             <dl>
               <div>
@@ -438,10 +442,18 @@ export function ProformaContents({
         </Panel>
         {freightControls}
         <Panel title="Catatan" className="so-proforma-note">
-          <p className="so-help">
-            Proforma Invoice merupakan dokumen sementara sebelum Invoice diterbitkan dan belum
-            membentuk piutang. Nilai mengikuti alokasi pada dokumen.
-          </p>
+          {notes ??
+            (documentType === "Invoice" ? (
+              <p className="so-help">
+                Invoice draft belum membentuk piutang. Nilai mengikuti POD dan ketentuan yang
+                tersimpan.
+              </p>
+            ) : (
+              <p className="so-help">
+                Proforma Invoice merupakan dokumen sementara sebelum Invoice diterbitkan dan belum
+                membentuk piutang. Nilai mengikuti alokasi pada dokumen.
+              </p>
+            ))}
         </Panel>
       </aside>
     </div>

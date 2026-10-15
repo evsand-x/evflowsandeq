@@ -3,6 +3,58 @@
   flex-direction: column;
   gap: 20px;
 }
+.outbound-stage-nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px;
+  border: 1px solid var(--ev-color-border);
+  border-radius: var(--ev-radius-card);
+  background: var(--ev-color-sidebar);
+  scrollbar-width: thin;
+}
+.outbound-stage-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: var(--ev-color-muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.outbound-stage-link:hover {
+  background: var(--ev-color-card);
+  color: var(--ev-color-text);
+}
+.outbound-stage-link[aria-current="page"] {
+  background: var(--ev-color-card);
+  color: var(--ev-color-text);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 10%);
+}
+.outbound-stage-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 720px) {
+  .outbound-stage-nav {
+    margin-inline: -4px;
+    border-inline: 0;
+    border-radius: 0;
+  }
+}
 .otc-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

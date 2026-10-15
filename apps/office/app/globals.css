@@ -396,6 +396,70 @@
   font-size: 11px;
   font-weight: 500;
 }
+
+/* Shared table labels, based on the Sales Order list status treatment. */
+[data-column-kind="status"] {
+  vertical-align: middle;
+}
+.web-table-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ev-color-neutral-soft);
+  color: var(--ev-color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.web-table-status > [data-slot="badge"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ev-color-neutral-soft);
+  color: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.web-table-status:has(> [data-slot="badge"]) {
+  padding: 0;
+  background: transparent;
+}
+.web-table-status > [data-slot="badge"]::before,
+.web-table-status:not(:has(> [data-slot="badge"]))::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 999px;
+  background: currentColor;
+  margin-right: 5px;
+}
+.web-table-status[data-tone="success"] { background: var(--ev-color-success-soft); color: var(--ev-color-success); }
+.web-table-status[data-tone="warning"] { background: var(--ev-color-warning-soft); color: var(--ev-color-warning); }
+.web-table-status[data-tone="danger"] { background: var(--ev-color-danger-soft); color: var(--ev-color-danger); }
+.web-table-status[data-tone="info"] { background: var(--ev-color-primary-soft); color: var(--ev-color-primary); }
+.web-table-status[data-tone="success"] > [data-slot="badge"] { background: var(--ev-color-success-soft); color: var(--ev-color-success); }
+.web-table-status[data-tone="warning"] > [data-slot="badge"] { background: var(--ev-color-warning-soft); color: var(--ev-color-warning); }
+.web-table-status[data-tone="danger"] > [data-slot="badge"] { background: var(--ev-color-danger-soft); color: var(--ev-color-danger); }
+.web-table-status[data-tone="info"] > [data-slot="badge"] { background: var(--ev-color-primary-soft); color: var(--ev-color-primary); }
+.web-table-description {
+  display: block;
+  max-width: 34rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: inherit;
+  line-height: 1.5;
+}
 @media (max-width: 900px) {
   .web-form-grid {
     grid-template-columns: 1fr;

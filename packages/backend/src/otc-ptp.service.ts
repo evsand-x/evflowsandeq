@@ -378,7 +378,7 @@ export class OtcPtpService {
             (!o.paymentSnapshot && policy.mode === "PREPAY")
               ? await reservationExpiry(tx, c)
               : null;
-          const batch = await tx.fulfillmentBatch.create({
+          await tx.fulfillmentBatch.create({
             data: {
               reservationExpiresAt: reservation?.expiresAt ?? null,
               reservationSnapshot: reservation?.snapshot ?? Prisma.DbNull,
@@ -1070,6 +1070,142 @@ export class OtcPtpService {
       return invoice;
     });
   }
+  async saveInvoiceDraft(
+    c: string,
+    a: string,
+    id: string | undefined,
+    input: {
+      delivery_receipt_id: string;
+      notes: string;
+      billing_reference: string;
+      version?: number | undefined;
+    },
+    key: string,
+  ) {
+    return transactionCommand(c, a, `invoice-drafts/${id ?? "new"}`, key, input, async (tx) => {
+      const ref = await tx.deliveryReceipt.findFirst({
+        where: { companyId: c, id: input.delivery_receipt_id },
+        include: { salesOrder: true },
+      });
+      if (!ref) throw new NotFoundException("POD tidak ditemukan.");
+      await lockCustomer(tx, c, ref.salesOrder.customerId);
+      await tx.$queryRaw`SELECT id FROM delivery_receipts WHERE id=${ref.id}::uuid AND company_id=${c}::uuid FOR UPDATE`;
+      const before = id ? await tx.salesInvoice.findFirst({ where: { id, companyId: c } }) : null;
+      if (id && !before) throw new NotFoundException();
+      if (before && (before.state !== "DRAFT" || before.deliveryReceiptId !== ref.id))
+        throw new ConflictException("INVOICE_DRAFT_LOCKED");
+      const oldSnapshot = before?.issuedSnapshot as { version?: number } | null;
+      if (before && input.version !== oldSnapshot?.version)
+        throw new ConflictException("INVOICE_DRAFT_VERSION_CHANGED");
+      const duplicate = await tx.salesInvoice.findFirst({
+        where: {
+          companyId: c,
+          deliveryReceiptId: ref.id,
+          state: { in: ["DRAFT", "POSTED"] },
+          ...(id ? { id: { not: id } } : {}),
+        },
+      });
+      if (duplicate) throw new ConflictException("POD_ALREADY_HAS_INVOICE");
+      const waiting = await tx.salesInvoice.findFirst({
+        where: {
+          companyId: c,
+          fulfillmentBatchId: ref.fulfillmentBatchId,
+          state: "ISSUED_WAITING_POD",
+        },
+      });
+      if (waiting) throw new ConflictException("FINALIZE_EXISTING_INVOICE");
+      const pod = await tx.deliveryReceipt.findUniqueOrThrow({
+        where: { id: ref.id },
+        include: {
+          fulfillmentBatch: true,
+          lines: {
+            include: {
+              allocation: {
+                include: {
+                  salesOrderLine: {
+                    include: { product: { include: { baseUom: true } }, Uom: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+      const customer = await tx.customer.findUniqueOrThrow({
+        where: { id: ref.salesOrder.customerId },
+      });
+      const company = await tx.company.findUniqueOrThrow({ where: { id: c } });
+      const allocations = pod.lines.map((l) => ({
+        product_code: l.allocation.salesOrderLine.product.code,
+        product: l.allocation.salesOrderLine.product.name,
+        unit:
+          l.allocation.salesOrderLine.Uom?.name ?? l.allocation.salesOrderLine.product.baseUom.name,
+        quantity: l.acceptedQuantity,
+        unit_price: l.allocation.salesOrderLine.unitPrice,
+        tax_snapshot: l.allocation.salesOrderLine.taxSnapshot,
+        amounts: lineAmounts(l.allocation.salesOrderLine, l.acceptedQuantity),
+      }));
+      const subtotal = allocations.reduce((s, l) => s.add(l.amounts.net), d("0"));
+      const tax = allocations.reduce(
+        (s, l) => s.add(l.amounts.tax),
+        pod.fulfillmentBatch.freightTaxAmount,
+      );
+      const total = subtotal.add(tax).add(pod.fulfillmentBatch.freightAmount);
+      if (total.lte(0)) throw new ConflictException("INVOICE_ACCEPTED_QUANTITY_REQUIRED");
+      const snapshot = JSON.parse(
+        JSON.stringify({
+          version: (oldSnapshot?.version ?? 0) + 1,
+          notes: input.notes,
+          reference: input.billing_reference,
+          company: company.name,
+          customer: customer.name,
+          address: ref.salesOrder.deliveryAddress,
+          currency: ref.salesOrder.currency,
+          payment: ref.salesOrder.paymentSnapshot,
+          allocations,
+          subtotal,
+          tax,
+          total,
+          freight: {
+            amount: pod.fulfillmentBatch.freightAmount,
+            tax: pod.fulfillmentBatch.freightTaxAmount,
+          },
+          batch_number: pod.fulfillmentBatch.number,
+        }),
+      );
+      const data = {
+        companyId: c,
+        customerId: customer.id,
+        salesOrderId: ref.salesOrderId,
+        deliveryReceiptId: ref.id,
+        fulfillmentBatchId: ref.fulfillmentBatchId,
+        currency: ref.salesOrder.currency,
+        state: "DRAFT" as const,
+        subtotal,
+        taxAmount: tax,
+        total,
+        freightAmount: pod.fulfillmentBatch.freightAmount,
+        freightTaxAmount: pod.fulfillmentBatch.freightTaxAmount,
+        outstandingAmount: 0,
+        issuedSnapshot: snapshot,
+      };
+      const result = before
+        ? await tx.salesInvoice.update({ where: { id: before.id }, data })
+        : await tx.salesInvoice.create({
+            data: { ...data, number: await this.num(tx, c, "sales_invoice", "INV") },
+          });
+      await this.audit.recordWith(tx, {
+        companyId: c,
+        actorId: a,
+        action: before ? "sales_invoice.draft_updated" : "sales_invoice.draft_created",
+        resourceType: "sales_invoice",
+        resourceId: result.id,
+        before: before ?? undefined,
+        after: result,
+      });
+      return result;
+    });
+  }
   async postInvoice(c: string, a: string, rid: string, key?: string) {
     return transactionCommand(
       c,
@@ -1124,13 +1260,21 @@ export class OtcPtpService {
           .add(freightBatch.freightTaxAmount);
         const total = sub.add(tax).add(freightBatch.freightAmount);
         if (total.lte(0)) throw new ConflictException("INVOICE_ACCEPTED_QUANTITY_REQUIRED");
-        const waiting = await tx.salesInvoice.findFirst({
+        const waitingIssued = await tx.salesInvoice.findFirst({
           where: {
             companyId: c,
             fulfillmentBatchId: r.fulfillmentBatchId,
             state: "ISSUED_WAITING_POD",
           },
         });
+        const draft = r.invoices.find((i) => i.state === "DRAFT");
+        if (
+          draft &&
+          (!draft.total?.eq(total) || !draft.subtotal.eq(sub) || !draft.taxAmount.eq(tax))
+        )
+          throw new ConflictException("INVOICE_DRAFT_SOURCE_CHANGED");
+        if (draft && waitingIssued) throw new ConflictException("DUPLICATE_INVOICE_SOURCE");
+        const waiting = waitingIssued ?? draft;
         const invoiceData = {
           companyId: c,
           customerId: r.salesOrder.customerId,
@@ -1191,6 +1335,9 @@ export class OtcPtpService {
           tax,
           total,
           lines: r.lines.map((x) => ({
+            product_code: products.find((p) => p.id === x.allocation.salesOrderLine.productId)
+              ?.code,
+            tax_snapshot: x.allocation.salesOrderLine.taxSnapshot,
             product: products.find((p) => p.id === x.allocation.salesOrderLine.productId)?.name,
             quantity: x.acceptedQuantity,
             unit_price: x.allocation.salesOrderLine.unitPrice,
@@ -1763,16 +1910,77 @@ export class OtcPtpService {
             id: true,
             number: true,
             currency: true,
+            deliveryAddress: true,
+            customerReference: true,
+            paymentSnapshot: true,
             customer: { select: { id: true, name: true } },
           },
         },
-        fulfillmentBatch: { select: { id: true, number: true } },
+        fulfillmentBatch: {
+          select: { id: true, number: true, freightAmount: true, freightTaxAmount: true },
+        },
+        lines: {
+          select: {
+            acceptedQuantity: true,
+            allocation: {
+              select: {
+                salesOrderLine: {
+                  select: {
+                    unitPrice: true,
+                    taxSnapshot: true,
+                    product: {
+                      select: { code: true, name: true, baseUom: { select: { name: true } } },
+                    },
+                    Uom: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
         invoices: { select: { id: true, number: true, state: true } },
       },
       orderBy: [{ acceptedAt: "asc" }, { id: "asc" }],
       take: 100,
     });
-    return rows;
+    const company = await prisma.company.findUniqueOrThrow({ where: { id: c } });
+    return rows.map(({ lines, ...row }) => {
+      const allocations = lines.map((l) => ({
+        product_code: l.allocation.salesOrderLine.product.code,
+        product: l.allocation.salesOrderLine.product.name,
+        unit:
+          l.allocation.salesOrderLine.Uom?.name ?? l.allocation.salesOrderLine.product.baseUom.name,
+        quantity: l.acceptedQuantity,
+        unit_price: l.allocation.salesOrderLine.unitPrice,
+        tax_snapshot: l.allocation.salesOrderLine.taxSnapshot,
+        amounts: lineAmounts(l.allocation.salesOrderLine, l.acceptedQuantity),
+      }));
+      const subtotal = allocations.reduce((s, l) => s.add(l.amounts.net), d("0"));
+      const tax = allocations.reduce(
+        (s, l) => s.add(l.amounts.tax),
+        row.fulfillmentBatch.freightTaxAmount,
+      );
+      return {
+        ...row,
+        receiptLines: lines,
+        snapshot: {
+          company: company.name,
+          customer: row.salesOrder.customer.name,
+          currency: row.salesOrder.currency,
+          address: row.salesOrder.deliveryAddress,
+          reference: row.salesOrder.customerReference,
+          payment: row.salesOrder.paymentSnapshot,
+          allocations,
+          subtotal,
+          tax,
+          total: subtotal.add(tax).add(row.fulfillmentBatch.freightAmount),
+          freight: {
+            amount: row.fulfillmentBatch.freightAmount,
+            tax: row.fulfillmentBatch.freightTaxAmount,
+          },
+        },
+      };
+    });
   }
 
   async createCustomerReceipt(c: string, a: string, customerId: string, i: any, key: string) {

@@ -138,11 +138,13 @@ export function DashboardSidebar({
   activeView,
   activeSection = "dashboard",
   preview = false,
+  outboundStage,
 }: {
   principal: AuthPrincipal;
   activeView: DashboardView;
   activeSection?: "dashboard" | "setting" | "sales" | "master" | "warehouse" | "finance";
   preview?: boolean;
+  outboundStage?: string;
 }) {
   const { state, isMobile, setOpenMobile, toggleSidebar } = useSidebar();
   const pathname = usePathname();
@@ -166,6 +168,7 @@ export function DashboardSidebar({
           "warehouse-backorders": "Barang Keluar",
           "pick-slips": "Barang Keluar",
           warehouse: "Barang Keluar",
+          returns: "Barang Keluar",
           invoices: "Piutang (AR)",
           reconciliation: "Kas & Bank",
           "bank-statements": "Kas & Bank",
@@ -378,13 +381,11 @@ export function DashboardSidebar({
                               ]
                             : item === "Barang Keluar"
                               ? [
-                                  [
-                                    "Backorder & Alokasi Stok",
-                                    "warehouse-backorders",
-                                    "sales_order.read",
-                                  ],
-                                  ["Pick Slip", "pick-slips", "fulfillment.read"],
-                                  ["Pemenuhan & POD", "warehouse", "fulfillment.read"],
+                                  ["Picking", "pick-slips", "fulfillment.read"],
+                                  ["Checking / Packing", "warehouse?stage=checking", "fulfillment.read"],
+                                  ["Pengiriman", "warehouse?stage=shipping", "fulfillment.read"],
+                                  ["POD", "warehouse?stage=pod", "fulfillment.read"],
+                                  ["Retur", "returns", "fulfillment.read"],
                                 ]
                               : item === "Piutang (AR)"
                                 ? []
@@ -505,15 +506,19 @@ export function DashboardSidebar({
                                             ),
                                       )
                                       .filter(([, route]) => !preview || route === "orders")
-                                      .map(([label, route]) => (
-                                        <SidebarMenuSubItem key={route}>
+                                      .map(([label, route]) => {
+                                        const routeValue = route ?? "";
+                                        const [routePath, routeQuery] = routeValue.split("?");
+                                        const href = `${preview ? "/preview" : ""}/operations/${routePath}${routeQuery ? `?${routeQuery}` : ""}`;
+                                        return (
+                                        <SidebarMenuSubItem key={routeValue}>
                                           <Link
-                                            href={`${preview ? "/preview" : ""}/operations/${route}`}
+                                            href={href}
                                             className="ev-sidebar-sub-link"
                                             aria-current={
                                               pathname?.startsWith(
-                                                `${preview ? "/preview" : ""}/operations/${route}`,
-                                              )
+                                                `${preview ? "/preview" : ""}/operations/${routePath}`,
+                                              ) && (!routeQuery || routeQuery === `stage=${outboundStage}`)
                                                 ? "page"
                                                 : undefined
                                             }
@@ -522,7 +527,8 @@ export function DashboardSidebar({
                                             {label}
                                           </Link>
                                         </SidebarMenuSubItem>
-                                      ))}
+                                        );
+                                      })}
                                   </SidebarMenuSub>
                                 </CollapsibleContent>
                               </Collapsible>

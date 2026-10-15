@@ -200,17 +200,20 @@
   color: var(--ev-color-primary);
   background: var(--ev-color-primary-soft);
 }
-.so-status[data-state="Backorder"] {
+.so-status[data-state="Backorder"],
+.so-status[data-state="Dibayar Sebagian"] {
   color: var(--ev-color-warning);
   background: var(--ev-color-warning-soft);
 }
 .so-status[data-state="Lolos"],
+.so-status[data-state="Lunas"],
 .so-status[data-state="Selesai"],
 .so-status[data-state="Terkirim Semua"] {
   color: var(--ev-color-success);
   background: var(--ev-color-success-soft);
 }
 .so-status[data-state="Ditahan"],
+.so-status[data-state="Belum Dibayar"],
 .so-status[data-state="Dibatalkan"] {
   color: var(--ev-color-danger);
   background: var(--ev-color-danger-soft);

@@ -234,7 +234,7 @@ export function SalesDashboard({
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => (
-          <span className="sales-action-status">
+          <span className="sales-action-status web-table-status" data-tone={row.original.status === "overdue" ? "danger" : "info"}>
             {row.original.label ?? (row.original.status === "overdue" ? "Terlambat" : "Terjadwal")}
           </span>
         ),

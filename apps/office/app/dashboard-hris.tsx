@@ -196,7 +196,7 @@ export function HrisDashboard({
       {
         accessorKey: "status",
         header: "Status",
-        cell: ({ row }) => <span className="hris-status">{row.original.status}</span>,
+        cell: ({ row }) => <span className="hris-status web-table-status" data-tone="warning">{row.original.status}</span>,
       },
     ],
     [],
