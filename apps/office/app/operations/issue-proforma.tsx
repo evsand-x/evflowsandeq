@@ -1,4 +1,5 @@
 "use client";
+import { SalesNavigation, SalesBadge } from "./sales-experience";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -9,7 +10,6 @@ import { ArrowLeft, FileCheck2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { apiRequest } from "@/lib/api";
@@ -18,7 +18,7 @@ import { useSession } from "../session-provider";
 import { DashboardSidebar } from "../dashboard-sidebar";
 import { ExecutiveTopbar } from "../dashboard-executive";
 
-import { Panel } from "./sales-order";
+import { Panel, Value } from "./sales-order";
 import { ErrorBox } from "./workspace";
 import { ProformaContents } from "./proforma";
 
@@ -151,7 +151,7 @@ export function ProformaDraftDetail({ orderId, batchId }: { orderId: string; bat
       <DashboardSidebar principal={principal} activeView="sales" activeSection="sales" />
       <SidebarInset className="min-w-0">
         <ExecutiveTopbar companyName={principal.company_name} />
-        <main className="executive-content crm-content otc-workspace so-workspace">
+        <main className="executive-content crm-content otc-workspace so-workspace sales-sketch">
           <header className="executive-heading">
             <div>
               <nav aria-label="Breadcrumb" className="executive-breadcrumb">
@@ -161,50 +161,11 @@ export function ProformaDraftDetail({ orderId, batchId }: { orderId: string; bat
               <h1>Detail Proforma</h1>
               <p>Rincian produk, alokasi, dan nilai Proforma.</p>
             </div>
+            <SalesNavigation active="proformas" />
           </header>
-          <div className="so-footer so-detail-actions">
-            <Button variant="outline" asChild>
-              <Link href={`/operations/orders/${orderId}`}>
-                <ArrowLeft />
-                Kembali ke SO
-              </Link>
-            </Button>
-            {allowed && (
-              <Button
-                variant="outline"
-                disabled={pending || query.isFetching}
-                onClick={() => {
-                  setError("");
-                  void query.refetch();
-                }}
-              >
-                <RefreshCw />
-                Muat ulang data
-              </Button>
-            )}
-            {allowed &&
-              preview &&
-              !query.isError &&
-              (preview.existing ? (
-                <Button asChild>
-                  <Link href={`/operations/proformas/${preview.existing.id}`}>Buka Proforma</Link>
-                </Button>
-              ) : (
-                <Button
-                  disabled={
-                    pending ||
-                    query.isFetching ||
-                    totalsPending ||
-                    !!error ||
-                    !data?.allocations.length
-                  }
-                  onClick={() => void issue()}
-                >
-                  <FileCheck2 />
-                  {pending ? "Menerbitkan…" : "Terbitkan Proforma"}
-                </Button>
-              ))}
-          </div>
+          <Button className="sales-back" variant="outline" asChild>
+            <Link href="/operations/proformas">← Kembali ke daftar</Link>
+          </Button>
           {!allowed ? (
             <ErrorBox message="Anda tidak memiliki izin menerbitkan Proforma." />
           ) : (
@@ -222,21 +183,48 @@ export function ProformaDraftDetail({ orderId, batchId }: { orderId: string; bat
               )}
               {data && preview && !query.isError && (
                 <>
-                  <div className="so-detail-overview">
-                    <div>
-                      <span className="so-eyebrow">PROFORMA</span>
-                      <h2>{data.order_number}</h2>
-                      <p>{data.customer}</p>
-                    </div>
-                    <Badge variant="outline">
-                      {preview.existing
-                        ? "Sudah diterbitkan"
-                        : preview.supersedes
-                          ? "Revisi dokumen"
-                          : "Belum diterbitkan"}
-                    </Badge>
-                  </div>
                   <ProformaContents
+                    review
+                    beforeContent={
+                      <Panel title="Konteks tahap">
+                        <Value label="Sales Order">
+                          {data.order_number} · {data.customer}
+                        </Value>
+                        <Value label="Tahap">{data.batch_number}</Value>
+                        <Value label="Alokasi dimuat">
+                          {query.dataUpdatedAt
+                            ? new Date(query.dataUpdatedAt).toLocaleTimeString("id-ID")
+                            : "Memuat"}
+                        </Value>
+                        <Button
+                          variant="outline"
+                          disabled={pending || query.isFetching}
+                          onClick={() => void query.refetch()}
+                        >
+                          <RefreshCw />
+                          Muat ulang alokasi
+                        </Button>
+                      </Panel>
+                    }
+                    asideContent={
+                      <Panel title="Syarat penerbitan">
+                        <Value label="Izin menerbitkan Proforma">
+                          <SalesBadge>{allowed ? "Ada" : "Tidak ada"}</SalesBadge>
+                        </Value>
+                        <Value label="Alokasi tahap ini">
+                          <SalesBadge>
+                            {data.allocations.length ? "Ada" : "Belum ada stok yang dapat dipenuhi"}
+                          </SalesBadge>
+                        </Value>
+                        <p className="sales-notice sales-warning">
+                          {preview.existing
+                            ? `Proforma ${preview.existing.number} sudah diterbitkan.`
+                            : preview.supersedes
+                              ? `Menggantikan ${preview.supersedes.number}; dokumen lama tetap tersimpan.`
+                              : "Nomor dokumen diberikan setelah penerbitan berhasil."}
+                        </p>
+                      </Panel>
+                    }
                     snapshot={
                       freightTouched && !totalsPending ? freightQuery.data!.data.snapshot : data
                     }
@@ -327,23 +315,40 @@ export function ProformaDraftDetail({ orderId, batchId }: { orderId: string; bat
                       </Panel>
                     }
                   />
-                  <Panel title="Informasi penerbitan">
-                    <p>
-                      {preview.existing
-                        ? `Proforma ${preview.existing.number} sudah sesuai dengan alokasi ini. Buka dokumen tersebut untuk melihat dan mencetak.`
-                        : preview.supersedes
-                          ? `Dokumen baru menggantikan ${preview.supersedes.number}. Dokumen lama tetap tersimpan.`
-                          : "Nomor dokumen diberikan setelah penerbitan berhasil."}
-                    </p>
-                    <p className="so-help">
-                      Proforma tidak membentuk piutang. Nilai dan alokasi akan diperiksa kembali
-                      saat penerbitan.
-                    </p>
-                  </Panel>
                 </>
               )}
             </>
           )}
+          <div className="so-footer so-detail-actions">
+            <Button variant="outline" asChild>
+              <Link href={`/operations/orders/${orderId}`}>
+                <ArrowLeft />
+                Batal
+              </Link>
+            </Button>
+            {allowed &&
+              preview &&
+              !query.isError &&
+              (preview.existing ? (
+                <Button asChild>
+                  <Link href={`/operations/proformas/${preview.existing.id}`}>Buka Proforma</Link>
+                </Button>
+              ) : (
+                <Button
+                  disabled={
+                    pending ||
+                    query.isFetching ||
+                    totalsPending ||
+                    !!error ||
+                    !data?.allocations.length
+                  }
+                  onClick={() => void issue()}
+                >
+                  <FileCheck2 />
+                  {pending ? "Menerbitkan…" : "Terbitkan Proforma"}
+                </Button>
+              ))}
+          </div>
         </main>
       </SidebarInset>
     </SidebarProvider>

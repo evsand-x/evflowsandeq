@@ -1,0 +1,54 @@
+.office-modern .tax-workspace {
+  max-width: none;
+}
+.tax-panel {
+  padding: 24px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ev-radius-card);
+  background: hsl(var(--card));
+  display: grid;
+  gap: 16px;
+}
+.tax-panel h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.tax-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.tax-grid label {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+}
+.tax-grid dt {
+  color: hsl(var(--muted-foreground));
+}
+.tax-grid dd {
+  overflow-wrap: anywhere;
+}
+.tax-workspace .crm-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.tax-workspace .crm-table-toolbar input {
+  flex: 1;
+  min-width: 180px;
+}
+@media (max-width: 640px) {
+  .tax-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tax-help {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.6;
+}
+.tax-panel li {
+  padding-block: 8px;
+}

@@ -1,4 +1,5 @@
 import {
+  isAccessAdministrator,
   financeDashboardQuerySchema,
   type AuthPrincipal,
   type FinanceDashboardData,
@@ -9,7 +10,7 @@ import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/com
 export class FinanceDashboardService {
   read(principal: AuthPrincipal, rawQuery: unknown): FinanceDashboardData {
     if (
-      !principal.permissions.some(
+      !isAccessAdministrator(principal) && !principal.permissions.some(
         (p) =>
           p.code === "finance.read" &&
           ["company", "privileged"].includes(p.scope_type) &&

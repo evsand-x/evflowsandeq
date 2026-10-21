@@ -173,8 +173,10 @@ export function DashboardSidebar({
           reconciliation: "Kas & Bank",
           "bank-statements": "Kas & Bank",
           accounting: "Akuntansi",
+          accounts: "Akuntansi",
           "tax-rules": "Pajak",
           "tax-documents": "Pajak",
+          "tax-input": "Pajak",
         } as Record<string, string>
       )[route ?? ""];
   const branch = `${moduleLabel}/${
@@ -307,46 +309,48 @@ export function DashboardSidebar({
         <SidebarGroup>
           <nav aria-label="Navigasi utama">
             <SidebarMenu>
-              <NavigationBranch
-                label="Dashboard"
-                icon={LayoutDashboard}
-                active={activeSection === "dashboard"}
-                open={!!groups.Dashboard}
-                onOpenChange={(open) => changeGroup("Dashboard", open)}
-                collapsed={!isMobile && state === "collapsed"}
-                flyoutOpen={flyout === "Dashboard"}
-                onFlyoutChange={(open) => {
-                  if (open) changeGroup("Dashboard", true);
-                  setFlyout(open ? "Dashboard" : null);
-                }}
-              >
-                <SidebarMenuSub>
-                  {views.map((view) => (
-                    <SidebarMenuSubItem key={view.id}>
-                      <Link
-                        href={
-                          preview
-                            ? view.id === "executive"
-                              ? "/preview/dashboard"
-                              : `/preview/dashboard?view=${view.id}`
-                            : view.id === "executive"
-                              ? "/"
-                              : `/?view=${view.id}`
-                        }
-                        aria-current={
-                          activeSection === "dashboard" && activeView === view.id
-                            ? "page"
-                            : undefined
-                        }
-                        onClick={closeNavigation}
-                        className="ev-sidebar-sub-link"
-                      >
-                        {view.label}
-                      </Link>
-                    </SidebarMenuSubItem>
-                  ))}
-                </SidebarMenuSub>
-              </NavigationBranch>
+              {views.length > 0 && (
+                <NavigationBranch
+                  label="Dashboard"
+                  icon={LayoutDashboard}
+                  active={activeSection === "dashboard"}
+                  open={!!groups.Dashboard}
+                  onOpenChange={(open) => changeGroup("Dashboard", open)}
+                  collapsed={!isMobile && state === "collapsed"}
+                  flyoutOpen={flyout === "Dashboard"}
+                  onFlyoutChange={(open) => {
+                    if (open) changeGroup("Dashboard", true);
+                    setFlyout(open ? "Dashboard" : null);
+                  }}
+                >
+                  <SidebarMenuSub>
+                    {views.map((view) => (
+                      <SidebarMenuSubItem key={view.id}>
+                        <Link
+                          href={
+                            preview
+                              ? view.id === "executive"
+                                ? "/preview/dashboard"
+                                : `/preview/dashboard?view=${view.id}`
+                              : view.id === "executive"
+                                ? "/"
+                                : `/?view=${view.id}`
+                          }
+                          aria-current={
+                            activeSection === "dashboard" && activeView === view.id
+                              ? "page"
+                              : undefined
+                          }
+                          onClick={closeNavigation}
+                          className="ev-sidebar-sub-link"
+                        >
+                          {view.label}
+                        </Link>
+                      </SidebarMenuSubItem>
+                    ))}
+                  </SidebarMenuSub>
+                </NavigationBranch>
+              )}
               {modules.map((module) => {
                 const Icon = moduleIcons[module.label] ?? Boxes;
                 return (
@@ -376,16 +380,29 @@ export function DashboardSidebar({
                           item === "Pesanan Pelanggan"
                             ? [
                                 ["Sales Order", "orders", "sales_order.read"],
-                                ["Proforma", "proformas", "sales_order.read"],
-                                ["Backorder & Sisa Pesanan", "backorders", "sales_order.read"],
+                                ["Proforma", "proformas", "proforma.read"],
+                                ["Backorder & Sisa Pesanan", "backorders", "sales_backorder.read"],
                               ]
                             : item === "Barang Keluar"
                               ? [
-                                  ["Picking", "pick-slips", "fulfillment.read"],
-                                  ["Checking / Packing", "warehouse?stage=checking", "fulfillment.read"],
-                                  ["Pengiriman", "warehouse?stage=shipping", "fulfillment.read"],
-                                  ["POD", "warehouse?stage=pod", "fulfillment.read"],
-                                  ["Retur", "returns", "fulfillment.read"],
+                                  [
+                                    "Backorder & Alokasi Stok",
+                                    "warehouse-backorders",
+                                    "warehouse_allocation.read",
+                                  ],
+                                  ["Pick Slip", "pick-slips", "outbound_picking.read"],
+                                  [
+                                    "Checking / Packing",
+                                    "warehouse?stage=checking",
+                                    "outbound_checking.read",
+                                  ],
+                                  [
+                                    "Pengiriman",
+                                    "warehouse?stage=shipping",
+                                    "outbound_shipping.read",
+                                  ],
+                                  ["POD", "warehouse?stage=pod", "delivery_receipt.read"],
+                                  ["Retur", "returns", "customer_return.receive"],
                                 ]
                               : item === "Piutang (AR)"
                                 ? []
@@ -400,6 +417,7 @@ export function DashboardSidebar({
                                     ]
                                   : item === "Akuntansi"
                                     ? [
+                                        ["Akun", "accounts", "account.read"],
                                         [
                                           "Pengaturan Jurnal Otomatis",
                                           "accounting",
@@ -408,12 +426,9 @@ export function DashboardSidebar({
                                       ]
                                     : item === "Pajak"
                                       ? [
-                                          ["Profil/Aturan", "tax-rules", "tax_rule.read"],
-                                          [
-                                            "Faktur Keluaran",
-                                            "tax-documents",
-                                            "tax_component.read",
-                                          ],
+                                          ["Daftar & Aturan Pajak", "tax-rules", "tax_master.read"],
+                                          ["Faktur Keluaran", "tax-documents", "tax_output.read"],
+                                          ["Faktur Masukan", "tax-input", "tax_input.read"],
                                         ]
                                       : [];
                         if (module.label === "Finance" && item === "Piutang (AR)")
@@ -432,12 +447,7 @@ export function DashboardSidebar({
                                 <CollapsibleContent>
                                   <SidebarMenuSub>
                                     <SidebarMenuSubItem>
-                                      {principal.permissions.some(
-                                        (p) =>
-                                          p.code === "sales_invoice.read" &&
-                                          ["company", "privileged"].includes(p.scope_type) &&
-                                          (!p.scope_id || p.scope_id === principal.company_id),
-                                      ) ? (
+                                      {hasCompanyPermission(principal, "sales_invoice.read") ? (
                                         <Link
                                           href={`${preview ? "/preview" : ""}/operations/invoices`}
                                           className="ev-sidebar-sub-link"
@@ -491,19 +501,12 @@ export function DashboardSidebar({
                                 <CollapsibleContent>
                                   <SidebarMenuSub>
                                     {operational
-                                      .filter(([label, , permission]) =>
+                                      .filter(([, , permission]) =>
                                         preview
                                           ? permission === "sales_order.read" &&
                                             item === "Pesanan Pelanggan"
-                                          : principal.permissions.some(
-                                              (p) =>
-                                                (p.code === permission ||
-                                                  (label === "Proforma" &&
-                                                    p.code === "proforma.issue")) &&
-                                                ["company", "privileged"].includes(p.scope_type) &&
-                                                (!p.scope_id ||
-                                                  p.scope_id === principal.company_id),
-                                            ),
+                                          : permission !== undefined &&
+                                            hasCompanyPermission(principal, permission),
                                       )
                                       .filter(([, route]) => !preview || route === "orders")
                                       .map(([label, route]) => {
@@ -511,22 +514,24 @@ export function DashboardSidebar({
                                         const [routePath, routeQuery] = routeValue.split("?");
                                         const href = `${preview ? "/preview" : ""}/operations/${routePath}${routeQuery ? `?${routeQuery}` : ""}`;
                                         return (
-                                        <SidebarMenuSubItem key={routeValue}>
-                                          <Link
-                                            href={href}
-                                            className="ev-sidebar-sub-link"
-                                            aria-current={
-                                              pathname?.startsWith(
-                                                `${preview ? "/preview" : ""}/operations/${routePath}`,
-                                              ) && (!routeQuery || routeQuery === `stage=${outboundStage}`)
-                                                ? "page"
-                                                : undefined
-                                            }
-                                            onClick={closeNavigation}
-                                          >
-                                            {label}
-                                          </Link>
-                                        </SidebarMenuSubItem>
+                                          <SidebarMenuSubItem key={routeValue}>
+                                            <Link
+                                              href={href}
+                                              className="ev-sidebar-sub-link"
+                                              aria-current={
+                                                pathname?.startsWith(
+                                                  `${preview ? "/preview" : ""}/operations/${routePath}`,
+                                                ) &&
+                                                (!routeQuery ||
+                                                  routeQuery === `stage=${outboundStage}`)
+                                                  ? "page"
+                                                  : undefined
+                                              }
+                                              onClick={closeNavigation}
+                                            >
+                                              {label}
+                                            </Link>
+                                          </SidebarMenuSubItem>
                                         );
                                       })}
                                   </SidebarMenuSub>
@@ -535,6 +540,12 @@ export function DashboardSidebar({
                             </SidebarMenuSubItem>
                           );
                         if (module.label === "Sales & Marketing" && item === "CRM") {
+                          if (
+                            !["crm_prospect", "crm_contact", "crm_opportunity"].some((resource) =>
+                              hasCompanyPermission(principal, `${resource}.read`),
+                            )
+                          )
+                            return null;
                           return (
                             <SidebarMenuSubItem key={item}>
                               <Collapsible
@@ -551,25 +562,19 @@ export function DashboardSidebar({
                                   <SidebarMenuSub>
                                     {[
                                       ["Prospek", "prospects"],
+                                      ["Peluang", "opportunities"],
                                       ["Kontak", "contacts"],
-                                      ["Pelanggan", "customers"],
                                     ]
-                                      .filter(
-                                        ([, key]) =>
-                                          key !== "customers" ||
-                                          principal.permissions.some(
-                                            (p) =>
-                                              p.code === "master_data.read" &&
-                                              ["company", "privileged"].includes(p.scope_type) &&
-                                              (!p.scope_id || p.scope_id === principal.company_id),
-                                          ),
+                                      .filter(([, key]) =>
+                                        hasCompanyPermission(
+                                          principal,
+                                          `${key === "opportunities" ? "crm_opportunity" : key === "contacts" ? "crm_contact" : "crm_prospect"}.read`,
+                                        ),
                                       )
                                       .map(([label, key]) => {
                                         const href = preview
                                           ? `/preview/crm/${key}`
-                                          : key === "customers"
-                                            ? "/master-data/customers"
-                                            : `/crm/${key}`;
+                                          : `/crm/${key}`;
                                         return (
                                           <SidebarMenuSubItem key={key}>
                                             <Link
@@ -591,6 +596,12 @@ export function DashboardSidebar({
                             </SidebarMenuSubItem>
                           );
                         }
+                        if (
+                          module.label === "Master Data" &&
+                          item === "Pelanggan" &&
+                          !hasCompanyPermission(principal, "master_customer.read")
+                        )
+                          return null;
                         const controlPermission = (
                           {
                             "Kredit & TOP Pelanggan": "customer.payment_policy.manage",
@@ -601,13 +612,7 @@ export function DashboardSidebar({
                           } as Record<string, string>
                         )[item];
                         const controlAllowed =
-                          controlPermission &&
-                          principal.permissions.some(
-                            (p) =>
-                              p.code === controlPermission &&
-                              ["company", "privileged"].includes(p.scope_type) &&
-                              (!p.scope_id || p.scope_id === principal.company_id),
-                          );
+                          controlPermission && hasCompanyPermission(principal, controlPermission);
                         const settingHref =
                           controlAllowed && !preview
                             ? "/operations/controls"
@@ -638,7 +643,11 @@ export function DashboardSidebar({
                                       pathname?.startsWith("/setting/matrix")
                                       ? "page"
                                       : undefined
-                                    : pathname === settingHref
+                                    : pathname === settingHref ||
+                                        (["/setting/users", "/master-data/customers"].includes(
+                                          settingHref,
+                                        ) &&
+                                          pathname?.startsWith(`${settingHref}/`))
                                       ? "page"
                                       : undefined
                                 }

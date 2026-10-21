@@ -1,5 +1,18 @@
 # Architecture evflow — web kantor, aplikasi mobile, satu backend modular
 
+## Submenu Akun dan migrasi master — 16 Oktober 2026
+
+Akun tetap di modul Finance backend. transactionCommand, lock perusahaan lalu finance, optimistic version, audit dan isolasi perusahaan berlaku pada mutasi. UI Next.js memakai TanStack Query/Table, SelectionField dan Sonner. Posting/tax/bank/profile hanya menerima akun Detail aktif. Migrasi konfigurasi lokal memakai command atomik terjaga lingkungan dan admin, versi profile/pajak serta audit; tidak mengubah ledger. Seed finance uji diblokir sesudah migrasi.
+
+### Penyempurnaan master pajak — 16 Oktober 2026
+
+Penanda penggunaan master pajak diperiksa pada create/revise/submit SO dan create supplier invoice, selain filter opsi frontend. Riwayat snapshot lama tetap kompatibel. Tidak ada perubahan batas modul atau grant.
+
+## Pembaruan pajak operasional — 16 Oktober 2026
+
+Pajak operasional tetap dalam modular monolith Finance. Master, versi dan audit disimpan atomik lewat transactionCommand; posting penjualan/pembelian membawa akun dan tarif snapshot. Metadata faktur tidak memanggil posting. Izin server: tax_master.read/create/update, tax_output.read/update, tax_input.read/update. Opsi pajak minimum dapat dibaca pembuat/pengubah SO dan pembuat supplier invoice tanpa membuka daftar dokumen pajak. Grant lama tidak diperluas otomatis.
+
+
 ## 1. Stack yang dipilih
 
 Nama aplikasi final adalah **evflow**. Keputusan D06 dikonfirmasi pengguna: Next.js + React untuk web kantor, Nuxt + Vue untuk aplikasi mobile sales/gudang yang dikemas agar dapat dipasang pada Android/iOS, dan satu backend NestJS dengan satu PostgreSQL sebagai sumber transaksi. PWA/browser hanya kanal tambahan. Backend memakai modular monolith. Skala awal 6–12 pengguna dan sekitar 700 SKU tidak memerlukan microservices. Satu transaksi database menjaga dokumen, stok, piutang dan jurnal tetap konsisten meskipun permintaan datang dari frontend yang berbeda.
@@ -165,3 +178,14 @@ Prisma Client backend menggunakan engineType=binary; generate harus dijalankan s
 
 Rujukan implementasi dan batas verifikasi: [laporan remediasi backend O2C](../development/o2c-backend-remediation-2026-10-05.md).
 
+# Keputusan otorisasi terbaru — 16 Oktober 2026
+
+Peran aktif `ADMIN_SYSTEM` pada membership perusahaan sesi memberi kewenangan penuh untuk pengaturan dan transaksi serta override penunjukan/persetujuan sendiri pada approval. Pemeriksaan role dilakukan server; UI hanya menyajikan kemampuan tersebut. Kode domain tetap menentukan pemilik aturan bisnis internal, bukan batas pengelompokan peran. Semua command tetap memeriksa autentikasi, perusahaan, status, versi, bukti dan invariant domain.
+
+Layanan IAM menyalin katalog capability ke grant peran biasa baru dalam transaksi pembuatan peran, sehingga UI dan otorisasi server langsung sejalan. Peran lama diperluas hanya melalui command perubahan matriks per peran dengan snapshot konflik, audit diff dan pencabutan sesi anggota. Peran Admin Sistem tetap memakai pengecualian bawaan tanpa grant tersimpan.
+
+Penghapusan pengguna dijalankan dalam transaksi backend dengan kunci perusahaan untuk melindungi Admin Sistem terakhir. Membership bersejarah diberi `deleted_at`, dinonaktifkan, dilepas dari peran dan sesinya dicabut; query autentikasi dan IAM mengecualikan arsip. Hapus permanen dibatasi pada akun tanpa sesi/aktivitas historis dan tanpa relasi identitas lain. Audit menyimpan identitas tindakan pada kedua jalur.
+
+## Otorisasi submenu — 16 Oktober 2026
+
+IAM-01/04: `PermissionGuard` mendukung metadata resource dinamis dengan allowlist server, pemeriksaan company/scope dan tanpa fallback induk. Perubahan ID resource atau query stage memilih pemeriksaan capability fitur yang benar, bukan membuktikan otorisasi dari asal menu klien. Query data terkait tetap memeriksa izin sumber. Migrasi grant tersimpan menjaga cakupan dan audit; matriks hanya menyimpan grant individual. Admin Sistem tetap menggunakan kewenangan bawaan.

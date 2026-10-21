@@ -2,6 +2,7 @@ import { ConflictException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
 import { z } from "zod";
 import { createSalesOrderSchema } from "@evflow/contracts";
+import { operationalTaxSnapshot } from "../finance/operational-tax";
 import { freightValues } from "./proforma";
 import { transactionCommand } from "../common/transaction-command";
 import { AuditService } from "../common/audit.service";
@@ -333,6 +334,7 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
               line_id: z.string().uuid(),
               quantity: z.string().regex(/^\d+(\.\d{1,10})?$/),
               unit_price: z.string().regex(/^\d+(\.\d{1,8})?$/),
+              tax_master_id: z.string().uuid().optional(),
             })
             .strict(),
         )
@@ -384,7 +386,12 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
           allocatedQuantity: 0,
           backorderQuantity: 0,
           priceSnapshot: Prisma.DbNull,
-          taxSnapshot: Prisma.DbNull,
+          taxSnapshot: line.tax_master_id
+            ? {
+                ...(await operationalTaxSnapshot(tx, c, line.tax_master_id, new Date(), "SALES")),
+                operational_tax_id: line.tax_master_id,
+              }
+            : Prisma.DbNull,
         },
       });
     }

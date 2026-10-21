@@ -70,3 +70,7 @@ Reservation, GR, release, recall dan destruction memakai locking/idempotency. Re
 ## 10. Keputusan final dan konfigurasi wajib
 
 Tolerance, hold, recall, retur, konsinyasi dan pemusnahan telah ditetapkan. Profil file/nomor inbound, nilai shelf-life/suhu, agreement ownership, daftar alasan dan reviewer wajib diisi dari sumber resmi sebelum policy diaktifkan. Nilai yang belum tersedia tidak boleh diganti default universal.
+
+## Izin tahap barang keluar — 16 Oktober 2026
+
+IAM-01/04: baca Pick Slip, Checking/Packing, Pengiriman dan POD dipisahkan menjadi `outbound_picking.read`, `outbound_checking.read`, `outbound_shipping.read`, `delivery_receipt.read`. Kode command picking/checking/dispatch yang sudah terpisah tetap berlaku dan ditempatkan pada resource submenu pemiliknya dalam katalog. Backorder & Alokasi Stok memakai `warehouse_allocation.read`. Induk Barang Keluar hanya mengelompokkan; izin baca satu tahap tidak membuka endpoint tahap lainnya. Status, bukti, stok, audit dan command domain tetap berlaku.

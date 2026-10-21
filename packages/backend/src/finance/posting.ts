@@ -22,7 +22,12 @@ export async function financeDate(tx: Tx, c: string, date = new Date()) {
 export async function postLedger(
   tx: Tx,
   actor: string,
-  input: { data: Prisma.LedgerEntryCreateManyInput[]; businessDate?: Date; accountIds?: string[] },
+  input: {
+    data: Prisma.LedgerEntryCreateManyInput[];
+    businessDate?: Date;
+    accountIds?: (string | undefined)[];
+    reversalOfJournalId?: string;
+  },
 ) {
   const first = input.data[0];
   if (!first) throw new ConflictException("JOURNAL_LINES_REQUIRED");
@@ -37,6 +42,33 @@ export async function postLedger(
     throw new ConflictException("JOURNAL_SOURCE_MISMATCH");
   const company = await tx.company.findUniqueOrThrow({ where: { id: c } });
   const currency = first.currency ?? company.baseCurrency;
+  let exactReversal = false;
+  if (input.reversalOfJournalId) {
+    const original = await tx.financeJournal.findFirst({
+      where: { id: input.reversalOfJournalId, companyId: c },
+      include: { lines: true },
+    });
+    if (
+      !original ||
+      first.sourceType !== "SOURCE_REVERSAL" ||
+      original.currency !== currency ||
+      original.lines.length !== input.data.length
+    )
+      throw new ConflictException("REVERSAL_SOURCE_MISMATCH");
+    const remaining = [...original.lines];
+    for (const [index, row] of input.data.entries()) {
+      const match = remaining.findIndex(
+        (l) =>
+          l.accountId === input.accountIds?.[index] &&
+          l.ledgerKind === row.kind &&
+          l.credit.eq(row.debit.toString()) &&
+          l.debit.eq(row.credit.toString()),
+      );
+      if (match < 0) throw new ConflictException("REVERSAL_LINES_MISMATCH");
+      remaining.splice(match, 1);
+    }
+    exactReversal = true;
+  }
   if (input.data.some((l) => (l.currency ?? company.baseCurrency) !== currency))
     throw new ConflictException("JOURNAL_CURRENCY_MISMATCH");
   let at = input.businessDate ?? new Date();
@@ -120,9 +152,10 @@ export async function postLedger(
         : mapping[row.kind]);
     if (!accountId) throw new ConflictException(`POSTING_MAPPING_REQUIRED:${row.kind}`);
     const account = await tx.financeAccount.findFirst({
-      where: { id: accountId, companyId: c, active: true },
+      where: { id: accountId, companyId: c, ...(exactReversal ? {} : { active: true }) },
     });
-    if (!account) throw new ConflictException("POSTING_ACCOUNT_INVALID");
+    if (!account || account.accountType !== "DETAIL")
+      throw new ConflictException("POSTING_ACCOUNT_INVALID");
     const mappedBanks = await tx.financeBankAccount.findMany({
       where: { companyId: c, accountId },
     });

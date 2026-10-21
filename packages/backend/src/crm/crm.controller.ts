@@ -1,4 +1,10 @@
 import {
+  RequireResourcePermission,
+  hasResourcePermission,
+  requireRelatedPermissions,
+} from "../identity/resource-permissions";
+import {
+  isAccessAdministrator,
   createContactSchema,
   createProspectSchema,
   createOpportunitySchema,
@@ -15,6 +21,7 @@ import { Prisma, prisma } from "@evflow/database";
 import { z } from "zod";
 import {
   BadRequestException,
+  ForbiddenException,
   Body,
   Controller,
   Get,
@@ -47,7 +54,7 @@ export class CrmController {
   constructor(@Inject(CrmService) private readonly crm: CrmService) {}
 
   @Get("crm/options")
-  @RequirePermissions("crm.create")
+  @RequireResourcePermission("crm", "create", "query")
   async options(
     @Query("q") q: string | undefined,
     @Query("customer_id") customerId: string | undefined,
@@ -95,7 +102,7 @@ export class CrmController {
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       }),
-      customerId
+      customerId && hasResourcePermission(req.auth, "crm_contact.read")
         ? prisma.contact.findMany({
             where: {
               companyId,
@@ -126,13 +133,14 @@ export class CrmController {
   }
 
   @Get("crm/workspace/summary")
-  @RequirePermissions("crm.read")
+  @RequirePermissions("crm_prospect.read")
   async summary(@Req() req: AuthenticatedRequest) {
     return { data: serialize(await crmSummary(req.auth.company_id)) };
   }
 
   @Get("crm/activities/:resourceType/:resourceId")
-  @RequirePermissions("crm.read")
+  @RequirePermissions("crm_activity.read")
+  @RequireResourcePermission("related", "read", "params", "resourceType")
   async activities(
     @Param("resourceType") resourceType: string,
     @Param("resourceId") resourceId: string,
@@ -146,7 +154,7 @@ export class CrmController {
   }
 
   @Post("crm/activities")
-  @RequirePermissions("crm.create")
+  @RequirePermissions("crm_activity.create")
   async createActivity(
     @Body() body: unknown,
     @Headers("idempotency-key") key: string | undefined,
@@ -156,6 +164,7 @@ export class CrmController {
       throw new BadRequestException("Idempotency-Key UUID wajib diisi.");
     const input = createCrmActivitySchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
+    requireRelatedPermissions(req.auth, input.data);
     return {
       data: serialize(
         await this.crm.createActivity(req.auth.company_id, req.auth.user_id, input.data, key!),
@@ -164,7 +173,7 @@ export class CrmController {
   }
 
   @Get("crm/attachments/:resourceType/:resourceId")
-  @RequirePermissions("crm.read")
+  @RequireResourcePermission("related", "read", "params", "resourceType")
   async attachments(
     @Param("resourceType") resourceType: string,
     @Param("resourceId") resourceId: string,
@@ -173,12 +182,14 @@ export class CrmController {
     if (!z.string().uuid().safeParse(resourceId).success)
       throw new BadRequestException("Referensi lampiran tidak valid.");
     return {
-      data: serialize(await this.crm.listAttachments(req.auth.company_id, resourceType, resourceId)),
+      data: serialize(
+        await this.crm.listAttachments(req.auth.company_id, resourceType, resourceId),
+      ),
     };
   }
 
   @Post("crm/attachments")
-  @RequirePermissions("crm.create")
+  @RequireResourcePermission("related", "create", "body", "resource_type")
   async registerAttachment(
     @Body() body: unknown,
     @Headers("idempotency-key") key: string | undefined,
@@ -196,15 +207,18 @@ export class CrmController {
   }
 
   @Get("crm/quotes")
-  @RequirePermissions("crm.read")
-  async quotes(@Query("customer_id") customerId: string | undefined, @Req() req: AuthenticatedRequest) {
+  @RequirePermissions("crm_quote.read")
+  async quotes(
+    @Query("customer_id") customerId: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
     if (customerId && !z.string().uuid().safeParse(customerId).success)
       throw new BadRequestException("Referensi pelanggan tidak valid.");
     return { data: serialize(await this.crm.listQuotes(req.auth.company_id, customerId)) };
   }
 
   @Post("crm/quotes")
-  @RequirePermissions("crm.create")
+  @RequirePermissions("crm_quote.create")
   async createQuote(
     @Body() body: unknown,
     @Headers("idempotency-key") key: string | undefined,
@@ -215,46 +229,112 @@ export class CrmController {
     const input = createQuoteSchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
     return {
-      data: serialize(await this.crm.createQuote(req.auth.company_id, req.auth.user_id, input.data, key!)),
+      data: serialize(
+        await this.crm.createQuote(req.auth.company_id, req.auth.user_id, input.data, key!),
+      ),
     };
   }
 
   @Post("crm/customer-orders")
-  @RequirePermissions("crm.create")
-  async createCustomerOrder(@Body() body: unknown, @Headers("idempotency-key") key: string | undefined, @Req() req: AuthenticatedRequest) {
-    if (!z.string().uuid().safeParse(key).success) throw new BadRequestException("Idempotency-Key UUID wajib diisi.");
+  @RequirePermissions("crm_customer_order.create")
+  async createCustomerOrder(
+    @Body() body: unknown,
+    @Headers("idempotency-key") key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (!z.string().uuid().safeParse(key).success)
+      throw new BadRequestException("Idempotency-Key UUID wajib diisi.");
     const input = createCustomerOrderSchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
-    return { data: serialize(await this.crm.createCustomerOrder(req.auth.company_id, req.auth.user_id, input.data, key!)) };
+    return {
+      data: serialize(
+        await this.crm.createCustomerOrder(req.auth.company_id, req.auth.user_id, input.data, key!),
+      ),
+    };
   }
 
   @Post("crm/customer-orders/:id/verify")
-  @RequirePermissions("crm.update")
+  @RequirePermissions("crm_customer_order.update")
   async verifyCustomerOrder(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    if (!z.string().uuid().safeParse(id).success) throw new BadRequestException("Referensi PO/SP tidak valid.");
-    return { data: serialize(await this.crm.verifyCustomerOrder(req.auth.company_id, req.auth.user_id, id)) };
+    if (!z.string().uuid().safeParse(id).success)
+      throw new BadRequestException("Referensi PO/SP tidak valid.");
+    return {
+      data: serialize(
+        await this.crm.verifyCustomerOrder(req.auth.company_id, req.auth.user_id, id),
+      ),
+    };
   }
 
   @Post("crm/opportunities/:id/win")
-  @RequirePermissions("crm.update")
-  async winOpportunity(@Param("id") id: string, @Body() body: unknown, @Req() req: AuthenticatedRequest) {
-    if (!z.string().uuid().safeParse(id).success) throw new BadRequestException("Referensi peluang tidak valid.");
+  @RequirePermissions("crm_opportunity.update")
+  async winOpportunity(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (!z.string().uuid().safeParse(id).success)
+      throw new BadRequestException("Referensi peluang tidak valid.");
     const input = winOpportunitySchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
-    return { data: serialize(await this.crm.winOpportunity(req.auth.company_id, req.auth.user_id, id, input.data)) };
+    return {
+      data: serialize(
+        await this.crm.winOpportunity(req.auth.company_id, req.auth.user_id, id, input.data),
+      ),
+    };
   }
 
   @Post("crm/opportunities/:id/lose")
-  @RequirePermissions("crm.update")
-  async loseOpportunity(@Param("id") id: string, @Body() body: unknown, @Req() req: AuthenticatedRequest) {
-    if (!z.string().uuid().safeParse(id).success) throw new BadRequestException("Referensi peluang tidak valid.");
+  @RequirePermissions("crm_opportunity.update")
+  async loseOpportunity(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (!z.string().uuid().safeParse(id).success)
+      throw new BadRequestException("Referensi peluang tidak valid.");
     const input = loseOpportunitySchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
-    return { data: serialize(await this.crm.loseOpportunity(req.auth.company_id, req.auth.user_id, id, input.data)) };
+    return {
+      data: serialize(
+        await this.crm.loseOpportunity(req.auth.company_id, req.auth.user_id, id, input.data),
+      ),
+    };
+  }
+
+  @Get("crm/workspace/opportunities")
+  @RequirePermissions("crm_opportunity.read")
+  async opportunityList(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const parsed = crmListQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
+    const { q, page } = parsed.data;
+    const contains = { contains: q, mode: "insensitive" as const };
+    const where = {
+      companyId: req.auth.company_id,
+      ...(q ? { OR: [{ code: contains }, { customer: { name: contains } }] } : {}),
+    };
+    const [data, total] = await prisma.$transaction([
+      prisma.opportunity.findMany({
+        where,
+        select: {
+          id: true,
+          code: true,
+          period: true,
+          state: true,
+          prospectId: true,
+          notes: true,
+          customer: { select: { id: true, code: true, name: true } },
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        take: 20,
+        skip: (page - 1) * 20,
+      }),
+      prisma.opportunity.count({ where }),
+    ]);
+    return serialize({ data, total, page, pageSize: 20 });
   }
 
   @Get("crm/workspace/:resource")
-  @RequirePermissions("crm.read")
+  @RequireResourcePermission("crm", "read")
   async workspace(
     @Param("resource") resource: string,
     @Query() query: unknown,
@@ -268,7 +348,7 @@ export class CrmController {
   }
 
   @Get("crm/workspace/:resource/:id")
-  @RequirePermissions("crm.read")
+  @RequireResourcePermission("crm", "read")
   async detail(
     @Param("resource") resource: string,
     @Param("id") id: string,
@@ -277,11 +357,20 @@ export class CrmController {
     const parsed = crmResourceSchema.safeParse(resource);
     if (!parsed.success || !z.string().uuid().safeParse(id).success)
       throw new BadRequestException("Referensi CRM tidak valid.");
-    return { data: serialize(await crmDetail(req.auth.company_id, parsed.data, id)) };
+    return {
+      data: serialize(
+        await crmDetail(
+          req.auth.company_id,
+          parsed.data,
+          id,
+          hasResourcePermission(req.auth, "crm_contact.read"),
+        ),
+      ),
+    };
   }
 
   @Get("crm/master/customers")
-  @RequirePermissions("master_data.read")
+  @RequirePermissions("crm_customer.read")
   async customers(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
     const parsed = crmListQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
@@ -289,23 +378,25 @@ export class CrmController {
   }
 
   @Get("crm/master/customers/:id")
-  @RequirePermissions("master_data.read")
+  @RequirePermissions("crm_customer.read")
   async customer(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     if (!z.string().uuid().safeParse(id).success)
       throw new BadRequestException("Referensi pelanggan tidak valid.");
     // Contacts retain their independent CRM permission even from the master page.
-    const crmAllowed = req.auth.permissions.some(
-      (p) =>
-        p.code === "crm.read" &&
-        ["company", "privileged"].includes(p.scope_type) &&
-        (!p.scope_id || p.scope_id === req.auth.company_id),
-    );
+    const crmAllowed =
+      isAccessAdministrator(req.auth) ||
+      req.auth.permissions.some(
+        (p) =>
+          p.code === "crm_contact.read" &&
+          ["company", "privileged"].includes(p.scope_type) &&
+          (!p.scope_id || p.scope_id === req.auth.company_id),
+      );
     const data = await crmDetail(req.auth.company_id, "customers", id, crmAllowed);
     return { data: serialize(data) };
   }
 
   @Get("crm/:resource")
-  @RequirePermissions("crm.read")
+  @RequireResourcePermission("crm", "read")
   async list(
     @Param("resource") resource: string,
     @Query("q") search: string | undefined,
@@ -316,8 +407,31 @@ export class CrmController {
     return { data: serialize(await this.crm.list(req.auth.company_id, parsed.data, search)) };
   }
 
+  @Patch("crm/contacts/:id")
+  @RequirePermissions("crm_contact.update")
+  async updateContact(
+    @Param("id") id: string,
+    @Headers("if-match") match: string | undefined,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (!/^"[1-9]\d*"$/.test(match ?? "")) throw new BadRequestException("If-Match versi wajib.");
+    const input = createContactSchema.parse(body);
+    return {
+      data: serialize(
+        await this.crm.updateContact(
+          req.auth.company_id,
+          req.auth.user_id,
+          z.string().uuid().parse(id),
+          Number(match!.slice(1, -1)),
+          input,
+        ),
+      ),
+    };
+  }
+
   @Post("crm/contacts")
-  @RequirePermissions("crm.create")
+  @RequirePermissions("crm_contact.create")
   async createContact(
     @Body() body: unknown,
     @Headers("idempotency-key") key: string | undefined,
@@ -335,7 +449,7 @@ export class CrmController {
   }
 
   @Post("crm/prospects")
-  @RequirePermissions("crm.create")
+  @RequirePermissions("crm_prospect.create")
   async createProspect(
     @Body() body: unknown,
     @Headers("idempotency-key") key: string | undefined,
@@ -345,6 +459,10 @@ export class CrmController {
       throw new BadRequestException("Idempotency-Key UUID wajib diisi.");
     const input = createProspectSchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
+    if (input.data.new_customer && !hasResourcePermission(req.auth, "crm_customer.create"))
+      throw new ForbiddenException("Izin membuat pelanggan CRM diperlukan.");
+    if (input.data.contact_ids?.length && !hasResourcePermission(req.auth, "crm_contact.read"))
+      throw new ForbiddenException("Izin membaca kontak diperlukan.");
     return {
       data: serialize(
         await this.crm.createProspect(req.auth.company_id, req.auth.user_id, input.data, key),
@@ -353,7 +471,7 @@ export class CrmController {
   }
 
   @Patch("crm/prospects/:id/status")
-  @RequirePermissions("crm.update")
+  @RequirePermissions("crm_prospect.update")
   async updateStatus(
     @Param("id") id: string,
     @Headers("if-match") ifMatch: string | undefined,
@@ -388,7 +506,7 @@ export class CrmController {
   }
 
   @Post("crm/prospects/:id/needs")
-  @RequirePermissions("crm.create")
+  @RequirePermissions("crm_prospect.create")
   async addNeeds(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -407,7 +525,7 @@ export class CrmController {
   }
 
   @Get("crm/prospects/:id/opportunities")
-  @RequirePermissions("crm.read")
+  @RequirePermissions("crm_prospect.read", "crm_opportunity.read")
   async opportunities(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     if (!z.string().uuid().safeParse(id).success)
       throw new BadRequestException("Referensi prospek tidak valid.");
@@ -424,7 +542,7 @@ export class CrmController {
   }
 
   @Post("crm/opportunities")
-  @RequirePermissions("crm.create")
+  @RequirePermissions("crm_opportunity.create")
   async createOpportunity(
     @Body() body: unknown,
     @Headers("idempotency-key") key: string | undefined,
@@ -434,6 +552,10 @@ export class CrmController {
       throw new BadRequestException("Idempotency-Key UUID wajib diisi.");
     const input = createOpportunitySchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
+    requireRelatedPermissions(req.auth, {
+      prospect_id: input.data.prospect_id,
+      ...(input.data.contact_ids.length ? { contact_id: true } : {}),
+    });
     return {
       data: serialize(
         await this.crm.createOpportunity(req.auth.company_id, req.auth.user_id, input.data, key),

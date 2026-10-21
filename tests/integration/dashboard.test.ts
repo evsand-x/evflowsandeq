@@ -17,7 +17,7 @@ describe("Dashboard scope and CRM follow-up", () => {
     display_name: "Dashboard Tester",
     email: `dashboard-${userId}@evflow.local`,
     roles: [],
-    permissions: [{ code: "crm.read", scope_type: "company", scope_id: null }],
+    permissions: [{ code: "crm_prospect.read", scope_type: "company", scope_id: null }],
   };
 
   beforeAll(async () => {

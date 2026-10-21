@@ -1,4 +1,5 @@
 import {
+  isAccessAdministrator,
   hrisDashboardQuerySchema,
   type AuthPrincipal,
   type HrisDashboardData,
@@ -8,7 +9,7 @@ import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/com
 export class HrisDashboardService {
   read(principal: AuthPrincipal, rawQuery: unknown): HrisDashboardData {
     if (
-      !principal.permissions.some(
+      !isAccessAdministrator(principal) && !principal.permissions.some(
         (p) =>
           p.code === "hr.read" &&
           ["company", "privileged"].includes(p.scope_type) &&

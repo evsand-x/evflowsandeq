@@ -1,4 +1,10 @@
 import {
+  accessHistory,
+  accessUserDetail,
+  accessRoleMembers,
+  accessListSchema,
+} from "./access-workspace";
+import {
   assignUserRolesSchema,
   createRoleSchema,
   createUserSchema,
@@ -17,6 +23,8 @@ import {
   Patch,
   Post,
   Req,
+  Query,
+  ParseUUIDPipe,
   UseGuards,
 } from "@nestjs/common";
 import { AccessService } from "./access.service";
@@ -30,6 +38,80 @@ import { RequirePermissions } from "./permissions.decorator";
 @UseGuards(AuthGuard, AccessAdministratorGuard, PermissionGuard)
 export class AccessController {
   constructor(@Inject(AccessService) private readonly access: AccessService) {}
+
+  @Get("access-workspace/users")
+  @RequirePermissions("user.read")
+  async userPage(@Req() request: AuthenticatedRequest, @Query() query: unknown) {
+    const parsed = accessListSchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
+    const q = parsed.data;
+    const rows = (await this.access.listUsers(request.auth.company_id)).filter(
+      (u) =>
+        (!q.q || `${u.display_name} ${u.email}`.toLowerCase().includes(q.q.toLowerCase())) &&
+        (q.status === "all" || u.active === (q.status === "active")) &&
+        (q.role === "all" || u.roles.some((r) => r.id === q.role)),
+    );
+    return { data: rows.slice((q.page - 1) * 20, q.page * 20), total: rows.length, page: q.page };
+  }
+  @Get("access-workspace/roles")
+  @RequirePermissions("role.read")
+  async rolePage(@Req() request: AuthenticatedRequest, @Query() query: unknown) {
+    const parsed = accessListSchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
+    const q = parsed.data;
+    const rows = (await this.access.listRoles(request.auth.company_id)).filter(
+      (r) =>
+        (!q.q || r.name.toLowerCase().includes(q.q.toLowerCase())) &&
+        (q.status === "all" || r.active === (q.status === "active")),
+    );
+    return { data: rows.slice((q.page - 1) * 20, q.page * 20), total: rows.length, page: q.page };
+  }
+  @Get("users/:id")
+  @RequirePermissions("user.read")
+  async userDetail(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const detail = await accessUserDetail(request.auth.company_id, id);
+    const user = (await this.access.listUsers(request.auth.company_id)).find(
+      (u) => u.user_id === id,
+    );
+    return { data: { ...user, ...detail } };
+  }
+  @Get("users/:id/history")
+  @RequirePermissions("user.read")
+  async userHistory(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return { data: await accessHistory(request.auth.company_id, "user", id) };
+  }
+  @Get("roles/:id/history")
+  @RequirePermissions("role.read")
+  async roleHistory(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return { data: await accessHistory(request.auth.company_id, "role", id) };
+  }
+  @Get("roles/:id/members")
+  @RequirePermissions("role.read", "user.read")
+  async roleMembers(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return { data: await accessRoleMembers(request.auth.company_id, id) };
+  }
+  @Post("users/:id/revoke-sessions")
+  @RequirePermissions("user.update")
+  async revokeSessions(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return {
+      data: await this.access.revokeSessions(request.auth.company_id, request.auth.user_id, id),
+    };
+  }
 
   @Get("users")
   @RequirePermissions("user.read")
@@ -82,6 +164,17 @@ export class AccessController {
         userId,
         input.data,
       ),
+    };
+  }
+
+  @Delete("users/:id")
+  @RequirePermissions("user.delete")
+  async deleteUser(
+    @Param("id", new ParseUUIDPipe()) userId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return {
+      data: await this.access.deleteUser(request.auth.company_id, request.auth.user_id, userId),
     };
   }
 
@@ -143,6 +236,7 @@ export class AccessController {
         request.auth.user_id,
         roleId,
         input.data.permissions,
+        input.data.expected_permissions,
       ),
     };
   }

@@ -4,6 +4,7 @@ import {
   openingStockSchema,
   createSalesOrderSchema,
   confirmPodSchema,
+  pickListCheckSchema,
   pickListConfirmSchema,
   postInvoiceSchema,
   invoiceDraftSchema,
@@ -275,6 +276,11 @@ export class OtcPtpController {
   }
   @Post("pick-lists/:id/confirm-pick")
   @RequirePermissions("fulfillment.pick")
+  async confirmPicking(@Param("id") id: string, @Body() body: unknown, @Headers("idempotency-key") key: string | undefined, @Req() req: AuthenticatedRequest) {
+    return { data: await this.service.confirmPick(req.auth.company_id, req.auth.user_id, id, parse(pickListConfirmSchema, body), commandKey(key)) };
+  }
+  @Post("pick-lists/:id/save-draft")
+  @RequirePermissions("fulfillment.pick")
   pick(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -288,6 +294,7 @@ export class OtcPtpController {
         id,
         parse(pickListConfirmSchema, body),
         commandKey(key),
+        true,
       )
       .then((data) => ({ data }));
   }
@@ -295,11 +302,12 @@ export class OtcPtpController {
   @RequirePermissions("fulfillment.check")
   check(
     @Param("id") id: string,
+    @Body() body: unknown,
     @Headers("idempotency-key") key: string | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
     return this.service
-      .confirmCheck(req.auth.company_id, req.auth.user_id, id, commandKey(key))
+      .confirmCheck(req.auth.company_id, req.auth.user_id, id, parse(pickListCheckSchema, body ?? {}), commandKey(key))
       .then((data) => ({ data }));
   }
   @Post("sales-invoices")

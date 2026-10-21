@@ -8,6 +8,7 @@ import {
   type AuthPrincipal,
   type SalesDashboardAction,
 } from "@evflow/contracts";
+import { hasCompanyPermission } from "../lib/navigation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
@@ -139,12 +140,7 @@ export function SalesDashboard({
   const [cursors, setCursors] = useState<string[]>([]);
   const [periodOpen, setPeriodOpen] = useState(false);
   const cursor = cursors.at(-1);
-  const canRead = principal.permissions.some(
-    (p) =>
-      p.code === "crm.read" &&
-      ["company", "privileged"].includes(p.scope_type) &&
-      (!p.scope_id || p.scope_id === principal.company_id),
-  );
+  const canRead = hasCompanyPermission(principal, "crm_prospect.read");
   const query = useQuery({
     queryKey: [
       "dashboard",
@@ -234,7 +230,10 @@ export function SalesDashboard({
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => (
-          <span className="sales-action-status web-table-status" data-tone={row.original.status === "overdue" ? "danger" : "info"}>
+          <span
+            className="sales-action-status web-table-status"
+            data-tone={row.original.status === "overdue" ? "danger" : "info"}
+          >
             {row.original.label ?? (row.original.status === "overdue" ? "Terlambat" : "Terjadwal")}
           </span>
         ),

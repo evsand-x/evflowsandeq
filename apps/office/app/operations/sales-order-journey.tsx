@@ -17,6 +17,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SelectionField } from "@/components/web/selection-field";
 import { apiRequest } from "@/lib/api";
 import { useSession } from "../session-provider";
+import { Panel, Value } from "./sales-order";
+import { Evidence } from "./workspace";
+import { SalesBadge } from "./sales-experience";
 import { DataTable } from "../crm/crm-common";
 import { amount, type Order, type OrderCommand } from "./sales-order-types";
 
@@ -58,7 +61,7 @@ export function OrderJourney({
   command,
   pending,
   children,
-  related,
+  onCloseRemainder,
   history,
 }: {
   row: Order;
@@ -66,15 +69,16 @@ export function OrderJourney({
   command: OrderCommand;
   pending: boolean;
   children: ReactNode;
-  related: ReactNode;
+  onCloseRemainder: () => void;
   history: ReactNode;
 }) {
   const { principal } = useSession();
   const [tab, setTab] = useState("summary");
+  const [goodsFilter, setGoodsFilter] = useState("ALL");
   const [kind, setKind] = useState("ALL");
   const [search, setSearch] = useState("");
   const tabsRef = useRef<HTMLDivElement>(null);
-  const warehouse = can("fulfillment.read");
+  const warehouse = can("outbound_checking.read");
   const invoices = can("sales_invoice.read") && can("customer_receipt.read");
   const q = useQuery({
     queryKey: [
@@ -117,10 +121,18 @@ export function OrderJourney({
         : [];
       const invoiceViews = await Promise.all(
         invoiceIds.map((id) =>
-          apiRequest<{ data: { id: string; state: string; createdAt: string } }>(
-            `/operations/invoices/${id}`,
-            { signal },
-          ).then((r) => r.data),
+          apiRequest<{
+            data: {
+              id: string;
+              state: string;
+              createdAt: string;
+              number: string;
+              dueDate?: string;
+              total?: string;
+              outstandingAmount?: string;
+              currency?: string;
+            };
+          }>(`/operations/invoices/${id}`, { signal }).then((r) => r.data),
         ),
       );
       return { docs, batches, invoiceViews };
@@ -290,6 +302,8 @@ export function OrderJourney({
     { id: "code", header: "Kode produk", cell: ({ row: r }) => r.original.product.code },
     { id: "name", header: "Nama produk", cell: ({ row: r }) => r.original.product.name },
     { id: "unit", header: "Satuan", cell: ({ row: r }) => r.original.product.baseUom?.name ?? "—" },
+    { id: "price", header: "Harga", cell: ({ row: r }) => amount(r.original.unitPrice) },
+    { id: "subtotal", header: "Subtotal", cell: ({ row: r }) => amount(r.original.subtotal) },
     ...(
       [
         ["orderedQuantity", "Dipesan"],
@@ -302,7 +316,7 @@ export function OrderJourney({
       header: label,
       cell: ({ row: r }: { row: { original: Line } }) => amount(r.original[key]),
     })),
-    ...(["shipped", "accepted"] as const).map((key) => ({
+    ...(["shipped"] as const).map((key) => ({
       id: key,
       header: key === "shipped" ? "Dikirim" : "Diterima",
       cell: ({ row: r }: { row: { original: Line } }) =>
@@ -324,6 +338,24 @@ export function OrderJourney({
             )
           : "—",
     })),
+    {
+      id: "invoiced",
+      header: "Ditagih",
+      cell: () => <span title="Kuantitas ditagih per baris belum tersedia">—</span>,
+    },
+    {
+      id: "close",
+      header: "Tindakan",
+      cell: ({ row: r }) =>
+        can("sales_order.close_remainder") &&
+        new Decimal(r.original.backorderQuantity ?? 0).gt(0) ? (
+          <Button variant="outline" onClick={onCloseRemainder}>
+            Tutup sisa
+          </Button>
+        ) : (
+          "—"
+        ),
+    },
   ];
   return (
     <>
@@ -439,33 +471,229 @@ export function OrderJourney({
       <Tabs value={tab} onValueChange={setTab} className="so-journey-tabs" ref={tabsRef}>
         <TabsList aria-label="Detail Sales Order" className="so-no-print" variant="line">
           <TabsTrigger value="summary">Ringkasan</TabsTrigger>
+          <TabsTrigger value="goods">Barang</TabsTrigger>
           <TabsTrigger value="fulfillment">Pemenuhan</TabsTrigger>
           <TabsTrigger value="documents">Dokumen</TabsTrigger>
+          <TabsTrigger value="billing">Tagihan</TabsTrigger>
           <TabsTrigger value="history">Riwayat</TabsTrigger>
         </TabsList>
-        <TabsContent value="summary" forceMount className="so-summary-tab">
+        <TabsContent value="summary" className="so-summary-tab">
           {children}
         </TabsContent>
-        <TabsContent value="fulfillment" className="so-no-print">
+        <TabsContent value="goods">
           <section className="so-journey-panel">
-            <h2>Pemenuhan per produk</h2>
-            <p>
-              Jumlah dialokasikan bersifat kumulatif. Dikirim mencakup barang dalam perjalanan,
-              diterima, dan dikembalikan dari pengiriman.
-            </p>
+            <h2>Barang pesanan</h2>
+            <div className="sales-inline-toolbar">
+              <SelectionField
+                label="Tampilkan"
+                hideLabel
+                value={[goodsFilter]}
+                options={[
+                  { id: "ALL", name: "Semua item" },
+                  { id: "BACKORDER", name: "Ada backorder" },
+                ]}
+                onChange={(v) => setGoodsFilter(v[0] ?? "ALL")}
+              />
+              <span>Item stok kosong tetap tampil</span>
+            </div>
             <DataTable
-              data={row.lines}
+              data={
+                goodsFilter === "BACKORDER"
+                  ? row.lines.filter((l) => new Decimal(l.backorderQuantity ?? 0).gt(0))
+                  : row.lines
+              }
               columns={quantities}
               total={row.lines.length}
-              label="jumlah pemenuhan"
               showColumns={false}
             />
+            <p className="sales-notice">
+              Item stok kosong tetap tercatat. Penutupan sisa memerlukan catatan konfirmasi
+              pelanggan.
+            </p>
           </section>
-          {related}
+        </TabsContent>
+        <TabsContent value="fulfillment" className="so-no-print">
+          <div className="sales-columns">
+            <div className="sales-main">
+              <section className="so-journey-panel">
+                <h2>Tahap pemenuhan</h2>
+                {!warehouse ? (
+                  <p className="sales-notice">
+                    Akses pemenuhan gudang diperlukan untuk melihat tahap.
+                  </p>
+                ) : q.isPending ? (
+                  <p role="status">Memuat tahap pemenuhan…</p>
+                ) : q.isError ? (
+                  <p role="alert">
+                    Tahap pemenuhan gagal dimuat.{" "}
+                    <Button variant="outline" onClick={() => void q.refetch()}>
+                      Coba lagi
+                    </Button>
+                  </p>
+                ) : (
+                  <DataTable
+                    data={q.data?.batches ?? []}
+                    total={q.data?.batches.length ?? 0}
+                    showColumns={false}
+                    columns={[
+                      { id: "stage", header: "Tahap", cell: ({ row: r }) => r.original.number },
+                      {
+                        id: "proforma",
+                        header: "Proforma",
+                        cell: ({ row: r }) =>
+                          row.documents?.find((d) => d.batchId === r.original.id)?.number ??
+                          "Belum terbit",
+                      },
+                      {
+                        id: "pick",
+                        header: "Pick Slip",
+                        cell: ({ row: r }) =>
+                          r.original.documents.find((d) => d.kind === "PICKING")?.number ??
+                          "Belum dibuat",
+                      },
+                      {
+                        id: "packing",
+                        header: "Packing List",
+                        cell: ({ row: r }) =>
+                          r.original.documents.find((d) => d.kind === "PACKING")?.number ?? "—",
+                      },
+                      {
+                        id: "shipment",
+                        header: "Surat Jalan",
+                        cell: ({ row: r }) =>
+                          r.original.documents.find((d) => d.kind === "SURAT_JALAN")?.number ?? "—",
+                      },
+                      {
+                        id: "pod",
+                        header: "POD",
+                        cell: ({ row: r }) => r.original.deliveryReceipts.length || "—",
+                      },
+                      {
+                        id: "action",
+                        header: "Tindakan",
+                        cell: ({ row: r }) =>
+                          r.original.state === "ALLOCATED" &&
+                          !r.original.pickList &&
+                          can("fulfillment.pick") ? (
+                            <Button disabled={pending} onClick={() => createPick(r.original.id)}>
+                              Buat Pick Slip
+                            </Button>
+                          ) : (
+                            <Link
+                              className="so-link"
+                              href={`/operations/warehouse/${r.original.id}`}
+                            >
+                              Buka
+                            </Link>
+                          ),
+                      },
+                    ]}
+                  />
+                )}
+                <p className="sales-notice">
+                  Tahap hanya memuat alokasi nyata. Backorder tanpa alokasi tetap menunggu stok atau
+                  tindakan tutup sisa.
+                </p>
+              </section>
+              <Panel title="Sisa pesanan (Backorder)">
+                {can("sales_order.reallocate") && row.state === "OPEN" && (
+                  <Button
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() =>
+                      void command(`/operations/orders/${row.id}/reallocate`, {
+                        version: row.version,
+                      }).catch(() => undefined)
+                    }
+                  >
+                    Evaluasi & alokasikan stok
+                  </Button>
+                )}
+                <DataTable
+                  data={row.lines.filter((l) => new Decimal(l.backorderQuantity ?? 0).gt(0))}
+                  total={
+                    row.lines.filter((l) => new Decimal(l.backorderQuantity ?? 0).gt(0)).length
+                  }
+                  showColumns={false}
+                  columns={[
+                    {
+                      id: "code",
+                      header: "Kode produk",
+                      cell: ({ row: r }) => r.original.product.code,
+                    },
+                    {
+                      id: "name",
+                      header: "Nama produk",
+                      cell: ({ row: r }) => r.original.product.name,
+                    },
+                    {
+                      id: "qty",
+                      header: "Sisa",
+                      cell: ({ row: r }) => amount(r.original.backorderQuantity),
+                    },
+                    {
+                      id: "action",
+                      header: "Tindakan",
+                      cell: () =>
+                        can("sales_order.close_remainder") ? (
+                          <Button variant="outline" onClick={onCloseRemainder}>
+                            Tutup sisa
+                          </Button>
+                        ) : (
+                          "Tunggu stok"
+                        ),
+                    },
+                  ]}
+                />
+              </Panel>
+            </div>
+            <aside className="sales-aside">
+              {active.map((b, index) => (
+                <Panel key={b.id} title={`Dokumen tahap ${index + 1}`}>
+                  <Value label="Tahap">{b.number}</Value>
+                  {["PROFORMA", "PICKING", "PACKING", "SURAT_JALAN", "POD", "INVOICE"].map((k) => (
+                    <Value key={k} label={kinds[k]!}>
+                      {entries
+                        .filter((e) => e.batch === b.number && e.kind === k)
+                        .map((e) => (
+                          <Link key={e.id} className="so-link" href={e.href}>
+                            {e.number}
+                          </Link>
+                        )).length ? (
+                        entries
+                          .filter((e) => e.batch === b.number && e.kind === k)
+                          .map((e) => (
+                            <Link key={e.id} className="so-link" href={e.href}>
+                              {e.number}
+                            </Link>
+                          ))
+                      ) : (
+                        <SalesBadge>
+                          {q.isPending
+                            ? "Memuat"
+                            : q.isError
+                              ? "Belum terverifikasi"
+                              : "Belum tersedia"}
+                        </SalesBadge>
+                      )}
+                    </Value>
+                  ))}
+                </Panel>
+              ))}
+              {row.paymentSnapshot?.mode === "PREPAY" && (
+                <Panel title="Dana tahap pemenuhan">
+                  <p>
+                    Dana terverifikasi dan kekurangan dapat ditinjau pada detail Proforma oleh
+                    Finance.
+                  </p>
+                </Panel>
+              )}
+            </aside>
+          </div>
         </TabsContent>
         <TabsContent value="documents" className="so-no-print">
           <section className="so-journey-panel">
-            <h2>Dokumen pesanan</h2>
+            <h2>Dokumen transaksi</h2>
             <p>
               Dokumen terhubung ke tahap pemenuhan. POD yang belum memiliki nomor ditandai apa
               adanya.
@@ -525,10 +753,124 @@ export function OrderJourney({
               <p>Dokumen gudang tidak ditampilkan karena izin membaca pemenuhan belum tersedia.</p>
             )}
           </section>
+          <Panel title="Lampiran">
+            <p>Lampiran SP/PO pelanggan</p>
+            <Evidence id={row.evidenceId} />
+            <p className="so-help">
+              Lampiran tambahan belum didukung. Lampiran sumber tetap terhubung ke Sales Order.
+            </p>
+          </Panel>
+        </TabsContent>
+        <TabsContent value="billing" className="so-no-print">
+          <div className="sales-columns">
+            <div className="sales-main">
+              <section className="so-journey-panel">
+                <h2>Invoice terkait</h2>
+                {!invoices ? (
+                  <p>Akses tagihan memerlukan izin Invoice dan penerimaan.</p>
+                ) : q.isPending ? (
+                  <p>Memuat tagihan…</p>
+                ) : q.isError ? (
+                  <p role="alert">Tagihan belum dapat dimuat.</p>
+                ) : (
+                  <>
+                    <DataTable
+                      data={q.data?.invoiceViews ?? []}
+                      total={q.data?.invoiceViews.length ?? 0}
+                      showColumns={false}
+                      columns={[
+                        {
+                          id: "number",
+                          header: "No. Invoice",
+                          cell: ({ row: r }) => (
+                            <Link
+                              className="so-link"
+                              href={`/operations/invoices/${r.original.id}`}
+                            >
+                              {r.original.number}
+                            </Link>
+                          ),
+                        },
+                        {
+                          id: "date",
+                          header: "Tanggal",
+                          cell: ({ row: r }) =>
+                            new Date(r.original.createdAt).toLocaleDateString("id-ID"),
+                        },
+                        {
+                          id: "due",
+                          header: "Jatuh tempo",
+                          cell: ({ row: r }) =>
+                            r.original.dueDate
+                              ? new Date(r.original.dueDate).toLocaleDateString("id-ID")
+                              : "Belum ditetapkan",
+                        },
+                        {
+                          id: "total",
+                          header: "Total",
+                          cell: ({ row: r }) => amount(r.original.total, r.original.currency),
+                        },
+                        {
+                          id: "remaining",
+                          header: "Sisa tagihan",
+                          cell: ({ row: r }) =>
+                            amount(r.original.outstandingAmount, r.original.currency),
+                        },
+                      ]}
+                    />
+                    <p className="sales-notice">
+                      Invoice mengikuti POD terkonfirmasi. Draft belum membentuk piutang; pembayaran
+                      dicatat dan dialokasikan oleh Finance.
+                    </p>
+                    {can("sales_invoice.post") && (
+                      <Button variant="outline" asChild>
+                        <Link href="/operations/invoice-create">Buat Invoice dari POD</Link>
+                      </Button>
+                    )}
+                  </>
+                )}
+              </section>
+              <Panel title="Ongkos kirim">
+                <Value label="Penagihan">Per pengiriman</Value>
+                <Value label="Estimasi / nilai">{amount(row.freightEstimate, row.currency)}</Value>
+                <p className="so-help">Nilai final mengikuti Invoice pada setiap pengiriman.</p>
+              </Panel>
+            </div>
+            <aside className="sales-aside">
+              <Panel title="Ringkasan tagihan">
+                <Value label="Total SO">{amount(row.total, row.currency)}</Value>
+                {[
+                  ["total", "Sudah ditagih"],
+                  ["outstandingAmount", "Sisa piutang"],
+                ].map(([key, label]) => (
+                  <Value key={key} label={label!}>
+                    {!invoices || !q.isSuccess
+                      ? "Belum tersedia"
+                      : amount(
+                          (q.data.invoiceViews ?? [])
+                            .filter((v) => v.state !== "DRAFT")
+                            .reduce((sum, v) => sum.add(v[key as "total"] ?? "0"), new Decimal(0))
+                            .toString(),
+                          row.currency,
+                        )}
+                  </Value>
+                ))}
+                <p className="so-help">
+                  Draft belum membentuk piutang. Nilai pajak dan ongkir mengikuti masing-masing
+                  Invoice.
+                </p>
+              </Panel>
+              {row.paymentSnapshot?.mode === "PREPAY" && (
+                <Panel title="Dana tahap pemenuhan">
+                  <p>Lihat dana terverifikasi pada detail Proforma.</p>
+                </Panel>
+              )}
+            </aside>
+          </div>
         </TabsContent>
         <TabsContent value="history" className="so-no-print">
           <section className="so-journey-panel">
-            <h2>Riwayat pesanan</h2>
+            <h2>Riwayat aktivitas</h2>
             {history}
           </section>
         </TabsContent>

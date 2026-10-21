@@ -30,7 +30,7 @@ const catalog: (ReportCatalogItem & { permission: string })[] = [
     module: "sales",
     description: "Sales & Marketing · Invoice diposting",
     owner_path: "Sales & Marketing → Target & Estimasi",
-    permission: "crm.read",
+    permission: "crm_prospect.read",
     reason: "Sumber invoice dan retur diposting belum tersedia.",
   },
   {

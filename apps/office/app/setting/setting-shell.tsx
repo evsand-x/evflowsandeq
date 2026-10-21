@@ -49,7 +49,7 @@ export function SettingShell({
       </main>
     );
   return (
-    <SidebarProvider style={matrix ? ({ "--sidebar-width": "248px" } as CSSProperties) : undefined}>
+    <SidebarProvider className="executive-shell" style={{ "--sidebar-width": "248px" } as CSSProperties}>
       <DashboardSidebar principal={principal} activeView="executive" activeSection="setting" />
       <SidebarInset className="bg-background min-h-dvh min-w-0">
         <ExecutiveTopbar companyName={principal.company_name} />

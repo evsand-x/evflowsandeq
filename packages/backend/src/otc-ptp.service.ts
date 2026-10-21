@@ -16,6 +16,7 @@ import { postAdvanceTax, consumeAdvanceTax } from "./finance/advance-tax";
 import { issueDocument, requireEvidence } from "./sales/document-controls";
 import { reservationExpiry } from "./sales/reservation-controls";
 import { nextDocumentNumber } from "./common/document-number";
+import { operationalTaxSnapshot, calculateOperationalTax } from "./finance/operational-tax";
 type Tx = Prisma.TransactionClient;
 const d = (v: string | Prisma.Decimal) => new Prisma.Decimal(v);
 type FreightTaxMode = "NON_TAXABLE" | "TAXABLE";
@@ -209,6 +210,16 @@ export class OtcPtpService {
           "TAXABLE",
           i.freight.tax_rule_id,
         );
+      const masterSnapshots = await Promise.all(
+        i.lines.map(async (line: any) =>
+          line.tax_master_id
+            ? {
+                ...(await operationalTaxSnapshot(tx, c, line.tax_master_id, new Date(), "SALES")),
+                operational_tax_id: line.tax_master_id,
+              }
+            : null,
+        ),
+      );
       const o = await tx.salesOrder.create({
         data: {
           companyId: c,
@@ -231,11 +242,12 @@ export class OtcPtpService {
               }
             : Prisma.DbNull,
           lines: {
-            create: i.lines.map((x: any) => ({
+            create: i.lines.map((x: any, index: number) => ({
               companyId: c,
               productId: x.product_id,
               orderedQuantity: d(x.quantity),
               unitPrice: d(x.unit_price),
+              ...(masterSnapshots[index] ? { taxSnapshot: masterSnapshots[index] } : {}),
             })),
           },
         },
@@ -640,55 +652,73 @@ export class OtcPtpService {
     });
   }
 
-  async confirmPick(c: string, a: string, id: string, input: any, key?: string) {
-    return transactionCommand(c, a, `pick-lists/${id}/pick`, key, input, async (tx) => {
-      await this.lockPickBatch(tx, c, id);
-      await tx.$queryRaw`SELECT id FROM pick_lists WHERE id = ${id}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
-      const pick = await tx.pickList.findFirst({
-        where: { id, companyId: c },
-        include: { lines: true },
-      });
-      if (!pick) throw new NotFoundException("Picking list tidak ditemukan.");
-      if (pick.state !== "OPEN") throw new ConflictException("Picking list sudah diproses.");
-      const pickLineIds = new Set(pick.lines.map((line) => line.id));
-      if (
-        input.lines.length !== pick.lines.length ||
-        input.lines.some((item: any) => !pickLineIds.has(item.pick_list_line_id)) ||
-        new Set(input.lines.map((item: any) => item.pick_list_line_id)).size !== input.lines.length
-      )
-        throw new ConflictException("PICK_LINES_REQUIRED");
-      for (const item of input.lines) {
-        const line = pick.lines.find((candidate) => candidate.id === item.pick_list_line_id);
-        if (
-          !line ||
-          d(item.picked_quantity).lt(0) ||
-          d(item.picked_quantity).gt(line.assignedQuantity)
-        )
-          throw new ConflictException("Qty picking melebihi alokasi.");
-        await tx.pickListLine.update({
-          where: { id: line.id },
-          data: { pickedQuantity: d(item.picked_quantity) },
+  async confirmPick(c: string, a: string, id: string, input: any, key?: string, draft = false) {
+    return transactionCommand(
+      c,
+      a,
+      `pick-lists/${id}/${draft ? "draft" : "pick"}`,
+      key,
+      input,
+      async (tx) => {
+        await this.lockPickBatch(tx, c, id);
+        await tx.$queryRaw`SELECT id FROM pick_lists WHERE id = ${id}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
+        const pick = await tx.pickList.findFirst({
+          where: { id, companyId: c },
+          include: { lines: true },
         });
-      }
-      const updated = await tx.pickList.update({
-        where: { id: pick.id },
-        data: { state: "PICKED", pickedAt: new Date(), version: { increment: 1 } },
-        include: { lines: true },
-      });
-      await this.audit.recordWith(tx, {
-        companyId: c,
-        actorId: a,
-        action: "pick_list.confirmed",
-        resourceType: "pick_list",
-        resourceId: pick.id,
-        after: updated,
-      });
-      return updated;
-    });
+        if (!pick) throw new NotFoundException("Picking list tidak ditemukan.");
+        if (pick.state !== "OPEN") throw new ConflictException("Picking list sudah diproses.");
+        if (
+          (draft && input.version == null) ||
+          (input.version != null && input.version !== pick.version)
+        )
+          throw new ConflictException("PICK_REVISION_OR_STATE_CHANGED");
+        const pickLineIds = new Set(pick.lines.map((line) => line.id));
+        if (
+          input.lines.length !== pick.lines.length ||
+          input.lines.some((item: any) => !pickLineIds.has(item.pick_list_line_id)) ||
+          new Set(input.lines.map((item: any) => item.pick_list_line_id)).size !==
+            input.lines.length
+        )
+          throw new ConflictException("PICK_LINES_REQUIRED");
+        for (const item of input.lines) {
+          const line = pick.lines.find((candidate) => candidate.id === item.pick_list_line_id);
+          if (
+            !line ||
+            d(item.picked_quantity).lt(0) ||
+            d(item.picked_quantity).gt(line.assignedQuantity)
+          )
+            throw new ConflictException("Qty picking melebihi alokasi.");
+          await tx.pickListLine.update({
+            where: { id: line.id },
+            data: { pickedQuantity: d(item.picked_quantity) },
+          });
+        }
+        const updated = await tx.pickList.update({
+          where: { id: pick.id },
+          data: {
+            state: draft ? "OPEN" : "PICKED",
+            pickedAt: draft ? null : new Date(),
+            version: { increment: 1 },
+          },
+          include: { lines: true },
+        });
+        await this.audit.recordWith(tx, {
+          companyId: c,
+          actorId: a,
+          action: draft ? "pick_list.draft_saved" : "pick_list.confirmed",
+          resourceType: "pick_list",
+          resourceId: pick.id,
+          after: updated,
+          ...(input.reason ? { reason: input.reason } : {}),
+        });
+        return updated;
+      },
+    );
   }
 
-  async confirmCheck(c: string, a: string, id: string, key?: string) {
-    return transactionCommand(c, a, `pick-lists/${id}/check`, key, { id }, async (tx) => {
+  async confirmCheck(c: string, a: string, id: string, input: any = {}, key?: string) {
+    return transactionCommand(c, a, `pick-lists/${id}/check`, key, input, async (tx) => {
       await this.lockPickBatch(tx, c, id);
       await tx.$queryRaw`SELECT id FROM pick_lists WHERE id = ${id}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
       const pick = await tx.pickList.findFirst({
@@ -697,6 +727,23 @@ export class OtcPtpService {
       });
       if (!pick) throw new NotFoundException("Picking list tidak ditemukan.");
       if (pick.state !== "PICKED") throw new ConflictException("Picking belum dikonfirmasi.");
+      if (input.checks?.length) {
+        if (
+          input.checks.length !== pick.lines.length ||
+          new Set(input.checks.map((x: any) => x.pick_list_line_id)).size !== pick.lines.length
+        )
+          throw new ConflictException("CHECK_LINES_REQUIRED");
+        for (const check of input.checks) {
+          const line = pick.lines.find((l) => l.id === check.pick_list_line_id);
+          if (
+            !line ||
+            (check.checked_quantity != null && !line.pickedQuantity.eq(check.checked_quantity))
+          )
+            throw new ConflictException("CHECK_QTY_MISMATCH");
+          if (check.condition !== "BAIK")
+            throw new ConflictException("CHECK_CONDITION_REQUIRES_RESOLUTION");
+        }
+      }
       const incomplete = pick.lines.some((line) => !line.pickedQuantity.eq(line.assignedQuantity));
       if (incomplete) throw new ConflictException("CHECK_QTY_MISMATCH");
       if (!pick.lines.some((line) => line.pickedQuantity.gt(0)))
@@ -725,6 +772,8 @@ export class OtcPtpService {
         source: source.snapshot,
         checked_at: updated.checkedAt,
         checker_id: a,
+        packing: input.packing ?? null,
+        checks: input.checks ?? [],
       });
       await this.audit.recordWith(tx, {
         companyId: c,
@@ -954,13 +1003,58 @@ export class OtcPtpService {
           ).tax,
         })),
       );
+      const masterTaxes = lines.flatMap((line: any) => {
+        const source = b.allocations.find(
+          (x) => x.id === line.fulfillmentAllocationId,
+        )!.salesOrderLine;
+        const snapshot = source.taxSnapshot as { account_id?: string } | null;
+        if (!snapshot?.account_id) return [];
+        return [
+          {
+            accountId: snapshot.account_id,
+            amount: lineAmounts(source, line.acceptedQuantity).tax,
+          },
+        ];
+      });
+      const legacyTax = tax
+        .sub(
+          masterTaxes.reduce(
+            (sum: Prisma.Decimal, row: { amount: Prisma.Decimal }) => sum.add(row.amount),
+            d("0"),
+          ),
+        )
+        .sub(advancedTax);
       await postLedger(tx, a, {
+        accountIds: [
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          ...(legacyTax.isZero() ? [] : [undefined]),
+          ...masterTaxes.map((row: { accountId: string }) => row.accountId),
+          undefined,
+        ],
         data: [
           { ...journal, kind: "SALE_COGS", debit: cost, credit: d("0") },
           { ...journal, kind: "INVENTORY_TRANSIT", debit: d("0"), credit: cost },
           { ...journal, kind: "UNBILLED_AR", debit: net.add(tax), credit: d("0") },
           { ...journal, kind: "SALE_REVENUE", debit: d("0"), credit: net },
-          { ...journal, kind: "SALES_TAX", debit: d("0"), credit: tax.sub(advancedTax) },
+          ...(legacyTax.isZero()
+            ? []
+            : [
+                {
+                  ...journal,
+                  kind: "SALES_TAX" as const,
+                  debit: Prisma.Decimal.max(legacyTax.neg(), 0),
+                  credit: Prisma.Decimal.max(legacyTax, 0),
+                },
+              ]),
+          ...masterTaxes.map((row: { amount: Prisma.Decimal }) => ({
+            ...journal,
+            kind: "SALES_TAX" as const,
+            debit: Prisma.Decimal.max(row.amount.neg(), 0),
+            credit: Prisma.Decimal.max(row.amount, 0),
+          })),
           { ...journal, kind: "CUSTOMER_ADVANCE", debit: d("0"), credit: advancedTax },
         ],
       });
@@ -2168,7 +2262,20 @@ export class OtcPtpService {
         (sum: Prisma.Decimal, line: any) => sum.add(line.quantity.mul(line.unitCost)),
         d("0"),
       );
-      const taxAmount = d(i.tax_amount ?? "0");
+      const taxSnapshot = i.tax_master_id
+        ? await operationalTaxSnapshot(
+            tx,
+            c,
+            i.tax_master_id,
+            new Date(i.invoice_date + "T23:59:59.999Z"),
+            "PURCHASE",
+          )
+        : null;
+      const taxAmount = taxSnapshot
+        ? calculateOperationalTax(subtotal, taxSnapshot)
+        : d(i.tax_amount ?? "0");
+      if (taxSnapshot && i.tax_amount !== undefined && !taxAmount.eq(i.tax_amount))
+        throw new ConflictException("TAX_AMOUNT_MISMATCH");
       const invoice = await tx.supplierInvoice.create({
         data: {
           companyId: c,
@@ -2181,6 +2288,7 @@ export class OtcPtpService {
           subtotal,
           taxAmount,
           total: subtotal.add(taxAmount),
+          ...(taxSnapshot ? { taxSnapshot } : {}),
           currency: i.currency,
           state: "MATCHED",
           idempotencyKey: key,
@@ -2248,8 +2356,8 @@ export class OtcPtpService {
             kind: "PURCHASE_TAX",
             sourceType: "SUPPLIER_INVOICE",
             sourceId: invoice.id,
-            debit: invoice.taxAmount,
-            credit: d("0"),
+            debit: Prisma.Decimal.max(invoice.taxAmount, 0),
+            credit: Prisma.Decimal.max(invoice.taxAmount.neg(), 0),
           },
           {
             companyId: c,
@@ -2259,6 +2367,11 @@ export class OtcPtpService {
             debit: d("0"),
             credit: invoice.total,
           },
+        ],
+        accountIds: [
+          undefined,
+          (invoice.taxSnapshot as { account_id?: string } | null)?.account_id,
+          undefined,
         ],
       });
       const posted = await tx.supplierInvoice.update({

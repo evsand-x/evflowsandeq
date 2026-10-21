@@ -29,7 +29,15 @@ describe("CRM first operational flow HTTP", () => {
       data: { id: roleId, companyId, code: "CRM_TEST", name: "CRM Test" },
     });
     await prisma.userRole.create({ data: { companyId, membershipId: member.id, roleId } });
-    for (const code of ["crm.read", "crm.create"]) {
+    for (const code of [
+      "crm_prospect.read",
+      "crm_prospect.create",
+      "crm_contact.read",
+      "crm_contact.create",
+      "crm_customer.create",
+      "crm_opportunity.read",
+      "crm_opportunity.create",
+    ]) {
       const permission = await prisma.permission.findUniqueOrThrow({ where: { code } });
       await prisma.rolePermission.create({
         data: { companyId, roleId, permissionId: permission.id, scopeType: "company" },
@@ -169,12 +177,24 @@ describe("CRM first operational flow HTTP", () => {
     expect(read[0].contact_ids).toEqual([contact.id]);
     expect(read[0].notes).toBe("HTTP draft");
     const createPermission = await prisma.permission.findUniqueOrThrow({
-      where: { code: "crm.create" },
+      where: { code: "crm_opportunity.create" },
     });
     await prisma.rolePermission.deleteMany({
       where: { companyId, roleId, permissionId: createPermission.id },
     });
     await post("/crm/opportunities", randomUUID(), payload).expect(403);
+    // A live authenticated session reads its current grants on every request.
+    const contactRead = await prisma.permission.findUniqueOrThrow({
+      where: { code: "crm_contact.read" },
+    });
+    await prisma.rolePermission.deleteMany({
+      where: { companyId, roleId, permissionId: contactRead.id },
+    });
+    await agent.get("/api/v1/crm/contacts").expect(403);
+    const restricted = (
+      await agent.get(`/api/v1/crm/workspace/prospects/${prospect.id}`).expect(200)
+    ).body.data;
+    expect(restricted.contacts).toBeUndefined();
+    expect(restricted.id).toBe(prospect.id);
   });
 });
-

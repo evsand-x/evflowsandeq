@@ -1,5 +1,44 @@
 # Domain Setting
 
+## Submenu Akun dan migrasi master — 16 Oktober 2026
+
+Matriks menampilkan Finance → Akuntansi → Akun dengan izin independen account.read, account.create, account.update, account.import. Admin Sistem tetap penuh dalam perusahaan aktif; grant peran biasa lama tidak diperluas otomatis. Mapping jurnal dan akun pajak tetap konfigurasi Finance berbasis ID akun, bukan hardcode kode sumber. Kode pada migrasi lokal hanya data konfigurasi pengguna. Riwayat audit mencatat impor, pemetaan dan penonaktifan akun uji.
+
+### Penyempurnaan master pajak — 16 Oktober 2026
+
+Admin mengatur penggunaan master pajak dan akun melalui Finance/Pajak. Pemeriksaan kesesuaian penggunaan adalah validasi backend; tidak memperkenalkan pengelompokan domain izin atau grant baru.
+
+## Pembaruan pajak operasional — 16 Oktober 2026
+
+Pengaturan master pajak operasional berada pada Finance → Pajak → Daftar & Aturan Pajak. Persentase, jenis, tambah/potong, akun, pembulatan dan status editable pengguna berizin tanpa approval. Hak independen tax_master.read/create/update, tax_output.read/update, tax_input.read/update dapat diatur Admin Sistem; hak administrator penuh tetap berlaku. Versi/audit/snapshot dan isolasi perusahaan merupakan invariant backend. Kebijakan approval konfigurasi lama tidak berlaku untuk master pajak ini.
+
+
+## Izin independen per submenu — keputusan terbaru 16 Oktober 2026
+
+- Setiap submenu operasional memiliki identitas izin tersendiri untuk setiap tindakan yang tersedia. Izin baca, buat, ubah, hapus dan tindakan bisnis diperiksa sesuai capability nyata.
+- Satu grant induk, seperti izin umum CRM atau Master Data, tidak boleh mengizinkan beberapa submenu sekaligus ataupun dipakai sebagai fallback. Prospek, Kontak dan Pelanggan harus dapat dibatasi secara terpisah. Tidak ada pewarisan izin otomatis dari induk navigasi.
+- Induk hanya menjadi pengelompokan. Pilih Semua pada induk mengubah pilihan grant masing-masing anak; penyimpanan tetap berupa grant anak individual. Jika induk memiliki halaman operasional sendiri, izin halaman tersebut hanya berlaku untuk halaman itu.
+- Backend menegakkan izin submenu pada endpoint, query, ekspor dan data terkait. Menyembunyikan menu atau menggandakan checkbox untuk ID grant yang sama tidak memenuhi aturan. Endpoint yang dipakai beberapa layar harus menjaga pemisahan kemampuan dan tidak mempercayai asal menu yang dikirim klien sebagai bukti izin.
+- Hak bawaan Admin Sistem tetap penuh dalam perusahaan sesi. Peran biasa mengikuti gabungan grant aktif dan scope; isolasi perusahaan serta invariant transaksi tetap berlaku.
+- Migrasi dari grant bersama wajib memiliki pemetaan yang dapat ditinjau dan audit, tanpa memperluas hak peran lama secara diam-diam. Peran baru tetap menerima seluruh capability yang tersedia saat dibuat sesuai keputusan sebelumnya.
+- Gate IAM-01/04: buktikan bahwa memberi atau mencabut izin submenu A tidak mengubah izin submenu B, termasuk akses API langsung, gabungan peran, ekspor dan data terkait. Capability yang belum dibangun tidak diberi checkbox semu. Implementasi yang masih berbagi grant dicatat sebagai utang migrasi dan belum lulus gate izin independen.
+
+Ketentuan ini menggantikan pemetaan bersama CRM/Master Data yang sebelumnya diterima sebagai tampilan sementara.
+
+Keputusan terbaru 16 Oktober 2026: Admin Sistem dapat mengatur izin semua menu yang operasional. Tujuh tampilan Dashboard memiliki izin baca tersendiri, sementara data tetap dibatasi izin/scope sumber. Menu belum operasional tetap terlihat tanpa checkbox semu. Pengosongan grant peran biasa lama yang diminta pengguna telah dilakukan pada database development lokal secara auditabel, bukan sebagai migrasi global.
+
+Penghapusan, penonaktifan, atau perubahan grant peran biasa mencabut sesi anggota yang kehilangan atau mendapat izin baru. Bila anggota itu tetap memegang peran aktif `ADMIN_SYSTEM`, sesinya dipertahankan: hak Admin Sistem tidak berubah dan principal/izin dibaca ulang dari database pada setiap request. Pengubahan keanggotaan atau penonaktifan Admin Sistem sendiri tetap mengikuti aturan pencabutan sesi dan perlindungan administrator terakhir.
+
+## Keputusan IAM terbaru — 16 Oktober 2026
+
+Admin Sistem (`ADMIN_SYSTEM`) memiliki hak penuh dalam perusahaan sesi untuk mengatur aplikasi dan menjalankan transaksi. Hak itu melekat pada peran aktif dan tidak bergantung pada grant checkbox. Admin dapat memutus approval tanpa penunjukan dan untuk pengajuannya sendiri; audit mencatat pelaku dan keputusan. Peran lain fleksibel: dibuat, diubah, dihapus, serta dapat digabung pada seorang pengguna. Penghapusan peran melepas penugasan, mencabut sesi anggota dan diaudit. Peran Admin Sistem dilindungi sebagai jalur administrasi. Matriks hak akses disusun menurut fitur/tindakan tanpa kelompok atau filter domain. Aturan ini menggantikan paragraf IAM-01/04/11 lama di akhir dokumen yang mewajibkan permission aksi tambahan dan melarang bypass transaksi Admin Sistem. Isolasi perusahaan, status dan invariant bisnis tetap berlaku.
+
+Matriks memakai urutan jalur navigasi Office, bukan urutan alfabet resource. Untuk Admin Sistem, capability backend yang tersedia ditampilkan tercentang otomatis meski tidak tersimpan sebagai grant. Layar/menu tanpa capability tersendiri diberi **Belum dapat diatur** dan tidak menyediakan checkbox. Matriks tidak menyediakan filter domain.
+
+Peran biasa baru mendapat seluruh capability yang tersedia dalam katalog saat pembuatan dengan cakupan perusahaan; grant dicatat atomik bersama peran. Peran lama tidak diubah otomatis. Admin Sistem dapat memilih semua izin pada matriks peran lama sebagai draf, meninjau dampaknya, lalu menyimpan satu peran setiap kali. Sesi anggota terdampak dicabut dan diff diaudit. Penambahan capability katalog nanti tidak otomatis memperluas peran biasa yang sudah dibuat. Hak `ADMIN_SYSTEM` tetap bawaan dan tidak disimpan sebagai grant.
+
+Daftar Pengguna dan Peran menyediakan aksi Hapus dengan konfirmasi bagi Admin Sistem. Pengguna tanpa riwayat pemakaian dapat dihapus permanen; pengguna bersejarah diarsipkan melalui `company_memberships.deleted_at`, dinonaktifkan, dikeluarkan dari daftar dan tidak dapat diedit sebagai akun aktif. Hapus menolak akun sendiri dan Admin Sistem terakhir, mencabut sesi, melepas penugasan peran, dan mencatat audit. Email akun terarsip tetap unik/terpakai. Peran biasa dihapus sesuai dampak anggota; `ADMIN_SYSTEM` tidak dapat dihapus.
+
 ## Capability proforma — 7 Oktober 2026
 
 `proforma.issue` mengizinkan pratinjau dan penerbitan manual proforma dari tahap
@@ -133,3 +172,11 @@ Rujukan implementasi dan batas verifikasi: [laporan remediasi backend O2C](../de
 ## Pengelolaan akses — keputusan 7 Oktober 2026
 
 IAM-01/04/11: pengguna dapat memiliki beberapa peran; izin efektif adalah gabungan izin peran aktif sesuai scope. Pengelolaan akun dan peran hanya untuk pemegang peran aktif Admin Sistem (`ADMIN_SYSTEM`) dalam perusahaan sesi, dengan permission aksi yang sesuai. Nama jabatan atau nama tampilan peran bukan bukti administrator. Pengguna → pilih akun → tetapkan beberapa peran; Peran → Atur Hak Akses → ubah checkbox matriks peran → simpan. Menu Pengguna/Peran/Matriks disembunyikan bagi nonadministrator; deep link dan seluruh endpoint `/users`, `/roles`, `/permissions` beserta mutasinya ditolak 403 walaupun permission IAM terlanjur diberikan. Pengaturan bisnis lain tetap mengikuti permission domain. Tidak ada bypass izin transaksi untuk Admin Sistem. Perubahan akses diaudit dan sesi terdampak dicabut. Tidak ada perubahan model database atau migration; implementasi dan batas validasi dicatat pada [catatan pengelolaan akses](../development/iam-admin-only-2026-10-07.md).
+
+## Implementasi workspace IAM — 16 Oktober 2026
+
+Workspace Pengguna/Peran memakai halaman daftar, form penuh, detail bertab dan matriks terpadu sesuai referensi terbaru pengguna. Status akun pada workspace mengubah keanggotaan perusahaan; penonaktifan identitas global tetap dihormati. Aksi cabut sesi, status peran, penugasan dan perubahan izin dicatat pada audit, dengan invalidasi sesi perusahaan terdampak. Snapshot izin mencegah overwrite oleh editor lama. Tidak ada perubahan saldo/ledger/stock atau migrasi. Editor cakupan khusus dan empat kategori data sensitif terpisah masih bergantung pada resolver scope serta permission backend khusus; izin umum finance/hr tidak dianggap pengganti. Lihat [catatan implementasi](../development/access-ui-2026-10-16.md) dan kontrak API terbaru.
+
+## Implementasi pemisahan submenu — 16 Oktober 2026
+
+Migration `20261016210000_independent_submenu_permissions` menggantikan grant induk CRM/Master Data dan baca fulfillment dengan grant anak terpisah. Peran lama mempertahankan tindakan/scope efektif yang sudah dimiliki; peran tanpa grant tetap kosong. Pemetaan diaudit oleh sistem. Admin Sistem tetap penuh dan sesinya tidak dicabut selama peran aktif. Matriks memiliki pilihan semua per kelompok/per tindakan, status sebagian, jumlah izin dipilih, serta buka/tutup seluruh menu. Kontrol tersebut hanya mengubah grant anak individual. Catatan pelaksanaan dan gate pada [hak akses fleksibel](../development/flexible-access-2026-10-16.md).

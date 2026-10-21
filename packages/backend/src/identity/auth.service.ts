@@ -54,7 +54,11 @@ export class AuthService {
       where: { email: input.email.toLowerCase() },
       include: {
         memberships: {
-          where: { active: true, ...(input.company_id ? { companyId: input.company_id } : {}) },
+          where: {
+            active: true,
+            deletedAt: null,
+            ...(input.company_id ? { companyId: input.company_id } : {}),
+          },
           include: { company: true },
           orderBy: [{ company: { name: "asc" } }, { companyId: "asc" }],
         },
@@ -271,6 +275,7 @@ export class AuthService {
       session.revokedAt ||
       session.expiresAt <= new Date() ||
       !session.membership.active ||
+      !!session.membership.deletedAt ||
       !session.membership.user.active
     ) {
       throw new UnauthorizedException("Sesi tidak aktif.");
@@ -284,6 +289,20 @@ export class AuthService {
           code: grant.permission.code,
           scope_type: grant.scopeType,
           scope_id: grant.scopeId,
+        });
+      }
+    }
+    if (
+      session.membership.userRoles.some(
+        (item) => item.role.active && item.role.code === "ADMIN_SYSTEM",
+      )
+    ) {
+      const catalog = await prisma.permission.findMany({ select: { code: true } });
+      for (const permission of catalog) {
+        permissionMap.set(`${permission.code}:company:`, {
+          code: permission.code,
+          scope_type: "company",
+          scope_id: null,
         });
       }
     }

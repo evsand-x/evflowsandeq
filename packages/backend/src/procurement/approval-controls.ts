@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException } from "@nestjs/common";
 import type { Prisma } from "@evflow/database";
+import { isCompanyAdministrator } from "../identity/administrator";
 
 export type ApprovalStep = { mode: "ANY" | "ALL"; user_ids: string[] };
 export type ApprovalSnapshot = {
@@ -50,7 +51,8 @@ export async function approvePr(
       requester_id: request.createdById,
     };
   }
-  if (!snapshot.steps.length || request.approvalValue.gt(snapshot.maximum_amount))
+  const administrator = await isCompanyAdministrator(tx, companyId, actorId);
+  if (!snapshot.steps.length || (!administrator && request.approvalValue.gt(snapshot.maximum_amount)))
     throw new ConflictException("APPROVAL_LIMIT_EXCEEDED");
   if (
     !request.approvalValue.eq(snapshot.amount) ||
@@ -58,7 +60,7 @@ export async function approvePr(
     request.createdById !== snapshot.requester_id
   )
     throw new ConflictException("APPROVAL_REVISION_CHANGED");
-  if (!snapshot.allow_self && actorId === snapshot.requester_id)
+  if (!administrator && !snapshot.allow_self && actorId === snapshot.requester_id)
     throw new ForbiddenException("SELF_APPROVAL_FORBIDDEN");
   const actions = await tx.transactionApprovalAction.findMany({
     where: { companyId, sourceId: id, policyId: snapshot.policy_id },
@@ -76,7 +78,7 @@ export async function approvePr(
   const member = await tx.companyMembership.findFirst({
     where: { companyId, userId: actorId, active: true, user: { active: true } },
   });
-  if (!member || !step.user_ids.includes(actorId))
+  if (!member || (!administrator && !step.user_ids.includes(actorId)))
     throw new ForbiddenException("APPROVER_NOT_ASSIGNED");
   if (!actions.some((x) => x.step === activeStep && x.actorId === actorId))
     await tx.transactionApprovalAction.create({
@@ -87,13 +89,15 @@ export async function approvePr(
         step: activeStep,
         actorId,
         decision: "APPROVED",
-        reason: "Persetujuan kebutuhan pembelian sesuai penugasan dan batas nilai.",
+        reason: administrator
+          ? "Keputusan Admin Sistem tanpa penunjukan approver."
+          : "Persetujuan kebutuhan pembelian sesuai penugasan dan batas nilai.",
       },
     });
   const all = await tx.transactionApprovalAction.findMany({
     where: { companyId, sourceId: id, policyId: snapshot.policy_id, decision: "APPROVED" },
   });
-  const complete = snapshot.steps.every((s, index) => {
+  const complete = administrator || snapshot.steps.every((s, index) => {
     const users = new Set(all.filter((x) => x.step === index).map((x) => x.actorId));
     return s.mode === "ALL"
       ? s.user_ids.every((u) => users.has(u))

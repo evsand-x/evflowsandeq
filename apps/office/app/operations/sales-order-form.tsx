@@ -18,6 +18,7 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { AddOrderCustomer } from "./so-add-customer";
 import { SelectionField } from "@/components/web/selection-field";
 import { Switch } from "@/components/ui/switch";
 import { apiRequest } from "@/lib/api";
@@ -34,6 +35,7 @@ type DraftLine = {
   product_id: string;
   quantity: string;
   unit_price: string;
+  tax_master_id?: string;
 };
 type Options = {
   currency: string;
@@ -116,6 +118,9 @@ export function SalesOrderForm({
       product_id: l.productId,
       quantity: l.orderedQuantity,
       unit_price: l.unitPrice,
+      ...(l.taxSnapshot?.operational_tax_id
+        ? { tax_master_id: l.taxSnapshot.operational_tax_id }
+        : {}),
     })) ?? [{ key: "first", product_id: "", quantity: "", unit_price: "" }],
   );
   const lookup = useQuery({
@@ -124,6 +129,12 @@ export function SalesOrderForm({
     enabled: !!principal,
   });
   const options: Options | undefined = lookup.data?.data;
+  const taxes = useQuery({
+    queryKey: ["tax-options", principal?.company_id, principal?.user_id, principal?.permissions],
+    queryFn: () =>
+      apiRequest<{ data: { id: string; name: string; percentage: string }[] }>("/tax/options?usage=SALES"),
+    enabled: !!principal,
+  });
   const selected = options?.customers.find((c) => c.id === customer);
   const currency = initial?.currency ?? options?.currency;
   const values = lines.map(subtotal),
@@ -244,10 +255,18 @@ export function SalesOrderForm({
     {
       id: "tax",
       header: "Pajak",
-      cell: () => (
-        <span className="so-unavailable" title="Dihitung oleh server saat evaluasi pesanan.">
-          Menunggu evaluasi
-        </span>
+      cell: ({ row }) => (
+        <SelectionField
+          hideLabel
+          label={`Pajak baris ${row.index + 1}`}
+          value={row.original.tax_master_id ? [row.original.tax_master_id] : []}
+          options={(taxes.data?.data ?? []).map((t) => ({
+            id: t.id,
+            name: `${t.name} (${t.percentage}%)`,
+          }))}
+          onChange={(v) => change(row.original.key, "tax_master_id", v[0] ?? "")}
+          placeholder="Pilih pajak"
+        />
       ),
     },
     {
@@ -326,6 +345,7 @@ export function SalesOrderForm({
                 line_id: l.line_id,
                 quantity: l.quantity,
                 unit_price: l.unit_price,
+                ...(l.tax_master_id ? { tax_master_id: l.tax_master_id } : {}),
               })),
             }
           : {
@@ -345,10 +365,11 @@ export function SalesOrderForm({
                     },
                   }
                 : {}),
-              lines: lines.map(({ product_id, quantity, unit_price }) => ({
+              lines: lines.map(({ product_id, quantity, unit_price, tax_master_id }) => ({
                 product_id,
                 quantity,
                 unit_price,
+                ...(tax_master_id ? { tax_master_id } : {}),
               })),
             };
         void command(initial ? `/sales-orders/${initial.id}/revise` : "/sales-orders", payload)
@@ -372,51 +393,76 @@ export function SalesOrderForm({
           <ErrorBox message={localError} />
         </div>
       )}
+      <Button
+        className="sales-back"
+        type="button"
+        variant="outline"
+        onClick={() => {
+          setLeaveTo(null);
+          if (dirty) setLeaving(true);
+          else router.push(back);
+        }}
+      >
+        Kembali ke daftar
+      </Button>
       <fieldset disabled={pending} className="so-form-fields">
         <div className="so-form-main">
-          <Panel title="Pelanggan & pengiriman">
+          <Panel title="1 · Pelanggan">
             <p className="so-help">Field bertanda * wajib diisi.</p>
-            <FieldGroup className="so-info-grid">
+            <FieldGroup className="sales-customer-fields">
               {initial ? (
                 <Value label="Pelanggan">{initial.customer?.name}</Value>
               ) : (
-                <SelectionField
-                  label="Pelanggan *"
-                  options={options?.customers ?? []}
-                  value={customer ? [customer] : []}
-                  placeholder={lookup.isLoading ? "Memuat pelanggan…" : "Pilih pelanggan"}
-                  onChange={(v) => {
-                    setDirty(true);
-                    const c = options?.customers.find((x) => x.id === v[0]);
-                    setCustomer(v[0] ?? "");
-                    setAddress(c?.shippingAddress ?? c?.primaryAddress ?? "");
-                  }}
-                />
+                <div className="so-customer-picker">
+                  <SelectionField
+                    label="Pelanggan *"
+                    options={options?.customers ?? []}
+                    value={customer ? [customer] : []}
+                    placeholder={lookup.isLoading ? "Memuat pelanggan…" : "Pilih pelanggan"}
+                    onChange={(v) => {
+                      setDirty(true);
+                      const c = options?.customers.find((x) => x.id === v[0]);
+                      setCustomer(v[0] ?? "");
+                      setAddress(c?.shippingAddress ?? c?.primaryAddress ?? "");
+                    }}
+                  />
+                  <AddOrderCustomer />
+                </div>
               )}
-              <Field>
-                <FieldLabel htmlFor="so-address">Alamat pengiriman *</FieldLabel>
-                <Input
-                  id="so-address"
-                  required
-                  maxLength={1000}
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="so-reference">Referensi SP/PO pelanggan *</FieldLabel>
-                <Input
-                  id="so-reference"
-                  required
-                  maxLength={100}
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                />
-              </Field>
+
               <Value label="Termin">
                 {terms(initial?.paymentSnapshot ?? selected?.paymentPolicies[0])}
               </Value>
             </FieldGroup>
+            <Value label="Sisa limit kredit">Belum tersedia</Value>
+            {initial && (
+              <Field>
+                <FieldLabel htmlFor="so-reason">Alasan revisi *</FieldLabel>
+                <Textarea
+                  id="so-reason"
+                  required
+                  maxLength={1000}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <p className="so-help">
+                  Revisi membatalkan hasil evaluasi sebelumnya dan memerlukan pengajuan ulang.
+                </p>
+              </Field>
+            )}
+          </Panel>
+          <Panel title="2 · Referensi SP/PO">
+            {" "}
+            <Field>
+              <FieldLabel htmlFor="so-reference">Referensi SP/PO pelanggan *</FieldLabel>
+              <Input
+                id="so-reference"
+                required
+                maxLength={100}
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+            </Field>{" "}
             <div className="so-document-links">
               <Dialog>
                 <DialogTrigger asChild>
@@ -449,23 +495,8 @@ export function SalesOrderForm({
                 </DialogContent>
               </Dialog>
             </div>
-            {initial && (
-              <Field>
-                <FieldLabel htmlFor="so-reason">Alasan revisi *</FieldLabel>
-                <Textarea
-                  id="so-reason"
-                  required
-                  maxLength={1000}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                />
-                <p className="so-help">
-                  Revisi membatalkan hasil evaluasi sebelumnya dan memerlukan pengajuan ulang.
-                </p>
-              </Field>
-            )}
           </Panel>
-          <Panel title="Detail produk pesanan">
+          <Panel title="3 · Barang">
             <p className="so-help">
               {lines.length} baris produk · Isi jumlah dan harga satuan. Gunakan titik untuk
               desimal.
@@ -498,39 +529,18 @@ export function SalesOrderForm({
               </Button>
             )}
           </Panel>
-          <Panel title="Catatan pesanan">
+          <Panel title="4 · Pengiriman & ongkos kirim" className="so-freight-card">
+            {" "}
             <Field>
-              <FieldLabel htmlFor="so-notes">Catatan (opsional)</FieldLabel>
-              <Textarea
-                id="so-notes"
-                placeholder="Tambahkan instruksi atau informasi untuk pesanan ini…"
-                maxLength={2000}
-                value={notes}
-                readOnly={!!initial}
-                onChange={(e) => setNotes(e.target.value)}
+              <FieldLabel htmlFor="so-address">Alamat pengiriman *</FieldLabel>
+              <Input
+                id="so-address"
+                required
+                maxLength={1000}
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
               />
-              {initial && <p className="so-help">Catatan asli dipertahankan pada revisi ini.</p>}
             </Field>
-          </Panel>
-        </div>
-        <aside className="so-form-aside" aria-label="Ringkasan dan informasi dokumen">
-          <Panel title="Informasi dokumen">
-            <div className="so-document-meta">
-              <Value label="No. SO">{initial?.number ?? "Otomatis saat draft disimpan"}</Value>
-              <Value label="Tanggal SO">
-                {initial
-                  ? new Date(initial.createdAt).toLocaleDateString("id-ID", { dateStyle: "long" })
-                  : "Tanggal saat draft disimpan"}
-              </Value>
-              <Value label={"Dicatat oleh"}>
-                {initial?.createdByName ?? principal?.display_name}
-              </Value>
-            </div>
-          </Panel>
-          <Panel title="Nilai pesanan">
-            <Totals subtotal={total} currency={currency} />
-          </Panel>
-          <Panel title="Ongkos kirim" className="so-freight-card">
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Tambahkan ongkos kirim</p>
@@ -580,11 +590,35 @@ export function SalesOrderForm({
               </FieldGroup>
             )}
           </Panel>
-          <Notice>
-            Semua jumlah pesanan tetap dicatat, termasuk saat stok kosong. Informasi stok langsung,
-            diskon terpisah belum tersedia. Ongkos kirim dapat diaktifkan per pengiriman. Pajak
-            mengikuti aturan pelanggan saat evaluasi.
-          </Notice>
+          <Panel title="5 · Catatan">
+            <Field>
+              <FieldLabel htmlFor="so-notes">Catatan (opsional)</FieldLabel>
+              <Textarea
+                id="so-notes"
+                placeholder="Tambahkan instruksi atau informasi untuk pesanan ini…"
+                maxLength={2000}
+                value={notes}
+                readOnly={!!initial}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+              {initial && <p className="so-help">Catatan asli dipertahankan pada revisi ini.</p>}
+            </Field>
+          </Panel>
+        </div>
+        <aside className="so-form-aside" aria-label="Ringkasan dan informasi dokumen">
+          <Panel title="Ringkasan">
+            <Totals
+              subtotal={total}
+              currency={currency}
+              freight={freightEnabled && validPrice(freightAmount) ? freightAmount : null}
+            />
+          </Panel>
+
+          <Panel title="Diperiksa saat diajukan">
+            <Value label="Aturan pembayaran">Dicek</Value>
+            <Value label="Past due / limit kredit">Dicek bila tempo</Value>
+            <Value label="Stok per item">Dicek</Value>
+          </Panel>
         </aside>
       </fieldset>
       <footer className="so-footer so-save-bar">

@@ -395,6 +395,7 @@ export class OperationsService {
     search: string,
     state?: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED",
     stage?: "checking" | "shipping" | "pod",
+    view?: string,
   ) {
     const skip = (page - 1) * 25,
       query = { contains: search, mode: "insensitive" as const };
@@ -433,6 +434,17 @@ export class OperationsService {
             batch: batches.find((b) => b.id === d.batchId),
             status: await proformaStatus(c, { ...d, snapshot }),
             pending: false,
+            value:
+              (snapshot as { total?: string } | null)?.total ??
+              (Array.isArray((snapshot as { allocations?: unknown[] } | null)?.allocations) &&
+              (snapshot as { allocations: { amounts?: { total?: string } }[] }).allocations.every(
+                (line) => line.amounts?.total != null,
+              )
+                ? (snapshot as { allocations: { amounts: { total: string } }[] }).allocations
+                    .reduce((sum, line) => sum.add(line.amounts.total), new Prisma.Decimal(0))
+                    .toString()
+                : null),
+            currency: (snapshot as { currency?: string } | null)?.currency ?? null,
           })),
       );
       const pendingBatches = await prisma.fulfillmentBatch.findMany({
@@ -473,7 +485,16 @@ export class OperationsService {
       const combined = [...rows, ...pending].sort(
         (a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime(),
       );
-      return { rows: combined.slice(skip, skip + 25), total: combined.length };
+      const summary: Record<string, number> = {
+        ISSUED: 0,
+        REVISION_REQUIRED: 0,
+        SUPERSEDED: 0,
+        PENDING: 0,
+        VOID: 0,
+      };
+      for (const row of combined) summary[row.status] = (summary[row.status] ?? 0) + 1;
+      const filtered = combined.filter((r) => !view || view === "ALL" || r.status === view);
+      return { rows: filtered.slice(skip, skip + 25), total: filtered.length, summary };
     }
     if (kind === "orders") {
       const where: Prisma.SalesOrderWhereInput = {
@@ -509,7 +530,8 @@ export class OperationsService {
         }),
         prisma.salesOrder.count({ where }),
       ]);
-      const [open, partial, backorder] = await prisma.$transaction([
+      const [draft, open, partial, backorder] = await prisma.$transaction([
+        prisma.salesOrder.count({ where: { companyId: c, state: "DRAFT" } }),
         prisma.salesOrder.count({ where: { companyId: c, state: "OPEN" } }),
         prisma.$queryRaw<{ count: number }[]>`
           SELECT COUNT(*)::integer AS count FROM sales_orders o
@@ -527,14 +549,18 @@ export class OperationsService {
         rows: rows.map(({ lines, ...row }) => ({ ...row, ...orderView({ ...row, lines }) })),
         total,
         pageSize: 25,
-        summary: { open, partial: partial[0]?.count ?? 0, creditHold: null, backorder },
+        summary: { draft, open, partial: partial[0]?.count ?? 0, creditHold: null, backorder },
         asOf: new Date().toISOString(),
       };
     }
     if (kind === "warehouse") {
       const where: Prisma.FulfillmentBatchWhereInput = {
         companyId: c,
-        OR: [{ number: query }, { salesOrder: { number: query } }, { salesOrder: { customer: { name: query } } }],
+        OR: [
+          { number: query },
+          { salesOrder: { number: query } },
+          { salesOrder: { customer: { name: query } } },
+        ],
         ...(stage === "checking"
           ? { state: "ALLOCATED", pickList: { is: { state: "PICKED" } } }
           : stage === "shipping"
@@ -593,7 +619,54 @@ export class OperationsService {
       ]);
       return { rows, total };
     }
-    const where = { companyId: c, number: query };
+    const allInvoices = await prisma.salesInvoice.findMany({
+      where: { companyId: c, OR: [{ number: query }, { customer: { name: query } }] },
+      select: {
+        id: true,
+        state: true,
+        dueDate: true,
+        outstandingAmount: true,
+        total: true,
+        subtotal: true,
+        taxAmount: true,
+      },
+    });
+    const handoffs = await prisma.auditEvent.findMany({
+      where: {
+        companyId: c,
+        resourceType: "commercial_invoice",
+        action: "commercial_document.handed_over",
+        resourceId: { in: allInvoices.map((r) => r.id) },
+      },
+      select: { resourceId: true, metadata: true },
+      orderBy: { occurredAt: "desc" },
+    });
+    const handed = new Set(handoffs.map((r) => r.resourceId));
+    const matches = (r: (typeof allInvoices)[number], v: string) => {
+      if (v === "ALL") return true;
+      const posted = ["POSTED", "PARTIALLY_PAID", "PAID"].includes(r.state);
+      if (v === "HANDOFF") return posted && !handed.has(r.id);
+      if (v === "PAID") return posted && r.outstandingAmount.isZero();
+      if (v === "UNPAID")
+        return posted && r.outstandingAmount.gte(r.total ?? r.subtotal.add(r.taxAmount));
+      if (v === "PARTIAL")
+        return (
+          posted &&
+          r.outstandingAmount.gt(0) &&
+          r.outstandingAmount.lt(r.total ?? r.subtotal.add(r.taxAmount))
+        );
+      if (v === "OVERDUE")
+        return posted && r.outstandingAmount.gt(0) && !!r.dueDate && r.dueDate < new Date();
+      return true;
+    };
+    const selected = allInvoices.filter((r) => matches(r, view ?? "ALL"));
+    const invoiceSummary = Object.fromEntries(
+      ["HANDOFF", "OVERDUE", "PAID", "PARTIAL"].map((v) => [
+        v,
+        allInvoices.filter((r) => matches(r, v)).length,
+      ]),
+    );
+    const where = { companyId: c, id: { in: selected.map((r) => r.id) } };
     const [rows, total] = await prisma.$transaction([
       prisma.salesInvoice.findMany({
         where,
@@ -613,9 +686,11 @@ export class OperationsService {
           ...invoice,
           total: invoice.total ?? invoice.subtotal.add(invoice.taxAmount),
           description: await this.invoiceDescription(c, invoice),
+          handoff: handed.has(invoice.id) ? "Diserahkan" : "Belum diserahkan",
         })),
       ),
       total,
+      summary: invoiceSummary,
     };
   }
   private async invoiceDescription(
@@ -650,7 +725,7 @@ export class OperationsService {
     if (invoice.taxAmount.gt(0)) notes.push("Masih berutang pajak keluaran (belum dilaporkan)");
     return notes.join(" · ");
   }
-  async proforma(c: string, id: string) {
+  async proforma(c: string, id: string, fundsAllowed = false) {
     const document = await prisma.fulfillmentDocument.findFirst({
       where: { companyId: c, id, kind: proformaKinds },
     });
@@ -664,7 +739,27 @@ export class OperationsService {
         salesOrder: { select: { id: true, number: true, customer: { select: { name: true } } } },
       },
     });
-    return { ...document, batch, status: await proformaStatus(c, document) };
+    const documentCurrency = (document.snapshot as { currency?: string } | null)?.currency;
+    const funds =
+      fundsAllowed && documentCurrency
+        ? await prisma.customerReceipt.aggregate({
+            where: {
+              companyId: c,
+              fulfillmentBatchId: document.batchId,
+              state: "POSTED",
+              currency: documentCurrency,
+            },
+            _sum: { unallocatedAmount: true },
+          })
+        : null;
+    return {
+      ...document,
+      batch,
+      verifiedFunds: funds
+        ? (funds._sum.unallocatedAmount ?? new Prisma.Decimal(0)).toString()
+        : null,
+      status: await proformaStatus(c, document),
+    };
   }
   async order(c: string, id: string) {
     const row = await prisma.salesOrder.findFirst({
@@ -718,6 +813,7 @@ export class OperationsService {
       include: {
         salesOrder: {
           select: {
+            id: true,
             number: true,
             customerId: true,
             deliveryAddress: true,
@@ -732,7 +828,14 @@ export class OperationsService {
             acceptedQuantity: true,
             returnedQuantity: true,
             stockLot: {
-              select: { batchNo: true, expiryDate: true, product: { select: { name: true } } },
+              select: {
+                batchNo: true,
+                expiryDate: true,
+                locator: { select: { code: true } },
+                product: {
+                  select: { code: true, name: true, baseUom: { select: { name: true } } },
+                },
+              },
             },
           },
         },
@@ -745,7 +848,7 @@ export class OperationsService {
     if (!row) throw new NotFoundException();
     const documents = await prisma.fulfillmentDocument.findMany({
       where: { companyId: c, batchId: id, kind: { in: ["PICKING", "PACKING", "SURAT_JALAN"] } },
-      select: { id: true, kind: true, number: true, issuedAt: true },
+      select: { id: true, kind: true, number: true, issuedAt: true, snapshot: true },
     });
     const freightTaxRules = await prisma.salesTaxRule.findMany({
       where: {

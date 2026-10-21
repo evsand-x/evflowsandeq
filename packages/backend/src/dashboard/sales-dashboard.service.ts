@@ -1,5 +1,5 @@
 import type { AuthPrincipal, SalesDashboardData, SalesDashboardQuery } from "@evflow/contracts";
-import { salesDashboardQuerySchema } from "@evflow/contracts";
+import { isAccessAdministrator, salesDashboardQuerySchema } from "@evflow/contracts";
 import { prisma, type Prisma } from "@evflow/database";
 import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
 import { z } from "zod";
@@ -18,9 +18,10 @@ const cursorSchema = z
 export class SalesDashboardService {
   async read(principal: AuthPrincipal, rawQuery: SalesDashboardQuery): Promise<SalesDashboardData> {
     if (
+      !isAccessAdministrator(principal) &&
       !principal.permissions.some(
         (p) =>
-          p.code === "crm.read" &&
+          p.code === "crm_prospect.read" &&
           ["company", "privileged"].includes(p.scope_type) &&
           (!p.scope_id || p.scope_id === principal.company_id),
       )

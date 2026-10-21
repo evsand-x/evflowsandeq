@@ -1,5 +1,18 @@
 # Database — model relasional
 
+## Submenu Akun dan migrasi master — 16 Oktober 2026
+
+Migrasi 20261017030000_account_workspace menambah finance_accounts.category_label, description, parent_id (FK), account_type (HEADER/DETAIL), normal_balance (DEBIT/CREDIT), psak118_category dan version. Kelompok tetap ASSET/LIABILITY/EQUITY/REVENUE/EXPENSE; kategori sumber disimpan terpisah. Nama tidak unik, kode unik per perusahaan. Induk opsional (akun akar); parent harus Header sekelompok dan bebas siklus. Tidak ada kolom nominal saldo. Migrasi data lokal membuat versi posting profile/revisi pajak dan audit; jurnal/snapshot lama utuh.
+
+### Penyempurnaan master pajak — 16 Oktober 2026
+
+Migrasi `20261017020000_operational_tax_usage` menambah `operational_taxes.usage` dengan nilai SALES/PURCHASE/BOTH, default BOTH untuk kompatibilitas master dan klien lama. Snapshot revisi/transaksi baru membawa usage. Revisi lama tanpa usage ditafsirkan BOTH; histori posted tidak ditulis ulang.
+
+## Pembaruan pajak operasional — 16 Oktober 2026
+
+Migrasi `20261017010000_operational_tax_master`: `operational_taxes`, `operational_tax_revisions`, `operational_tax_invoices`, serta `supplier_invoices.tax_snapshot`. Master menyimpan percentage numeric(12,8), account_id, kind/effect, precision/rounding, active, version/effective_from. Unik nama/perusahaan; revisi unik tax/version; dokumen unik perusahaan/arah/sumber serta perusahaan/arah/pihak/nomor. Invoice metadata menyimpan evidence_id, document_date dan versi. Identitas sumber polimorfik divalidasi server dalam transaksi dan lock perusahaan. Referensi lama dipertahankan; tidak ada konversi otomatis rule lama menjadi master baru karena akun harus dipilih secara eksplisit.
+
+
 ## Implementasi proforma manual — 7 Oktober 2026
 
 Menggunakan `fulfillment_documents` yang sudah tersedia: original kind PROFORMA,
@@ -42,7 +55,7 @@ Common fields tabel bisnis: id, company_id, created_at, created_by, updated_at, 
 | users | email unique, password_hash, employee_id nullable, active, mfa_reference |
 | auth_sessions | user_id, session_family_id, created_at, last_seen_at, expires_at, revoked_at, revoked_reason, permission_version, device_label; state sesi bersama web/PWA |
 | refresh_tokens | session_id, token_hash unique, expires_at, consumed_at, replaced_by_token_id, revoked_at; rotasi atomik, hash saja, jejak token lama untuk deteksi replay |
-| company_memberships | company_id, user_id, active; unique(company_id,user_id) |
+| company_memberships | company_id, user_id, active, deleted_at nullable; unique(company_id,user_id). `deleted_at` membedakan arsip dari akun nonaktif biasa; query aktif mengecualikan arsip |
 | roles / permissions | code unique; permissions memakai resource/action |
 | role_permissions / user_roles | FK role/permission/user + scope_type/scope_id tervalidasi |
 | approval_policies | document_kind, version_no, state draft/active/inactive, effective_from/to, conditions, priority, amount_basis, currency, lower/upper bounds, separation_of_duties, allow_self_approval default false, reapproval_fields, reminder_after_work_minutes default 240, escalate_after_work_minutes default 480; Active memerlukan assignee/scope/limit/fallback lengkap |
@@ -66,6 +79,8 @@ Common fields tabel bisnis: id, company_id, created_at, created_by, updated_at, 
 Setiap header operasional di bawah memakai `document_id UNIQUE REFERENCES documents(id)`. Registri documents menyediakan lampiran/approval tanpa FK polimorfik bebas. Total dokumen tersimpan sebagai snapshot hasil perhitungan server, diverifikasi kembali saat posting.
 
 `user_roles` mendukung relasi banyak-ke-banyak pengguna/peran. Matriks hak akses merupakan tampilan pengelolaan `role_permissions` beserta scope. Izin efektif menggabungkan pasangan tindakan-cakupan dari setiap peran; jangan menggabungkan tindakan satu peran dengan cakupan lebih luas dari peran lain. Hak yang tidak diberikan ditolak. Tidak perlu akun berbeda untuk setiap peran; audit selalu menyimpan pengguna sebenarnya. Hak memiliki beberapa peran tidak otomatis melewati limit approval atau aturan persetujuan dokumen sendiri.
+
+Pembuatan peran biasa mengisi `role_permissions` dari snapshot seluruh katalog `permissions` yang tersedia saat itu, dengan `scope_type=company`, dalam transaksi yang sama dengan baris `roles`. Peran lama tidak menerima backfill otomatis. `ADMIN_SYSTEM` tetap dapat memiliki nol grant tersimpan karena kewenangannya berasal dari kode peran aktif pada membership. Penambahan capability katalog kemudian tidak mengubah grant peran biasa yang telah dibuat.
 
 ## 3. Master dan CRM
 
@@ -418,3 +433,6 @@ Penambahan implementasi: materialRevision SO, closedQuantity per baris, versi pi
 
 Rujukan implementasi dan batas verifikasi: [laporan remediasi backend O2C](../development/o2c-backend-remediation-2026-10-05.md).
 
+## Migrasi izin submenu — 16 Oktober 2026
+
+IAM-01/04: migration `20261016210000_independent_submenu_permissions` memetakan grant `crm.*`, `master_data.*`, dan `fulfillment.read` ke capability anak dengan aksi/scope identik, mencatat `role.permissions.migrated` oleh sistem, lalu menghapus capability induk tersebut. Grant kosong tetap kosong. `sales_order.read` tetap milik SO; hak baca Proforma serta Backorder yang sebelumnya ikut terbuka disalin ke capability terpisah. Pemegang `proforma.issue` memperoleh baca Proforma yang sebelumnya sudah tersedia. Sesi anggota terdampak dicabut kecuali tetap memegang `ADMIN_SYSTEM` aktif. Tidak mengubah schema atau saldo; pemulihan menggunakan forward migration berbasis audit, bukan menghidupkan fallback induk.

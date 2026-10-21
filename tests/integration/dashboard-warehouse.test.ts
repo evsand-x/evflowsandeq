@@ -86,7 +86,7 @@ describe("Warehouse dashboard scope and source availability", () => {
   it("rejects absent, unrelated, invalid-company and unusable warehouse grants", async () => {
     for (const permissions of [
       [],
-      [{ code: "master_data.read", scope_type: "company", scope_id: null }],
+      [{ code: "master_customer.read", scope_type: "company", scope_id: null }],
       [{ code: "warehouse.read", scope_type: "company", scope_id: otherCompanyId }],
       [{ code: "warehouse.read", scope_type: "self", scope_id: null }],
       [{ code: "warehouse.read", scope_type: "warehouse", scope_id: null }],

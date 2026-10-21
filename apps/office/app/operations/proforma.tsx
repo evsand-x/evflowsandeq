@@ -1,4 +1,11 @@
 "use client";
+import {
+  SalesPeriod,
+  SalesNavigation,
+  SalesBadge,
+  DocumentHandoff,
+  HandoffStatus,
+} from "./sales-experience";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -7,6 +14,7 @@ import { ArrowLeft, Printer } from "lucide-react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SelectionField } from "@/components/web/selection-field";
 import { apiRequest } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
@@ -28,6 +36,9 @@ type Proforma = {
   issuedAt: string;
   pending?: boolean;
   snapshot?: unknown;
+  value?: string | null;
+  verifiedFunds?: string | null;
+  currency?: string;
   batch?: {
     id: string;
     number: string;
@@ -52,6 +63,7 @@ function ProformaDocuments({ id }: { id?: string | undefined }) {
   const [search, setSearch] = useState("");
   const [term, setTerm] = useState("");
   const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState("ALL");
   useEffect(() => {
     const timer = setTimeout(() => {
       setTerm(search);
@@ -59,19 +71,24 @@ function ProformaDocuments({ id }: { id?: string | undefined }) {
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
-  const allowed =
-    !!principal &&
-    (hasCompanyPermission(principal, "sales_order.read") ||
-      hasCompanyPermission(principal, "proforma.issue"));
+  const allowed = !!principal && hasCompanyPermission(principal, "proforma.read");
   const canIssue = !!principal && hasCompanyPermission(principal, "proforma.issue");
   const canReadOrder = !!principal && hasCompanyPermission(principal, "sales_order.read");
   const endpoint = id
     ? `/operations/proformas/${id}`
-    : `/operations/lists/proformas?page=${page}&search=${encodeURIComponent(term)}`;
+    : `/operations/lists/proformas?page=${page}&search=${encodeURIComponent(term)}&view=${filter}`;
   const query = useQuery({
-    queryKey: ["operations", principal?.company_id, principal?.user_id, endpoint],
+    queryKey: [
+      "operations",
+      principal?.company_id,
+      principal?.user_id,
+      endpoint,
+      principal?.permissions,
+    ],
     queryFn: ({ signal }) =>
-      apiRequest<{ data: Proforma & { rows: Proforma[]; total: number } }>(endpoint, { signal }),
+      apiRequest<{
+        data: Proforma & { rows: Proforma[]; total: number; summary: Record<string, number> };
+      }>(endpoint, { signal }),
     enabled: allowed,
   });
   const row = query.data?.data;
@@ -119,9 +136,23 @@ function ProformaDocuments({ id }: { id?: string | undefined }) {
           : new Date(r.original.issuedAt).toLocaleDateString("id-ID"),
     },
     {
+      id: "value",
+      header: "Nilai proforma",
+      cell: ({ row: r }) => amount(r.original.value, r.original.currency),
+    },
+    {
       id: "status",
       header: "Status dokumen",
-      cell: ({ row: r }) => <Badge variant="outline">{statusLabel(r.original.status)}</Badge>,
+      cell: ({ row: r }) => <SalesBadge>{statusLabel(r.original.status)}</SalesBadge>,
+    },
+    {
+      id: "funds",
+      header: "Dana terverifikasi",
+      cell: () => (
+        <span title="Dana per tahap dapat diperiksa pada detail Proforma sesuai izin penerimaan">
+          —
+        </span>
+      ),
     },
     {
       id: "actions",
@@ -162,7 +193,7 @@ function ProformaDocuments({ id }: { id?: string | undefined }) {
       <DashboardSidebar principal={principal} activeView="sales" activeSection="sales" />
       <SidebarInset className="min-w-0">
         <ExecutiveTopbar companyName={principal.company_name} />
-        <main className="executive-content crm-content otc-workspace so-workspace">
+        <main className="executive-content crm-content otc-workspace so-workspace sales-sketch">
           <header className="executive-heading">
             <div>
               <nav aria-label="Breadcrumb" className="executive-breadcrumb">
@@ -170,9 +201,16 @@ function ProformaDocuments({ id }: { id?: string | undefined }) {
                 <Link href="/operations/proformas">Proforma</Link>
                 {id ? " / Detail" : ""}
               </nav>
-              <h1>{id ? "Detail Proforma" : "Proforma"}</h1>
-              <p>Proforma dan riwayat revisi berdasarkan alokasi Sales Order.</p>
+              <h1>
+                {id && row ? `${row.number} · ${row.batch?.salesOrder.number ?? ""}` : "Proforma"}
+              </h1>
+              <p>
+                {id && row
+                  ? `Terbit ${new Date(row.issuedAt).toLocaleDateString("id-ID")} · ${row.batch?.number ?? ""}`
+                  : "Dokumen per tahap pemenuhan; Proforma tidak membentuk piutang."}
+              </p>
             </div>
+            <SalesNavigation active="proformas" />
           </header>
           {!allowed ? (
             <ErrorBox message="Anda tidak memiliki izin membaca Proforma." />
@@ -190,6 +228,93 @@ function ProformaDocuments({ id }: { id?: string | undefined }) {
             ) : (
               row && (
                 <>
+                  <Button className="sales-back" variant="outline" asChild>
+                    <Link href="/operations/proformas">← Kembali ke daftar</Link>
+                  </Button>
+                  <div className="so-print-area web-form">
+                    <div className="sales-status-strip">
+                      <SalesBadge>{statusLabel(row.status)}</SalesBadge>
+                    </div>
+                    {row.status !== "ISSUED" && (
+                      <p role="status">
+                        {row.status === "SUPERSEDED"
+                          ? "Dokumen telah digantikan oleh revisi baru."
+                          : row.status === "VOID"
+                            ? "Tahap pemenuhan dibatalkan. Dokumen ini tidak berlaku."
+                            : row.status === "REVISION_REQUIRED"
+                              ? "Alokasi telah berubah. Tinjau dan terbitkan revisi melalui detail SO."
+                              : "Status dokumen belum tersedia. Muat ulang data sebelum mencetak."}
+                      </p>
+                    )}
+                    {row.status !== "ISSUED" && (
+                      <p>ARSIP — tidak untuk digunakan sebagai Proforma aktif.</p>
+                    )}
+                    <ProformaContents
+                      documentNumber={row.number}
+                      asideContent={
+                        <>
+                          <Panel title="Pembayaran">
+                            <Value label="Nilai Proforma">
+                              {amount(
+                                (row.snapshot as { total?: string })?.total ?? row.value,
+                                (row.snapshot as { currency?: string })?.currency,
+                              )}
+                            </Value>
+                            <Value label="Dana terverifikasi">
+                              {row.verifiedFunds == null
+                                ? "Memerlukan akses penerimaan"
+                                : amount(
+                                    row.verifiedFunds,
+                                    (row.snapshot as { currency?: string })?.currency,
+                                  )}
+                            </Value>
+                            <Value label="Kekurangan">
+                              {row.verifiedFunds != null &&
+                              (row.snapshot as { total?: string })?.total != null
+                                ? amount(
+                                    Decimal.max(
+                                      0,
+                                      new Decimal((row.snapshot as { total: string }).total).sub(
+                                        row.verifiedFunds,
+                                      ),
+                                    ).toString(),
+                                    (row.snapshot as { currency?: string }).currency,
+                                  )
+                                : "Belum tersedia"}
+                            </Value>
+                            <p className="sales-notice sales-warning">
+                              Bukti unggahan tidak otomatis berarti dana terverifikasi. Pengiriman
+                              mengikuti pemeriksaan Finance dan gudang.
+                            </p>
+                          </Panel>
+                          <Panel title="Penyerahan dokumen">
+                            <HandoffStatus kind="proforma" id={row.id} />
+                          </Panel>
+                          <Panel title="Versi & riwayat">
+                            <Value label="Dokumen">{row.number}</Value>
+                            <Value label="Terbit">
+                              {new Date(row.issuedAt).toLocaleDateString("id-ID")}
+                            </Value>
+                            <SalesBadge>{statusLabel(row.status)}</SalesBadge>
+                            <p className="sales-notice">
+                              Proforma tidak membentuk piutang. Perubahan sumber memerlukan
+                              pemeriksaan revisi.
+                            </p>
+                          </Panel>
+                        </>
+                      }
+                      mainContent={
+                        <DocumentHandoff
+                          kind="proforma"
+                          id={row.id}
+                          editable={canIssue && row.status === "ISSUED"}
+                        />
+                      }
+                      snapshot={row.snapshot}
+                      issuedAt={row.issuedAt}
+                      batchNumber={row.batch?.number}
+                    />
+                  </div>
                   <div className="so-footer so-detail-actions so-no-print">
                     <Button variant="outline" asChild>
                       <Link href="/operations/proformas">
@@ -209,68 +334,88 @@ function ProformaDocuments({ id }: { id?: string | undefined }) {
                       Cetak Proforma
                     </Button>
                   </div>
-                  <div className="so-print-area web-form">
-                    <div className="so-detail-overview">
-                      <div>
-                        <span className="so-eyebrow">PROFORMA</span>
-                        <h2>{row.number}</h2>
-                        <p>{row.batch?.salesOrder.customer.name}</p>
-                      </div>
-                      <div className="so-dimensions">
-                        <div>
-                          <span>Dokumen</span>
-                          <Badge variant="outline">{statusLabel(row.status)}</Badge>
-                        </div>
-                        <div>
-                          <span>Sales Order</span>
-                          <strong>{row.batch?.salesOrder.number ?? "—"}</strong>
-                        </div>
-                      </div>
-                    </div>
-                    {row.status !== "ISSUED" && (
-                      <p role="status">
-                        {row.status === "SUPERSEDED"
-                          ? "Dokumen telah digantikan oleh revisi baru."
-                          : row.status === "VOID"
-                            ? "Tahap pemenuhan dibatalkan. Dokumen ini tidak berlaku."
-                            : row.status === "REVISION_REQUIRED"
-                              ? "Alokasi telah berubah. Tinjau dan terbitkan revisi melalui detail SO."
-                              : "Status dokumen belum tersedia. Muat ulang data sebelum mencetak."}
-                      </p>
-                    )}
-                    {row.status !== "ISSUED" && (
-                      <p>ARSIP — tidak untuk digunakan sebagai Proforma aktif.</p>
-                    )}
-                    <ProformaContents
-                      snapshot={row.snapshot}
-                      issuedAt={row.issuedAt}
-                      batchNumber={row.batch?.number}
-                    />
-                  </div>
                 </>
               )
             )
           ) : (
             <>
-              <DataTable
-                data={row?.rows ?? []}
-                columns={columns}
-                total={row?.total ?? 0}
-                page={page}
-                onPage={setPage}
-                busy={query.isFetching}
-                label="Proforma"
-                densityControl
-                toolbar={
-                  <Input
-                    aria-label="Cari Proforma, SO, atau pelanggan"
-                    placeholder="Cari nomor Proforma, SO, atau pelanggan…"
-                    value={search}
-                    maxLength={100}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                }
-              />
+              <div className="sales-list-tabs" aria-label="Status Proforma">
+                {[
+                  ["ALL", "Semua"],
+                  ["PENDING", "Belum terbit"],
+                  ["ISSUED", "Terbit"],
+                  ["REVISION_REQUIRED", "Perlu revisi"],
+                  ["SUPERSEDED", "Diganti"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={filter === value}
+                    onClick={() => {
+                      setFilter(value!);
+                      setPage(1);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="so-kpis">
+                {[
+                  ["ISSUED", "Terbit"],
+                  ["REVISION_REQUIRED", "Perlu revisi"],
+                  ["SUPERSEDED", "Diganti"],
+                  ["FUNDS_PENDING", "Menunggu dana"],
+                ].map(([key, label]) => (
+                  <Panel key={key} title={label!}>
+                    <strong className="sales-kpi-number">{row?.summary?.[key!] ?? "—"}</strong>
+                  </Panel>
+                ))}
+              </div>
+              <p className="sales-notice">
+                Proforma diterbitkan per tahap setelah alokasi tersedia. Proforma tidak membentuk
+                piutang.
+              </p>
+              <section className="sales-list-panel">
+                <h2>Daftar Proforma</h2>
+                <DataTable
+                  data={row?.rows ?? []}
+                  columns={columns}
+                  total={row?.total ?? 0}
+                  page={page}
+                  onPage={setPage}
+                  busy={query.isFetching}
+                  label="Proforma"
+                  showColumns={false}
+                  toolbar={
+                    <div className="sales-inline-toolbar">
+                      <Input
+                        aria-label="Cari Proforma, SO, atau pelanggan"
+                        placeholder="Cari nomor Proforma, SO, atau pelanggan…"
+                        value={search}
+                        maxLength={100}
+                        onChange={(e) => setSearch(e.target.value)}
+                      />
+                      <SelectionField
+                        label="Status Proforma"
+                        value={[filter]}
+                        options={[
+                          { id: "ALL", name: "Semua status" },
+                          { id: "PENDING", name: "Belum terbit" },
+                          { id: "ISSUED", name: "Terbit" },
+                          { id: "REVISION_REQUIRED", name: "Perlu revisi" },
+                          { id: "SUPERSEDED", name: "Diganti" },
+                        ]}
+                        onChange={(values) => {
+                          setFilter(values[0] ?? "ALL");
+                          setPage(1);
+                        }}
+                      />
+                      <SalesPeriod />
+                    </div>
+                  }
+                />
+              </section>
               <p className="so-help">
                 Proforma hanya memuat jumlah yang telah dialokasikan. Tahap yang menunggu penerbitan
                 belum memiliki nomor dokumen sampai pengguna mengonfirmasi penerbitannya. Proforma
@@ -314,6 +459,12 @@ export function ProformaContents({
   freightControls,
   documentType = "Proforma",
   notes,
+  mainContent,
+  asideContent,
+  beforeContent,
+  afterContent,
+  review = false,
+  documentNumber,
 }: {
   snapshot: unknown;
   issuedAt?: string | undefined;
@@ -322,6 +473,12 @@ export function ProformaContents({
   freightControls?: ReactNode;
   documentType?: "Proforma" | "Invoice";
   notes?: ReactNode;
+  mainContent?: ReactNode;
+  asideContent?: ReactNode;
+  beforeContent?: ReactNode;
+  afterContent?: ReactNode;
+  review?: boolean;
+  documentNumber?: string;
 }) {
   const data = snapshot as
     | {
@@ -370,91 +527,113 @@ export function ProformaContents({
     },
     { id: "net", header: "Sub Total", cell: ({ row }) => amount(row.original.amounts?.net) },
   ];
+  const totals = (
+    <aside className="so-totals" aria-label={`Ringkasan nilai ${documentType}`}>
+      <dl>
+        <div>
+          <dt>Subtotal</dt>
+          <dd>{amount(subtotal, data.currency)}</dd>
+        </div>
+        <div>
+          <dt>Diskon</dt>
+          <dd>Belum tersedia</dd>
+        </div>
+        {data.freight?.tax_snapshot || new Decimal(data.freight?.tax ?? "0").gt(0) ? (
+          <>
+            <div>
+              <dt>Ongkos kirim (sebelum PPN)</dt>
+              <dd>{totalsPending ? "—" : amount(data.freight?.amount, data.currency)}</dd>
+            </div>
+            <div>
+              <dt>PPN barang + ongkos kirim</dt>
+              <dd>{totalsPending ? "—" : amount(tax, data.currency)}</dd>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <dt>PPN barang</dt>
+              <dd>{totalsPending ? "—" : amount(tax, data.currency)}</dd>
+            </div>
+            <div>
+              <dt>Ongkos kirim (sesudah PPN)</dt>
+              <dd>{totalsPending ? "—" : amount(data.freight?.amount, data.currency)}</dd>
+            </div>
+          </>
+        )}
+        <div className="so-grand-total">
+          <dt>Total Tagihan</dt>
+          <dd>{totalsPending ? "—" : amount(total, data.currency)}</dd>
+        </div>
+      </dl>
+      {data.total == null && data.allocations.length > 0 && (
+        <p>
+          Ringkasan dihitung dari nilai baris pada snapshot dokumen lama. Nilai yang tidak tersimpan
+          ditampilkan sebagai tanda pisah.
+        </p>
+      )}
+    </aside>
+  );
+  const reviewing = review || !!freightControls;
   return (
-    <div className={freightControls ? "so-detail-layout so-proforma-layout" : "so-detail-layout"}>
-      <div className="so-detail-main">
-        <Panel title="Pelanggan & pengiriman">
-          <div className="so-info-grid">
-            <Value label="Perusahaan saat penerbitan">
-              {data.company ?? "Tidak tercatat pada dokumen lama"}
-            </Value>
-            <Value label="Pelanggan saat penerbitan">{data.customer}</Value>
-            <Value label="Alamat pengiriman">{data.address}</Value>
-            <Value label="Referensi pelanggan">{data.reference}</Value>
-            <Value label="Mata uang">{data.currency}</Value>
-            <Value label="Ketentuan pembayaran">{terms(data.payment)}</Value>
-            <Value label="Tanggal terbit">
-              {issuedAt
-                ? new Date(issuedAt).toLocaleDateString("id-ID", { dateStyle: "long" })
-                : "Belum diterbitkan"}
-            </Value>
-            <Value label="Tahap pemenuhan">{batchNumber}</Value>
-          </div>
-        </Panel>
-        <Panel title={`Detail produk ${documentType}`}>
-          <div className="so-proforma-lines">
-            <DataTable
-              data={data.allocations}
-              columns={columns}
-              total={data.allocations.length}
-              label={`produk ${documentType}`}
-              showColumns={false}
-            />
-          </div>
-          <p className="so-help">
-            Harga dan nilai dalam {data.currency ?? "mata uang dokumen"}. Subtotal sebelum pajak.
-          </p>
-        </Panel>
-      </div>
-      <aside className="so-detail-aside" aria-label={`Nilai dan catatan ${documentType}`}>
-        <Panel title="Nilai Pesanan">
-          <aside className="so-totals" aria-label={`Ringkasan nilai ${documentType}`}>
-            <h3>Ringkasan nilai</h3>
-            <dl>
-              <div>
-                <dt>Subtotal</dt>
-                <dd>{amount(subtotal, data.currency)}</dd>
-              </div>
-              <div>
-                <dt>Diskon</dt>
-                <dd>Belum tersedia</dd>
-              </div>
-              <div>
-                <dt>Ongkos Kirim</dt>
-                <dd>{totalsPending ? "—" : amount(data.freight?.amount, data.currency)}</dd>
-              </div>
-              <div>
-                <dt>Pajak</dt>
-                <dd>{totalsPending ? "—" : amount(tax, data.currency)}</dd>
-              </div>
-              <div className="so-grand-total">
-                <dt>Total Tagihan</dt>
-                <dd>{totalsPending ? "—" : amount(total, data.currency)}</dd>
-              </div>
-            </dl>
-            {data.total == null && (
+    <div className="sales-columns">
+      <div className="sales-main">
+        {beforeContent}
+        <Panel
+          title={
+            reviewing
+              ? documentType === "Invoice"
+                ? "2 · Tinjau baris tagihan"
+                : "Isi Proforma (hanya yang teralokasi)"
+              : `${documentType === "Invoice" ? "Invoice" : "Proforma Invoice"}${documentNumber ? ` · ${documentNumber}` : ""}`
+          }
+          className="sales-document"
+        >
+          {!reviewing && (
+            <div className="sales-document-parties">
+              <strong>{data.company ?? "Perusahaan tidak tercatat pada dokumen lama"}</strong>
               <p>
-                Ringkasan dihitung dari nilai baris pada snapshot dokumen lama. Nilai yang tidak
-                tersimpan ditampilkan sebagai tanda pisah.
+                {data.customer} · {data.address}
               </p>
-            )}
-          </aside>
+              <p className="so-help">
+                {data.reference} · {terms(data.payment)}
+                {issuedAt ? ` · ${new Date(issuedAt).toLocaleDateString("id-ID")}` : ""}
+                {batchNumber ? ` · ${batchNumber}` : ""}
+              </p>
+            </div>
+          )}
+          <DataTable
+            data={data.allocations}
+            columns={columns}
+            total={data.allocations.length}
+            label={`produk ${documentType}`}
+            showColumns={false}
+          />
+          {reviewing ? (
+            <p className="sales-notice">
+              {documentType === "Invoice"
+                ? "Jumlah mengikuti yang benar-benar diterima pada POD."
+                : "Jika alokasi berubah setelah pratinjau, muat ulang sebelum menerbitkan."}
+            </p>
+          ) : (
+            <div className="sales-document-total">{totals}</div>
+          )}
         </Panel>
         {freightControls}
-        <Panel title="Catatan" className="so-proforma-note">
-          {notes ??
-            (documentType === "Invoice" ? (
-              <p className="so-help">
-                Invoice draft belum membentuk piutang. Nilai mengikuti POD dan ketentuan yang
-                tersimpan.
-              </p>
-            ) : (
-              <p className="so-help">
-                Proforma Invoice merupakan dokumen sementara sebelum Invoice diterbitkan dan belum
-                membentuk piutang. Nilai mengikuti alokasi pada dokumen.
-              </p>
-            ))}
-        </Panel>
+        {afterContent}
+        {mainContent}
+        {notes && reviewing && <Panel title="3 · Jatuh tempo & referensi">{notes}</Panel>}
+      </div>
+      <aside className="sales-aside" aria-label={`Ringkasan dan tindak lanjut ${documentType}`}>
+        {reviewing && (
+          <Panel title="Ringkasan">
+            {totals}
+            <p className="sales-notice">
+              Ongkir mengikuti pengiriman terkait. Nilainya tidak ditambahkan dua kali.
+            </p>
+          </Panel>
+        )}
+        {asideContent}
       </aside>
     </div>
   );

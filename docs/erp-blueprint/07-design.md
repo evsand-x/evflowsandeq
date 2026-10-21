@@ -1,5 +1,24 @@
 # Design — web kantor dan aplikasi mobile sales/gudang
 
+## Submenu Akun dan migrasi master — 16 Oktober 2026
+
+Label submenu operasional adalah **Akun**, route /operations/accounts, /new, /:id dan /:id/edit. Sidebar membuka Akuntansi pada seluruh route tersebut. Tabel: Kode Akun, Nama Akun, Kategori, Tipe, Saldo Normal, Status, Tindakan; pencarian, kelompok dan status, pagination 25. Form Identitas serta Klasifikasi dan struktur memakai standar desain global web. Field terkunci menampilkan alasan pemakaian. Detail memuat atribut, referensi dan audit; tidak ada saldo nominal pada master.
+
+### Penyempurnaan master pajak — 16 Oktober 2026
+
+Kolom master terbaru: Nama Pajak, Jenis Pajak, Penggunaan, Akun Pajak, Tarif (%), Perlakuan Transaksi, Status. Gunakan label PPh, Ditambahkan/Dipotong dan nama pembulatan yang mudah dibaca. Popup akun menampilkan kode, nama serta kelompok Aset/Kewajiban/Ekuitas/Pendapatan/Beban; akun nonaktif lama tetap terbaca.
+
+## Pembaruan pajak operasional — 16 Oktober 2026
+
+Navigasi aktif Finance → Pajak tepat tiga submenu: Daftar & Aturan Pajak (`/operations/tax-rules`), Faktur Keluaran (`/operations/tax-documents`), Faktur Masukan (`/operations/tax-input`). Daftar master memuat Nama Pajak, Jenis, Akun Pajak, Nilai %, Perhitungan, Status; tersedia Buat, Detail, Edit. Faktur menampilkan nomor transaksi, pihak, pajak, total, status dan metadata resmi. Masing-masing submenu mempunyai izin sendiri; tidak berbagi izin induk. Menggunakan shell dan standar global web, TanStack Query/Table, SelectionField dan Sonner. Navigasi pajak luas/Coretax pada bagian historis ditunda.
+
+
+Keputusan terbaru 16 Oktober 2026 (IAM-01/04): setiap submenu operasional memiliki checkbox izin sendiri per tindakan, dengan grant anak yang independen. Dilarang menggandakan checkbox ber-ID grant sama sebagai pengaturan beberapa submenu. Induk hanya mengelompokkan navigasi; Pilih Semua mengubah masing-masing grant anak. Halaman operasional pada induk, jika ada, memiliki izin sendiri yang tidak memberi akses anak. Ketentuan ini menggantikan pemetaan bersama CRM/Master Data sebelumnya. Implementasi yang masih berlabel “Izin bersama” adalah utang migrasi dan belum memenuhi desain akhir; jangan mengklaimnya independen sebelum backend dipisahkan. Kolom Ubah dan Hapus tidak selalu berarti tindakan pada draf. Capability yang belum tersedia tetap memakai status eksplisit, bukan checkbox semu.
+
+Koreksi label matriks 16 Oktober 2026: checkbox kosong berarti izin yang dapat diatur belum diberikan; checkbox tercentang berarti diizinkan. Sel tanpa capability memakai “Belum tersedia” jika izin belum tersedia/dipetakan, atau “Tidak berlaku” jika tindakan memang tidak relevan. Jangan menyamakan capability yang belum dibangun dengan tindakan yang tidak berlaku atau menampilkan tanda strip yang ambigu.
+
+Matriks hak akses mengikuti seluruh hierarki menu Office. Setiap tampilan Dashboard yang operasional memiliki checkbox Lihat yang dapat diubah Admin Sistem pada peran biasa; Admin Sistem sendiri tercentang otomatis dan tidak dibatasi. Menu yang belum operasional tetap terlihat dengan label Belum dapat diatur. Peran biasa lama yang grantnya kosong tetap dapat diberi izin melalui matriks.
+
 ## Koreksi Office 7 Oktober 2026 — proforma manual
 
 Detail SO, bagian Pemenuhan & dokumen terkait: tiap tahap ALLOCATED pada SO Open
@@ -270,12 +289,7 @@ Submenu Rekrutmen, Onboarding, Payroll dan Offboarding membuka daftar kerja sesu
    - Barang operasional, model aset dan jasa berulang
    - Kategori, UOM dan Harga Beli Acuan bila relevan
    - Status peninjauan dan riwayat perubahan
-7. **Referensi Reusable**
-   - Kategori dan daftar pilihan bersama seperti satuan umum, channel dan rayon
-   - Daftar yang dikelola pemilik aturan lain hanya ditampilkan sebagai referensi/tautan
-8. **Ringkasan Lintas Domain**
-   - Stok, kredit, saldo dan pajak secara read-only
-   - Drill-down membuka modul pemilik sesuai izin
+Kategori, UOM, channel dan rayon tetap menjadi referensi kanonis yang digunakan pada form terkait. Stok, kredit, saldo dan pajak ditampilkan pada layar yang relevan sesuai izin dan kepemilikan domain; tidak ada submenu Ringkasan Lintas Domain tersendiri.
 
 Butir di bawah setiap nomor adalah kelompok isi layar/detail, bukan izin untuk mengubah semua datanya melalui update master. Pada Pelanggan, termin/mode pembayaran, limit kredit, status WAPU dan piutang awal hanya ditampilkan atau dibuka sebagai tindakan berizin ke pemilik aturan: Setting/Finance/Pajak atau proses opening Finance. Saldo awal berasal dari rincian invoice yang diverifikasi dan diposting, bukan angka bebas pada master.
 
@@ -800,3 +814,29 @@ Pengguna menyetujui tema terang netral-charcoal, emerald dan Plus Jakarta Sans u
 ### Akses Proforma operasional — 7 Oktober 2026
 
 Sales & Marketing → Pesanan Pelanggan → Proforma membuka /operations/proformas. Daftar lintas SO memisahkan nomor Proforma, SO, pelanggan, tahap pemenuhan, tanggal terbit dan status dokumen. Cari nomor/SO/pelanggan, pagination, lihat/cetak; detail /operations/proformas/{id} menyediakan Daftar Proforma dan Buka Sales Order. Tidak ada tombol Buat Proforma: dokumen berasal dari alokasi otomatis. Proforma memakai izin sales_order.read tanpa mensyaratkan fulfillment.read. Tautan dari detail SO membuka konteks Proforma yang sama.
+
+## Redesign Sales Office - 16 Oktober 2026
+
+Acuan pengguna Redesign-UI-Sales.pdf mengganti komposisi Sales: navigasi SO/Proforma/Invoice sesuai izin, KPI dan filter status, form SO lima kelompok bernomor, enam tab detail SO, dokumen dan penyerahan di kiri dengan ringkasan di kanan. Tombol primer hijau, outline hijau dan badge bertitik semantik. Penerbitan Proforma merupakan tindakan pengguna pada alokasi yang tersedia; bukan otomatis saat membuka daftar. Cakupan implementasi dan selisih PDF: [Redesign Sales](../development/sales-redesign-2026-10-16.md).
+# Keputusan desain IAM terbaru — 16 Oktober 2026
+
+Peran adalah kelompok hak fleksibel yang dapat dibuat, diubah dan dihapus. Layar Matriks Hak Akses menampilkan fitur/tindakan tanpa heading maupun filter domain; kelompok fitur diperbolehkan. Admin Sistem dapat memakai semua menu dan tindakan dalam perusahaan sesi tanpa bergantung pada grant peran, termasuk approval sendiri/tanpa penunjukan. Penghapusan peran menampilkan jumlah anggota terdampak sebelum konfirmasi. Ketentuan IAM 7 Oktober tentang permission tambahan dan larangan bypass transaksi digantikan keputusan ini.
+
+Koreksi pengguna: baris matriks mengikuti urutan dan jalur navigasi Office (modul › kelompok › layar/fitur), tanpa filter domain tersendiri. Item yang belum memiliki capability backend ditampilkan **Belum dapat diatur** tanpa checkbox. Capability nyata milik Admin Sistem terlihat tercentang otomatis dan tidak dapat diedit; tanda tersebut bukan grant tersimpan.
+
+Form peran baru menjelaskan bahwa semua izin katalog yang tersedia akan langsung diberikan saat disimpan. Matriks peran lama mempertahankan checkbox sesuai grant tersimpan; tombol **Pilih semua izin** mengisi izin katalog sebagai draf, lalu memakai dialog tinjau dan Simpan yang sudah ada. Tombol tersebut tidak tersedia untuk `ADMIN_SYSTEM` karena haknya otomatis.
+
+Kolom Aksi pada daftar Pengguna dan Peran memuat tombol **Hapus** untuk Admin Sistem. Dialog pengguna menjelaskan kemungkinan hapus permanen atau arsip dan pencabutan sesi; dialog peran menyebut jumlah anggota terdampak. Tombol akun sendiri dan peran `ADMIN_SYSTEM` tidak ditampilkan. Kesalahan server tetap terlihat di dialog; daftar diperbarui hanya setelah respons berhasil.
+
+
+## Redesign Pengguna dan Peran — 16 Oktober 2026
+
+Acuan visual terbaru: Redesign UI Setting Pengguna & Peran.pdf. Daftar pengguna/peran memakai pencarian, filter, pengaturan kolom dan pagination; form buat/edit menjadi halaman penuh dengan kartu akun/peran/pratinjau izin. Detail pengguna memakai ringkasan dan tab Peran & Cakupan, Izin Efektif, Sesi, Riwayat. Detail peran memakai kartu ringkasan dan tab Matriks Hak Akses, Cakupan & Data Sensitif, Anggota, Riwayat. Matriks menyatukan tindakan per resource, memisahkan modul, menyorot perubahan, dan menyediakan tinjauan sebelum penerapan. Badge hijau untuk aktif, netral untuk nonaktif; tombol primer hijau. Cakupan khusus dan kategori data sensitif yang belum mempunyai enforcement/katalog khusus ditampilkan sebagai informasi terbatas, bukan toggle aktif. Bukti dan batas implementasi: [catatan redesign akses](../development/access-ui-2026-10-16.md).
+
+## Matriks submenu independen — implementasi 16 Oktober 2026
+
+Baris mengikuti hierarki navigasi. Induk murni memiliki checkbox agregat per tindakan dan kolom Semua yang mengubah grant anak, dengan status sebagian dan hitungan izin dipilih. Baris fitur operasional mempunyai grant sendiri; kolom pertama tetap terlihat saat tabel digulir horizontal. Buka semua menu/Tutup semua menu tersedia; menu tanpa capability tetap memakai status eksplisit. Pilihan satu submenu tidak mengubah submenu saudara. Label Izin bersama telah dihapus dari matriks hasil migrasi.
+
+## Keputusan navigasi CRM — 16 Oktober 2026
+
+CRM-01/05, MD-01, APP-03, IAM-04: Pelanggan dikelola melalui Master Data > Pelanggan. Submenu Pelanggan CRM dihapus; URL web lama /crm/customers dan turunannya dialihkan ke Master Pelanggan, dengan pemeriksaan izin tujuan. CRM menampilkan Prospek, Peluang, Kontak. Peluang memiliki daftar tersendiri dengan izin crm_opportunity.read; proses buat/hasil yang tersedia tetap melalui detail prospek. Matriks menempatkan Peluang sejajar Prospek; capability crm_customer tetap untuk proyeksi/registrasi institusi pendukung proses Prospek, pada baris Prospek > Institusi terkait, bukan submenu pelanggan kedua. Tidak menyalin grant menjadi master_customer maupun mengubah data. Bukti: docs/development/crm-navigation-2026-10-16.md.

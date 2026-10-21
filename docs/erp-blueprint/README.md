@@ -1,5 +1,34 @@
 # evflow — ERP PT Sandeq Sarana Medika
 
+## Submenu Akun dan migrasi master — 16 Oktober 2026
+
+Keputusan pengguna: Finance → Akuntansi → Akun menyediakan daftar, buat, edit dan detail. Impor 156 master dari file pengguna tanpa saldo awal. Kode teks sumber dipertahankan; nama boleh sama. Lanjutan: konfigurasi jurnal/pajak/kas dipindahkan ke akun impor, transit/karantina digabung ke Persediaan Barang, WAPU ke PPN Masukan, kas/bank ke 1-10001 Kas Op Mandiri. Jurnal uji lama tidak diubah; akun uji bersejarah dinonaktifkan, yang tanpa rujukan dihapus. Cakupan dan hasil: [catatan implementasi](../development/accounts-workspace-2026-10-16.md).
+
+### Penyempurnaan master pajak — 16 Oktober 2026
+
+Penyempurnaan master: satu master mempunyai satu akun dan penggunaan SALES/PURCHASE/BOTH. Nama Pajak terpisah dari Jenis Pajak dan Perlakuan Transaksi; perubahan jenis tidak otomatis mengubah tambah/potong. Pengguna meminta master PPN Penjualan 11% untuk penjualan, ditambahkan, memakai akun pajak penjualan yang tersedia. Ini data konfigurasi pengguna, bukan tarif hardcoded.
+
+## Pembaruan pajak operasional — 16 Oktober 2026
+
+Keputusan 16 Oktober 2026 — Pajak operasional: Finance → Pajak hanya berisi Daftar & Aturan Pajak, Faktur Keluaran, Faktur Masukan. Master PPN/PPh, tambah/potong, akun dan persentase dapat dibuat/diubah pengguna berizin tanpa approval. Versi/tanggal efektif dan snapshot transaksi tetap wajib. Faktur berasal dari transaksi penjualan/pembelian, dengan nomor/tanggal/lampiran resmi. Coretax, worksheet PPh Badan, masa/rekonsiliasi pajak dan workflow kepatuhan lanjutan ditunda. Keputusan ini menggantikan cakupan aktif pajak/Coretax pada bagian historis dokumen. Tidak mengubah ledger posted atau aturan pajak payroll.
+
+
+## Keputusan terbaru — 16 Oktober 2026: larangan izin bersama pada induk
+
+Setiap submenu operasional memiliki izin independen per tindakan. Satu grant induk tidak boleh mengendalikan beberapa submenu atau menjadi fallback otorisasi. Induk hanya mengelompokkan navigasi; Pilih Semua mengubah grant setiap anak. Berlaku untuk seluruh modul, termasuk Prospek, Kontak dan Pelanggan. Hak bawaan Admin Sistem tetap penuh. Keputusan ini menggantikan ketentuan sebelumnya yang membolehkan pemetaan izin bersama CRM/Master Data. Kontrak dan penerimaan: IAM-01/04 serta [Setting](15-setting.md). Implementasi lama yang belum dipisahkan masih merupakan utang migrasi.
+
+Keputusan terbaru 16 Oktober 2026: Admin Sistem dapat mengatur izin setiap menu yang sudah operasional. Menu yang belum operasional tetap tampil tanpa grant semu. Tujuh tampilan Dashboard memiliki izin baca masing-masing, disertai pemeriksaan izin/scope sumber data. Atas permintaan pengguna, grant peran biasa lama pada database development lokal dikosongkan dan diaudit; ini bukan migrasi global. Peran baru tetap menerima seluruh katalog izin saat dibuat.
+
+## Keputusan pengguna — 16 Oktober 2026: hapus pengguna dan peran dari daftar
+
+Admin Sistem dapat memakai tombol **Hapus** pada daftar Pengguna dan Peran. Akun pengguna yang belum pernah dipakai dihapus permanen; akun dengan riwayat pemakaian diarsipkan, keluar dari daftar aktif, dan tetap mempertahankan referensi audit/transaksi. Penghapusan mencabut sesi dan dicatat dalam audit. Akun sendiri dan Admin Sistem terakhir tidak dapat dihapus. Peran biasa yang dihapus melepas penugasan anggotanya. [Arah dan cakupan](../development/flexible-access-2026-10-16.md).
+
+Peran biasa yang baru dibuat langsung mendapat seluruh capability yang saat itu tersedia dalam katalog pada cakupan perusahaan. Peran lama tetap memakai grant tersimpan; Admin Sistem dapat memilih semua izin dan menyimpan perubahan pada tiap peran secara terpisah. Peran `ADMIN_SYSTEM` tetap memiliki hak bawaan tanpa grant tersimpan. Capability baru di kemudian hari tidak otomatis memperluas peran biasa lama.
+
+## Keputusan pengguna — 16 Oktober 2026: peran fleksibel dan Admin Sistem
+
+Peran dapat dibuat, diubah, dan dihapus; satu pengguna dapat memegang beberapa peran. Matriks hak akses mengelompokkan menurut fitur bila perlu, tanpa kelompok atau filter domain. Admin Sistem (`ADMIN_SYSTEM`) memiliki kewenangan penuh dalam perusahaan sesi untuk pengaturan dan transaksi bisnis tanpa bergantung pada grant perannya. Admin Sistem juga dapat memutus approval sendiri dan tanpa penunjukan approver; keputusan tetap diaudit. Validasi bisnis dan isolasi perusahaan tetap berlaku. Keputusan ini menggantikan syarat permission aksi tambahan dan larangan bypass transaksi Admin Sistem pada keputusan 7 Oktober. [Arah dan cakupan](../development/flexible-access-2026-10-16.md).
+
 ## Keputusan pengguna — 7 Oktober 2026: proforma diterbitkan manual
 
 Submit/evaluasi SO tetap memvalidasi dan mengalokasikan stok otomatis, tetapi tidak

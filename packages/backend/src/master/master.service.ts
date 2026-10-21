@@ -472,7 +472,66 @@ export class MasterService {
     });
   }
 
+  private customerLegalDocuments(value: unknown, previous: unknown = []) {
+    if (!Array.isArray(value)) return jsonOrNull(value);
+    const old = Array.isArray(previous) ? previous : [];
+    const identity = (item: Record<string, unknown>) =>
+      JSON.stringify(
+        Object.entries(item)
+          .filter(([key]) => key !== "verification_state")
+          .sort(([a], [b]) => a.localeCompare(b)),
+      );
+    return jsonOrNull(
+      value.map((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+        const match = old.find(
+          (entry) =>
+            entry &&
+            typeof entry === "object" &&
+            !Array.isArray(entry) &&
+            identity(entry) === identity(item),
+        );
+        return { ...item, verification_state: match?.verification_state ?? "UNVERIFIED" };
+      }),
+    );
+  }
+
+  private async validateCustomerEvidence(companyId: string, input: Record<string, unknown>) {
+    const documents = [
+      ...(Array.isArray(input.legal_documents) ? input.legal_documents : []),
+      input.noo_document,
+    ];
+    for (const document of documents) {
+      if (!document || typeof document !== "object") continue;
+      const id = (document as Record<string, unknown>).evidence_id;
+      if (
+        id &&
+        (typeof id !== "string" ||
+          !(await prisma.transactionEvidence.findFirst({
+            where: { id, companyId, purpose: "CUSTOMER_MASTER" },
+            select: { id: true },
+          })))
+      )
+        throw new NotFoundException("Bukti pelanggan tidak ditemukan pada perusahaan ini.");
+    }
+  }
+
   async createCustomer(companyId: string, actorId: string, input: Record<string, unknown>) {
+    const channelId = nullable(input.channel_id),
+      rayonId = nullable(input.rayon_id);
+    if (
+      channelId &&
+      !(await prisma.customerChannel.findFirst({
+        where: { id: channelId, companyId, state: "ACTIVE" },
+      }))
+    )
+      throw new NotFoundException("Channel pelanggan tidak ditemukan.");
+    if (
+      rayonId &&
+      !(await prisma.rayon.findFirst({ where: { id: rayonId, companyId, state: "ACTIVE" } }))
+    )
+      throw new NotFoundException("Rayon pelanggan tidak ditemukan.");
+    await this.validateCustomerEvidence(companyId, input);
     const name = String(input.name).trim();
     const code = await this.nextCode(companyId, entityTypes.customer, actorId);
     return this.createWithAudit("customer", companyId, actorId, async (tx) =>
@@ -500,7 +559,7 @@ export class MasterService {
           paymentMethodPreference: nullable(input.payment_method_preference),
           paymentToleranceDays:
             input.payment_tolerance_days == null ? null : Number(input.payment_tolerance_days),
-          legalDocuments: jsonOrNull(input.legal_documents),
+          legalDocuments: this.customerLegalDocuments(input.legal_documents),
           responsiblePerson: jsonOrNull(input.responsible_person),
           responsibleLicense: jsonOrNull(input.responsible_license),
           nooDocument: jsonOrNull(input.noo_document),
@@ -519,6 +578,7 @@ export class MasterService {
     expectedVersion: number,
     input: Record<string, unknown>,
   ) {
+    await this.validateCustomerEvidence(companyId, input);
     const name = String(input.name).trim();
     const channelId = nullable(input.channel_id);
     const rayonId = nullable(input.rayon_id);
@@ -543,7 +603,7 @@ export class MasterService {
           "Status pelanggan bertransaksi ditetapkan oleh Finance setelah invoice diposting.",
         );
       const updated = await tx.customer.update({
-        where: { id },
+        where: { id, companyId, version: expectedVersion },
         data: {
           name,
           normalizedName: normalize(name),
@@ -565,7 +625,10 @@ export class MasterService {
           paymentMethodPreference: nullable(input.payment_method_preference),
           paymentToleranceDays:
             input.payment_tolerance_days == null ? null : Number(input.payment_tolerance_days),
-          legalDocuments: jsonOrNull(input.legal_documents),
+          legalDocuments: this.customerLegalDocuments(
+            input.legal_documents,
+            current.legalDocuments,
+          ),
           responsiblePerson: jsonOrNull(input.responsible_person),
           responsibleLicense: jsonOrNull(input.responsible_license),
           nooDocument: jsonOrNull(input.noo_document),

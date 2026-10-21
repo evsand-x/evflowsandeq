@@ -137,6 +137,7 @@ export const createUserSchema = z
     email: z.string().email(),
     display_name: z.string().trim().min(2).max(200),
     password: z.string().min(12).max(200),
+    active: z.boolean().default(true),
     role_ids: z.array(z.string().uuid()).default([]),
   })
   .strict();
@@ -157,6 +158,7 @@ export const createRoleSchema = z
     code: z.string().regex(/^[A-Z][A-Z0-9_]{2,49}$/),
     name: z.string().trim().min(2).max(100),
     description: z.string().trim().max(500).optional(),
+    active: z.boolean().optional(),
   })
   .strict();
 
@@ -164,6 +166,7 @@ export const updateRoleSchema = z
   .object({
     name: z.string().trim().min(2).max(100),
     description: z.string().trim().max(500).optional(),
+    active: z.boolean().optional(),
   })
   .strict();
 
@@ -184,6 +187,7 @@ export const rolePermissionInputSchema = z.object({
 
 export const updateRolePermissionsSchema = z.object({
   permissions: z.array(rolePermissionInputSchema).max(200),
+  expected_permissions: z.array(rolePermissionInputSchema).max(200).optional(),
 });
 
 const decimalStringSchema = z.string().regex(/^\d+(\.\d+)?$/, "Gunakan angka desimal positif.");

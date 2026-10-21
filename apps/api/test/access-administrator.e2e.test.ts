@@ -13,6 +13,7 @@ describe("access administration HTTP boundary", () => {
     listUsers: vi.fn(() => []),
     listRoles: vi.fn(() => []),
     listPermissions: vi.fn(() => []),
+    deleteUser: vi.fn(async () => ({ deleted: true })),
   };
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -74,18 +75,27 @@ describe("access administration HTTP boundary", () => {
   it("accepts active administrator among multiple roles", async () => {
     await request(app.getHttpServer()).get("/roles").set("x-test-role", "admin").expect(200);
   });
-  it("still denies administrator without action permission", async () => {
+  it("allows administrator without action permission", async () => {
     await request(app.getHttpServer())
       .get("/roles")
       .set("x-test-role", "admin")
       .set("x-test-no-permissions", "1")
-      .expect(403);
+      .expect(200);
   });
-  it("still denies administrator with permission for another company", async () => {
+  it("allows administrator even when editable grants target another company", async () => {
     await request(app.getHttpServer())
       .get("/roles")
       .set("x-test-role", "admin")
       .set("x-test-foreign-scope", "1")
-      .expect(403);
+      .expect(200);
+  });
+  it("protects user deletion from nonadmins and forwards the company-bound admin request", async () => {
+    const id = "c5870ae0-2ae8-43e4-ad1d-2a44171cbe31";
+    await request(app.getHttpServer()).delete(`/users/${id}`).expect(403);
+    await request(app.getHttpServer())
+      .delete(`/users/${id}`)
+      .set("x-test-role", "admin")
+      .expect(200);
+    expect(service.deleteUser).toHaveBeenCalledWith("company-a", "test", id);
   });
 });

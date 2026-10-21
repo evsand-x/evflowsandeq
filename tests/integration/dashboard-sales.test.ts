@@ -26,7 +26,7 @@ describe("Sales dashboard live prospect schedule", () => {
     display_name: "Tester",
     email: `${userId}@example.invalid`,
     roles: [],
-    permissions: [{ code: "crm.read", scope_type: "company", scope_id: null }],
+    permissions: [{ code: "crm_prospect.read", scope_type: "company", scope_id: null }],
   };
   const query: SalesDashboardQuery = { month: "2026-02", status: "all", sort: "asc", limit: 2 };
   beforeAll(async () => {
@@ -137,8 +137,8 @@ describe("Sales dashboard live prospect schedule", () => {
     }
     for (const permissions of [
       [],
-      [{ code: "crm.read", scope_type: "company", scope_id: otherCompanyId }],
-      [{ code: "crm.read", scope_type: "self", scope_id: null }],
+      [{ code: "crm_prospect.read", scope_type: "company", scope_id: otherCompanyId }],
+      [{ code: "crm_prospect.read", scope_type: "self", scope_id: null }],
     ]) {
       const result = await queue.read(
         { ...principal, permissions },
@@ -184,8 +184,8 @@ describe("Sales dashboard live prospect schedule", () => {
   it("rejects missing, narrow and mismatched permissions before data access", async () => {
     for (const permissions of [
       [],
-      [{ code: "crm.read", scope_type: "self", scope_id: null }],
-      [{ code: "crm.read", scope_type: "company", scope_id: otherCompanyId }],
+      [{ code: "crm_prospect.read", scope_type: "self", scope_id: null }],
+      [{ code: "crm_prospect.read", scope_type: "company", scope_id: otherCompanyId }],
     ]) {
       await expect(service.read({ ...principal, permissions }, query)).rejects.toMatchObject({
         status: 403,

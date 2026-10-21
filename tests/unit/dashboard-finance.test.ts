@@ -44,7 +44,7 @@ describe("Finance dashboard access and unavailable sources", () => {
   it("rejects unrelated, narrow and cross-company grants, regardless of role name", () => {
     for (const permissions of [
       [],
-      [{ code: "master_data.read", scope_type: "company", scope_id: null }],
+      [{ code: "master_customer.read", scope_type: "company", scope_id: null }],
       ...["self", "department", "warehouse"].map((scope_type) => [
         { code: "finance.read", scope_type, scope_id: companyId },
       ]),

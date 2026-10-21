@@ -1,3 +1,5 @@
+import { RequireResourcePermission } from "../identity/resource-permissions";
+import { customerPage, customerDetail, customerHistory, customerSales } from "./customer-workspace";
 import {
   activateMasterSchema,
   createCustomerSchema,
@@ -18,7 +20,7 @@ import {
   createWarehouseSchema,
   masterResourceSchema,
 } from "@evflow/contracts";
-import { Prisma } from "@evflow/database";
+import { Prisma, prisma } from "@evflow/database";
 import { z } from "zod";
 import {
   BadRequestException,
@@ -45,8 +47,28 @@ import { MasterService } from "./master.service";
 export class MasterController {
   constructor(@Inject(MasterService) private readonly master: MasterService) {}
 
+  @Get("master-data/customer-options")
+  @RequirePermissions("master_customer.read")
+  async customerOptions(@Req() req: AuthenticatedRequest) {
+    const where = { companyId: req.auth.company_id, state: "ACTIVE" as const };
+    const select = { id: true, name: true };
+    const [channels, rayons] = await Promise.all([
+      prisma.customerChannel.findMany({ where, select, orderBy: { name: "asc" } }),
+      prisma.rayon.findMany({ where, select, orderBy: { name: "asc" } }),
+    ]);
+    return { data: { channels, rayons } };
+  }
+
+  @Post("crm/master/customers")
+  @RequirePermissions("crm_customer.create")
+  async createCrmCustomer(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
+    const input = createCustomerSchema.parse(body);
+    const created = await this.master.createCustomer(req.auth.company_id, req.auth.user_id, input);
+    return { data: { id: created.id, code: created.code, name: created.name } };
+  }
+
   @Get("master-data/:resource")
-  @RequirePermissions("master_data.read")
+  @RequireResourcePermission("master", "read")
   async list(
     @Param("resource") resource: string,
     @Query("q") search: string | undefined,
@@ -65,7 +87,7 @@ export class MasterController {
   }
 
   @Post("master-data/:resource")
-  @RequirePermissions("master_data.create")
+  @RequireResourcePermission("master", "create")
   async create(
     @Param("resource") resource: string,
     @Body() body: unknown,
@@ -105,8 +127,59 @@ export class MasterController {
     return { data: serialize(created) };
   }
 
+  @Get("master-data/customer-workspace/list")
+  @RequirePermissions("master_customer.read")
+  async customerList(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    return serialize(await customerPage(req.auth, query));
+  }
+
+  @Get("master-data/customers/:id")
+  @RequirePermissions("master_customer.read")
+  async customerDetail(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: serialize(await customerDetail(req.auth, z.string().uuid().parse(id))) };
+  }
+
+  @Get("master-data/customers/:id/history")
+  @RequirePermissions("master_customer.read")
+  async customerHistory(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: serialize(await customerHistory(req.auth, z.string().uuid().parse(id))) };
+  }
+
+  @Get("master-data/customers/:id/sales")
+  @RequirePermissions("master_customer.read")
+  async customerSales(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: serialize(await customerSales(req.auth, z.string().uuid().parse(id))) };
+  }
+
+  @Post("master-data/customers/:id/archive")
+  @RequirePermissions("master_customer.activate")
+  async archiveCustomer(
+    @Param("id") id: string,
+    @Headers("if-match") match: string | undefined,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = z
+      .object({ reason: z.string().trim().min(3).max(1000) })
+      .strict()
+      .parse(body);
+    return {
+      data: serialize(
+        await this.master.changeState(
+          req.auth.company_id,
+          req.auth.user_id,
+          "customers",
+          z.string().uuid().parse(id),
+          parseVersion(match),
+          "ARCHIVED",
+          input.reason,
+        ),
+      ),
+    };
+  }
+
   @Patch("master-data/customers/:id")
-  @RequirePermissions("master_data.update")
+  @RequirePermissions("master_customer.update")
   async updateCustomer(
     @Param("id") id: string,
     @Headers("if-match") ifMatch: string | undefined,
@@ -130,7 +203,7 @@ export class MasterController {
   }
 
   @Patch("master-data/suppliers/:id")
-  @RequirePermissions("master_data.update")
+  @RequirePermissions("master_supplier.update")
   async updateSupplier(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -146,7 +219,7 @@ export class MasterController {
   }
 
   @Post("master-data/:resource/:id/activate")
-  @RequirePermissions("master_data.activate")
+  @RequireResourcePermission("master", "activate")
   async activate(
     @Param("resource") resource: string,
     @Param("id") id: string,
@@ -171,7 +244,7 @@ export class MasterController {
   }
 
   @Post("master-data/products/:id/uoms")
-  @RequirePermissions("master_data.update")
+  @RequirePermissions("master_product.update")
   async addProductUom(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -187,13 +260,13 @@ export class MasterController {
   }
 
   @Get("master-data/products/:id")
-  @RequirePermissions("master_data.read")
+  @RequirePermissions("master_product.read")
   async product(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return { data: serialize(await this.master.getProduct(req.auth.company_id, id)) };
   }
 
   @Patch("master-data/products/:id")
-  @RequirePermissions("master_data.update")
+  @RequirePermissions("master_product.update")
   async updateProduct(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -209,7 +282,7 @@ export class MasterController {
   }
 
   @Post("master-data/products/duplicate-check")
-  @RequirePermissions("master_data.read")
+  @RequirePermissions("master_product.read")
   async productDuplicateCheck(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
     const input = z
       .object({
@@ -225,13 +298,13 @@ export class MasterController {
   }
 
   @Get("master-data/products/:id/history")
-  @RequirePermissions("master_data.read")
+  @RequirePermissions("master_product.read")
   async productHistory(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return { data: serialize(await this.master.productHistory(req.auth.company_id, id)) };
   }
 
   @Post("master-data/products/:id/registrations")
-  @RequirePermissions("master_data.update")
+  @RequirePermissions("master_product.update")
   async productRegistration(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -252,7 +325,7 @@ export class MasterController {
   }
 
   @Post("master-data/product-registrations/:id/verify")
-  @RequirePermissions("master_data.activate")
+  @RequirePermissions("master_product.activate")
   async verifyProductRegistration(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -273,7 +346,7 @@ export class MasterController {
   }
 
   @Post("master-data/products/:id/reference-prices")
-  @RequirePermissions("master_data.update")
+  @RequirePermissions("master_product.update")
   async productReferencePrice(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -294,7 +367,7 @@ export class MasterController {
   }
 
   @Post("master-data/:resource/:id/deactivate")
-  @RequirePermissions("master_data.update")
+  @RequireResourcePermission("master", "update")
   async deactivate(
     @Param("resource") resource: string,
     @Param("id") id: string,

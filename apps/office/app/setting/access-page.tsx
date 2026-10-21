@@ -45,6 +45,7 @@ import { useMemo, useState } from "react";
 import { apiRequest, ApiError } from "../../lib/api";
 import { effectivePermissionSummary, type Role, type User } from "../../lib/iam";
 import { PermissionMatrix } from "./permission-matrix";
+import { AccessWorkspace } from "./access-workspace";
 import { SettingShell } from "./setting-shell";
 import { useSession } from "../session-provider";
 import { useRouter } from "next/navigation";
@@ -77,7 +78,7 @@ function PageHeading({
   );
 }
 
-function UsersView() {
+export function UsersView() {
   const { principal } = useSession();
   const canCreate = !!principal && hasCompanyPermission(principal, "user.create");
   const canEdit =
@@ -544,7 +545,8 @@ export function RolesView() {
     }
   };
   const remove = async (role: Role) => {
-    if (role.member_count !== 0 || !window.confirm(`Hapus peran ${role.name}?`)) return;
+    if (role.code === "ADMIN_SYSTEM") return;
+    if (!window.confirm(`Hapus peran ${role.name} dan lepaskan dari ${role.member_count} pengguna? Sesi mereka akan dicabut.`)) return;
     try {
       await apiRequest(`/roles/${role.id}`, { method: "DELETE" });
       await client.invalidateQueries({ queryKey: ["setting", "roles"] });
@@ -756,7 +758,7 @@ export function RoleTable({
                   >
                     Atur Hak Akses
                   </Button>
-                  {role.member_count === 0 && canRemove && (
+                  {role.code !== "ADMIN_SYSTEM" && canRemove && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -776,31 +778,7 @@ export function RoleTable({
   );
 }
 
-export function AccessPage({
-  section,
-  roleId,
-}: {
-  section: "users" | "roles" | "matrix";
-  roleId?: string;
-}) {
-  return (
-    <SettingShell
-      matrix={section === "matrix"}
-      permission={
-        section === "users"
-          ? ["user.read", "role.read"]
-          : section === "roles"
-            ? "role.read"
-            : ["role.permission.update", "role.read", "permission.read"]
-      }
-    >
-      {section === "users" ? (
-        <UsersView />
-      ) : section === "roles" ? (
-        <RolesView />
-      ) : (
-        <PermissionMatrix key={roleId} selectedRoleId={roleId} />
-      )}
-    </SettingShell>
-  );
+export function AccessPage({section,roleId}:{section:"users"|"roles"|"matrix";roleId?:string}) {
+ if(section!=="matrix")return <AccessWorkspace section={section}/>;
+ return <SettingShell matrix permission={["role.read","permission.read"]}><PermissionMatrix selectedRoleId={roleId}/></SettingShell>;
 }

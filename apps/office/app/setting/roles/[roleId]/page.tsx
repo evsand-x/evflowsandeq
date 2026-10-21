@@ -1,0 +1,2 @@
+import {AccessWorkspace} from "../../access-workspace";
+export default async function Page({params}:{params:Promise<{roleId:string}>}){const {roleId}=await params;return <AccessWorkspace section="roles" path={[roleId]}/>;}

@@ -24,6 +24,7 @@ import { AuthGuard } from "../identity/auth.guard";
 import type { AuthenticatedRequest } from "../identity/auth.types";
 import { DashboardService } from "./dashboard.service";
 import { ActionQueueService } from "./action-queue.service";
+import { requireDashboardView } from "./workspace-access";
 
 @Controller("dashboard")
 @UseGuards(AuthGuard)
@@ -39,21 +40,25 @@ export class DashboardController {
 
   @Get("actions")
   async actionQueue(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    requireDashboardView(request.auth, "actions");
     return actionQueueResponseSchema.parse({ data: await this.actions.read(request.auth, query) });
   }
 
   @Get("hris")
   hrisDashboard(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    requireDashboardView(request.auth, "hris");
     return hrisDashboardResponseSchema.parse({ data: this.hris.read(request.auth, query) });
   }
 
   @Get("finance")
   financeDashboard(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    requireDashboardView(request.auth, "finance");
     return financeDashboardResponseSchema.parse({ data: this.finance.read(request.auth, query) });
   }
 
   @Get("warehouse")
   async warehouseDashboard(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    requireDashboardView(request.auth, "warehouse");
     return warehouseDashboardResponseSchema.parse({
       data: await this.warehouse.read(request.auth, query),
     });
@@ -61,6 +66,7 @@ export class DashboardController {
 
   @Get("sales")
   async salesDashboard(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    requireDashboardView(request.auth, "sales");
     const parsed = salesDashboardQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException("Filter Dashboard Sales tidak valid.");
     return salesDashboardResponseSchema.parse({
@@ -70,6 +76,7 @@ export class DashboardController {
 
   @Get("summary")
   async summary(@Req() request: AuthenticatedRequest) {
+    requireDashboardView(request.auth, "executive");
     return dashboardSummarySchema.parse({ data: await this.dashboard.summary(request.auth) });
   }
 }

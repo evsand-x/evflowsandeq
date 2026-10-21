@@ -7,7 +7,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, type CSSProperties } from "react";
 import { ApiError, apiRequest } from "../lib/api";
-import { dashboardViews, visibleDashboardViews, type DashboardView } from "../lib/navigation";
+import {
+  dashboardViews,
+  hasCompanyPermission,
+  visibleDashboardViews,
+  type DashboardView,
+} from "../lib/navigation";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { ExecutiveDashboard, ExecutiveTopbar } from "./dashboard-executive";
 import { useSession } from "./session-provider";
@@ -36,7 +41,10 @@ function DashboardContent() {
       principal?.permissions,
     ],
     queryFn: () => apiRequest<{ data: DashboardSummary }>("/dashboard/summary"),
-    enabled: state === "authenticated" && Boolean(principal),
+    enabled:
+      state === "authenticated" &&
+      Boolean(principal) &&
+      hasCompanyPermission(principal!, "dashboard_executive.read"),
     refetchOnWindowFocus: true,
   });
 
@@ -70,16 +78,9 @@ function DashboardContent() {
 
   const allowedViews = visibleDashboardViews(principal);
   const requested = params.get("view");
-  const selected = (
-    requested === "sales" ||
-    requested === "warehouse" ||
-    requested === "finance" ||
-    requested === "hris" ||
-    requested === "actions" ||
-    requested === "reports"
-      ? requested
-      : (allowedViews.find((view) => view.id === requested)?.id ?? "executive")
-  ) as DashboardView;
+  const selected = (allowedViews.find((view) => view.id === requested)?.id ??
+    allowedViews[0]?.id ??
+    "executive") as DashboardView;
   const label = dashboardViews.find((view) => view.id === selected)?.label ?? "Ringkasan Eksekutif";
   const data = summary.data?.data;
 
@@ -97,7 +98,12 @@ function DashboardContent() {
       <DashboardSidebar principal={principal} activeView={selected} />
       <SidebarInset className="bg-background min-h-dvh min-w-0">
         <ExecutiveTopbar companyName={principal.company_name} />
-        {selected === "executive" ? (
+        {!allowedViews.length ? (
+          <main id="dashboard-main" className="p-8" role="status">
+            Anda belum memiliki izin untuk tampilan Dashboard. Hubungi Admin Sistem untuk mengatur
+            peran Anda.
+          </main>
+        ) : selected === "executive" ? (
           <ExecutiveDashboard
             name={principal.display_name}
             principal={principal}

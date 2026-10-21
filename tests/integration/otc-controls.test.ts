@@ -1,3 +1,5 @@
+import { previewProforma, issueProforma } from "../../packages/backend/src/sales/proforma";
+import { saveHandoff, listHandoffs } from "../../packages/backend/src/sales/commercial-handoff";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@evflow/database";
 import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
@@ -232,6 +234,7 @@ afterAll(async () => {
   await prisma.customerPaymentPolicy.deleteMany({ where: { companyId: c } });
   await prisma.auditEvent.deleteMany({ where: { companyId: c } });
   await prisma.masterCodeSequence.deleteMany({ where: { companyId: c } });
+  await prisma.documentNumberRule.deleteMany({ where: { companyId: c } });
   await prisma.policyVersion.deleteMany({ where: { policy: { companyId: c } } });
   await prisma.systemPolicy.deleteMany({ where: { companyId: c } });
   await prisma.product.deleteMany({ where: { companyId: c } });
@@ -1075,6 +1078,7 @@ it("runs SO through POD, taxed invoice and payment without double recognition an
   expect(entries.filter((x) => x.kind === "SALE_REVENUE")).toHaveLength(1);
 });
 
+
 it("requires assigned approver, separation of duties, limit and all approval steps", async () => {
   const request = await prisma.purchaseRequest.create({
     data: {
@@ -1330,4 +1334,40 @@ it("quarantines POD returns, balances transit, blocks overdue until invoice is p
   await service.submitSalesOrder(c, actor, next.id, randomUUID());
   const journal = await prisma.ledgerEntry.findMany({ where: { companyId: c } });
   expect(journal.reduce((sum, l) => sum + Number(l.debit) - Number(l.credit), 0)).toBe(0);
+});
+it("outbound UI draft persists with revision and rejects invalid checking", async () => {
+  await prisma.salesTaxRule.updateMany({ where: { companyId: c }, data: { state: "ACTIVE" } });
+  await prisma.documentNumberRule.createMany({ data: ["sales_order", "fulfillment", "document_PICKING", "document_PACKING", "document_PROFORMA"].map(documentKind => ({ companyId: c, documentKind, prefix: `${documentKind}-`, digits: 6, resetYearly: true, effectiveFrom: new Date("2020-01-01"), effectiveTo: new Date("2099-01-01"), createdById: actor })) });
+  await lot("2");
+  const so = await order(["2"]);
+  await service.submitSalesOrder(c, actor, so.id, randomUUID());
+  const batch = await prisma.fulfillmentBatch.findFirstOrThrow({ where: { salesOrderId: so.id } });
+  await service.createPickingSlip(c, actor, batch.id, randomUUID());
+  const pick = await prisma.pickList.findFirstOrThrow({ where: { fulfillmentBatchId: batch.id }, include: { lines: true } });
+  const input = { version: pick.version, lines: pick.lines.map(l => ({ pick_list_line_id: l.id, picked_quantity: l.assignedQuantity.toString() })) };
+  await expect(service.confirmPick(c, actor, pick.id, { lines: input.lines }, randomUUID(), true)).rejects.toThrow("PICK_REVISION_OR_STATE_CHANGED");
+  const key = randomUUID();
+  const draft = await service.confirmPick(c, actor, pick.id, input, key, true);
+  expect(draft.state).toBe("OPEN");
+  expect(draft.pickedAt).toBeNull();
+  expect(draft.version).toBe(pick.version + 1);
+  await service.confirmPick(c, actor, pick.id, input, key, true);
+  await expect(service.confirmPick(c, actor, pick.id, input, randomUUID(), true)).rejects.toThrow("PICK_REVISION_OR_STATE_CHANGED");
+  await service.confirmPick(c, actor, pick.id, { ...input, version: draft.version }, randomUUID());
+  const checks = input.lines.map(l => ({ pick_list_line_id: l.pick_list_line_id, checked_quantity: l.picked_quantity, condition: "BAIK" }));
+  await expect(service.confirmCheck(c, actor, pick.id, { checks: checks.map(l => ({ ...l, checked_quantity: "0" })) }, randomUUID())).rejects.toThrow("CHECK_QTY_MISMATCH");
+  await expect(service.confirmCheck(c, actor, pick.id, { checks: checks.map(l => ({ ...l, condition: "RUSAK" })) }, randomUUID())).rejects.toThrow("CHECK_CONDITION_REQUIRES_RESOLUTION");
+  await service.confirmCheck(c, actor, pick.id, { checks }, randomUUID());
+  expect((await prisma.pickList.findUniqueOrThrow({ where: { id: pick.id } })).state).toBe("CHECKED");
+  const preview = await previewProforma(c, batch.id);
+  const document = await issueProforma(c, actor, batch.id, { version: preview.version }, randomUUID());
+  const proof = await prisma.transactionEvidence.create({ data: { companyId: c, actorId: actor, purpose: "PROFORMA_HANDOFF", originalName: "TEST-ONLY.png", objectKey: "TEST-ONLY", sha256: "TEST-ONLY", sizeBytes: 1 } });
+  const handoff = { delivered_at: new Date(Date.now()-1000).toISOString(), delivered_by: "Test collector", recipient: "Test recipient", medium: "IN_PERSON", evidence_id: proof.id, promise_date: null };
+  await expect(saveHandoff(c, actor, "proforma", document.id, { ...handoff, evidence_id: evidence.PAYMENT }, randomUUID())).rejects.toThrow("Bukti terima");
+  const replay = randomUUID();
+  const saved = await saveHandoff(c, actor, "proforma", document.id, handoff, replay);
+  expect((await saveHandoff(c, actor, "proforma", document.id, handoff, replay)).id).toBe(saved.id);
+  expect(await listHandoffs(c, "proforma", document.id)).toHaveLength(1);
+  await expect(listHandoffs(randomUUID(), "proforma", document.id)).rejects.toThrow();
+
 });

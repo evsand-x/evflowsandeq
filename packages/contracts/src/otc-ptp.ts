@@ -44,6 +44,7 @@ export const createSalesOrderSchema = z
             product_id: z.string().uuid(),
             quantity: positiveDecimal,
             unit_price: z.string().regex(/^\d{1,16}(\.\d{1,8})?$/),
+            tax_master_id: z.string().uuid().optional(),
           })
           .strict(),
       )
@@ -143,6 +144,7 @@ export const createSupplierInvoiceSchema = z
     invoice_date: z.string().date(),
     due_date: z.string().date(),
     tax_amount: nonNegativeDecimal.optional(),
+    tax_master_id: z.string().uuid().optional(),
     currency: z
       .string()
       .regex(/^[A-Z]{3}$/)
@@ -214,6 +216,8 @@ export const postCustomerRefundSchema = z
   .strict();
 export const pickListConfirmSchema = z
   .object({
+    version: z.number().int().positive().optional(),
+    reason: z.string().trim().max(1000).optional(),
     lines: z
       .array(
         z
@@ -222,6 +226,31 @@ export const pickListConfirmSchema = z
       )
       .min(1)
       .max(100),
+  })
+  .strict();
+export const pickListCheckSchema = z
+  .object({
+    packing: z
+      .object({
+        package_count: z.string().regex(/^\d{1,6}$/).optional(),
+        total_weight_kg: nonNegativeDecimal.optional(),
+        package_type: z.string().trim().max(100).optional(),
+        notes: z.string().trim().max(2000).optional(),
+        label_attached: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+    checks: z
+      .array(
+        z.object({
+          pick_list_line_id: z.string().uuid(),
+          condition: z.string().trim().min(1).max(100),
+          checked_quantity: nonNegativeDecimal.optional(),
+          notes: z.string().trim().max(500).optional(),
+        }).strict(),
+      )
+      .max(100)
+      .optional(),
   })
   .strict();
 export const paymentPolicySchema = z

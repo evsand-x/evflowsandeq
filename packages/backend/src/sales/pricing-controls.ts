@@ -1,6 +1,7 @@
 import { ConflictException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
 import { validException } from "./exception-controls";
+import { operationalTaxSnapshot } from "../finance/operational-tax";
 
 export type TaxSnapshot = {
   rule_id: string;
@@ -11,6 +12,9 @@ export type TaxSnapshot = {
   decimal_places: number;
   rounding: "HALF_UP" | "HALF_EVEN" | "DOWN";
   taxable_event?: string;
+  effect?: string;
+  account_id?: string;
+  version?: number;
 };
 type PricedLine = { unitPrice: Prisma.Decimal; taxSnapshot: Prisma.JsonValue | null };
 
@@ -46,7 +50,10 @@ export function lineAmounts(line: PricedLine, quantity: Prisma.Decimal) {
   if (rounding === undefined) throw new ConflictException("TAX_ROUNDING_REQUIRED");
   const net = quantity.mul(line.unitPrice).toDecimalPlaces(tax.decimal_places, rounding);
   const dpp = net.mul(tax.dpp_factor).toDecimalPlaces(tax.decimal_places, rounding);
-  const vat = dpp.mul(tax.rate).toDecimalPlaces(tax.decimal_places, rounding);
+  const vat = dpp
+    .mul(tax.rate)
+    .toDecimalPlaces(tax.decimal_places, rounding)
+    .mul(tax.effect === "DEDUCT" ? -1 : 1);
   return { net, dpp, tax: vat, total: net.add(vat) };
 }
 
@@ -61,6 +68,7 @@ export async function priceOrder(
     unitPrice: Prisma.Decimal;
     salesOrderId: string;
     orderedQuantity: Prisma.Decimal;
+    taxSnapshot?: Prisma.JsonValue | null;
   }>,
 ) {
   const now = new Date();
@@ -92,17 +100,29 @@ export async function priceOrder(
       !priceGrants.some((g) => g.amountLimit.gte(line.unitPrice.mul(line.orderedQuantity)))
     )
       throw new ConflictException("PRICE_EXCEPTION_APPROVAL_REQUIRED");
-    const taxes = await tx.salesTaxRule.findMany({
-      where: {
-        state: "ACTIVE",
-        companyId,
-        customerId,
-        productId: product.id,
-        effectiveFrom: { lte: now },
-        effectiveTo: { gt: now },
-      },
-    });
-    if (taxes.length !== 1)
+    const selected = line.taxSnapshot as { operational_tax_id?: string } | null;
+    const masterSnapshot = selected?.operational_tax_id
+      ? await operationalTaxSnapshot(
+          tx,
+          companyId,
+          selected.operational_tax_id,
+          new Date(),
+          "SALES",
+        )
+      : null;
+    const taxes = masterSnapshot
+      ? []
+      : await tx.salesTaxRule.findMany({
+          where: {
+            state: "ACTIVE",
+            companyId,
+            customerId,
+            productId: product.id,
+            effectiveFrom: { lte: now },
+            effectiveTo: { gt: now },
+          },
+        });
+    if (!masterSnapshot && taxes.length !== 1)
       throw new ConflictException(taxes.length ? "TAX_POLICY_CONFLICT" : "TAX_POLICY_REQUIRED");
     const rule = taxes[0]!;
     await tx.salesOrderLine.update({
@@ -120,16 +140,18 @@ export async function priceOrder(
               ?.id ?? null,
           effective_from: prices[0]!.effectiveFrom.toISOString(),
         },
-        taxSnapshot: {
-          rule_id: rule.id,
-          name: rule.name,
-          legal_reference: rule.legalReference,
-          rate: rule.rate.toString(),
-          dpp_factor: rule.dppFactor.toString(),
-          decimal_places: rule.decimalPlaces,
-          rounding: rule.rounding,
-          taxable_event: rule.taxableEvent,
-        },
+        taxSnapshot: masterSnapshot
+          ? { ...masterSnapshot, operational_tax_id: selected!.operational_tax_id! }
+          : {
+              rule_id: rule.id,
+              name: rule.name,
+              legal_reference: rule.legalReference,
+              rate: rule.rate.toString(),
+              dpp_factor: rule.dppFactor.toString(),
+              decimal_places: rule.decimalPlaces,
+              rounding: rule.rounding,
+              taxable_event: rule.taxableEvent,
+            },
       },
     });
   }

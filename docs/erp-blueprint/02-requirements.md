@@ -1,6 +1,29 @@
 # Requirements — aturan bisnis dan penerimaan
 
+## Submenu Akun dan migrasi master — 16 Oktober 2026
+
+FIN-01, IAM-04, APP-03: cakupan aktif Akun adalah daftar/buat/edit/detail dengan kode unik per perusahaan, nama boleh sama, kategori rinci, kelompok, Header/Detail, saldo normal, induk, deskripsi, PSAK 118 dan status. Akun terpakai mengunci klasifikasi; edit aman memerlukan alasan/audit. account.read/create/update/import independen. Saldo awal tidak diimpor dari master. Akun uji tanpa referensi dapat dihapus melalui migrasi terkontrol; yang bersejarah tetap tersimpan nonaktif.
+
+### Penyempurnaan master pajak — 16 Oktober 2026
+
+FIN-08: master menyimpan penggunaan Penjualan/Pembelian/Keduanya, divalidasi backend saat pemilihan pada transaksi. Kolom memakai Nama Pajak, Jenis Pajak, Penggunaan, Tarif (%), Perlakuan Transaksi, Akun Pajak dan Status. Nama duplikat tanpa membedakan huruf besar-kecil ditolak. Kelompok akun berasal dari COA; satu master hanya satu akun. Riwayat menampilkan snapshot tarif, akun, penggunaan dan status.
+
+## Pembaruan pajak operasional — 16 Oktober 2026
+
+FIN-08: cakupan aktif pajak adalah master nama, jenis PPN/PPh, akun, persentase, efek tambah/potong, pembulatan dan status aktif; daftar/buat/edit/detail tanpa approval. Setiap perubahan menghasilkan versi/audit; nilai transaksi memakai decimal dan snapshot. FIN-16 (Coretax) ditunda. FIN-11/PTP-03: daftar faktur keluaran/masukan memakai invoice sumber perusahaan, metadata resmi dapat dicatat hanya setelah posting, tanpa posting kedua. IAM-04: izin master, keluaran dan masukan independen. APP-03: layar operasional terhubung API dengan cache terisolasi dan tabel bersama.
+
+
+## Penerimaan IAM-01/04 — izin independen per submenu, 16 Oktober 2026
+
+Setiap submenu operasional wajib memiliki izin tersendiri per tindakan; grant induk bersama dan fallback ke izin induk dilarang. Induk hanya mengelompokkan navigasi dan kontrol Pilih Semua mengubah grant anak secara individual. Dengan peran biasa yang hanya memiliki izin submenu A, akses UI/API langsung ke submenu B harus ditolak; mencabut izin A tidak mengubah grant maupun akses B yang diberikan terpisah. Uji pula gabungan beberapa peran, query, ekspor dan data terkait. Admin Sistem tetap memiliki hak bawaan penuh. Migrasi izin lama dicatat dalam audit dan tidak boleh memperluas hak peran lama secara diam-diam. Checkbox independen belum dianggap selesai sebelum enforcement backend dan pengujian isolasi tersebut terbukti.
+
+Keputusan terbaru IAM-01/04 dan DSH-01: Admin Sistem dapat mengatur izin baca setiap tampilan Dashboard yang operasional secara terpisah. API Dashboard dan laporan memeriksa izin tampilan, kemudian tetap membatasi data menurut izin/scope sumber. Semua menu tetap tampil dalam matriks; yang belum operasional tidak memiliki checkbox semu. Pengosongan grant peran lama yang diminta pengguna berlaku pada database development lokal saja, dengan audit dan pencabutan sesi.
+
 Status: spesifikasi awal. `Wajib` menyatakan kebutuhan produk; detail yang berlabel `usulan` masih mengikuti register keputusan. Tahap pengerjaan ada di [Features](08-features.md).
+
+Keputusan IAM terbaru 16 Oktober 2026: `ADMIN_SYSTEM` berwenang penuh untuk pengaturan dan transaksi bisnis dalam perusahaan sesi tanpa grant tambahan, termasuk keputusan approval sendiri/tanpa penunjukan. Peran biasa dapat dibuat, diubah, dan dihapus; haknya dipilih lintas fitur tanpa pengelompokan domain dalam matriks. Penghapusan melepas penugasan dan mencabut sesi terdampak secara auditabel. Ketentuan IAM-01/02/04/09 yang lebih lama tentang permission tambahan atau larangan bypass Admin Sistem digantikan keputusan ini; validasi transaksi dan isolasi perusahaan tetap berlaku.
+
+Peran biasa baru menerima seluruh izin katalog yang sudah tersedia pada cakupan perusahaan saat dibuat. Grant peran lama tidak berubah otomatis; Admin Sistem dapat memilih semua izin sebagai draf dan menyimpan peran lama satu per satu. Perubahan yang disimpan mencabut sesi anggota serta diaudit. Peran `ADMIN_SYSTEM` memakai hak bawaan tanpa grant checkbox tersimpan.
 
 ## A. Konvensi bersama
 
@@ -18,7 +41,7 @@ Status: spesifikasi awal. `Wajib` menyatakan kebutuhan produk; detail yang berla
 | IAM-01 | Pengguna, multi-role dan matriks izin per aksi/scope | Satu akun dapat menjalankan beberapa peran; setiap tindakan dinilai dari izin efektif dan cakupan data, bukan nama jabatan. Data modal/payroll tanpa izin tidak tersedia melalui UI, API atau ekspor. Detail pada [Setting, IAM dan Konfigurasi](15-setting.md) |
 | IAM-02 | Approval untuk permintaan unlock dan transaksi lain yang memerlukannya | SO normal tidak membuat approval instance manusia. Permintaan unlock memakai policy/approver yang dikonfigurasi; versi aturan tersimpan; izin persetujuan dokumen sendiri mengikuti kebijakan, bukan jumlah peran pengguna |
 | IAM-03 | Audit dan nomor dokumen | Nomor unik perusahaan/jenis/periode; pembatalan tidak mendaur ulang nomor; perubahan role dan override tercatat |
-| IAM-04 | Setting → Pengguna; Peran → Matriks Hak Akses | Hanya pemegang peran aktif Admin Sistem (`ADMIN_SYSTEM`) dengan permission aksi dan scope yang sesuai dapat mengelola pengguna/peran/matriks, memasang beberapa peran ke pengguna dan meninjau izin efektif. Checkbox mengatur izin peran yang dipilih. Menu pengelolaan akses disembunyikan bagi nonadministrator; URL langsung dan API baca/mutasi juga ditolak meskipun memiliki permission IAM. Perubahan diaudit dan sesi terdampak dicabut; pengaturan bisnis lain tetap mengikuti izin domain |
+| IAM-04 | Setting → Pengguna; Peran → Matriks Hak Akses | Admin Sistem mengelola pengguna/peran/matriks, memasang beberapa peran dan meninjau izin efektif. Daftar Pengguna dan Peran menyediakan Hapus dengan konfirmasi. Akun tanpa riwayat pemakaian dihapus permanen; akun dengan riwayat diarsipkan dan disembunyikan dari daftar. Akun sendiri dan Admin Sistem terakhir dilindungi. Peran biasa yang dihapus melepas penugasan. Nonadministrator ditolak di UI dan API; perubahan diaudit dan sesi terdampak dicabut. Keputusan terbaru di awal dokumen menggantikan ketentuan grant Admin Sistem lama. |
 | IAM-05 | Setting → Template Cetak | Rancangan: template per jenis dokumen, pengaturan layout/kolom, preview, draft/publikasi/default berizin dan versi. Dokumen terbit menyimpan data/versi/file historis; cetak ulang tidak mengganti nomor/data. Template tidak melewati batas data, permission atau aturan qty pemenuhan. Detail pada [Design](07-design.md) |
 | IAM-06 | Setting → Penomoran Dokumen | Rancangan: pola prefix/tahun/bulan/urutan, reset per periode, preview dan audit. Nomor unik per perusahaan/jenis, alokasi atomik/idempotent saat penerbitan sesuai jenis; SO saat pengajuan tercatat. Draft/preview tidak mengambil nomor resmi; void tidak mendaur ulang nomor. Format baru tidak mengubah histori, counter terpakai tidak bebas direset dan referensi eksternal/Coretax terpisah |
 | IAM-07 | Pengaturan Persetujuan | Setting mengatur jenis/cakupan/kondisi, dasar nilai/mata uang, batas, tahap berurutan, pengguna/peran/atasan, cukup satu/semua pihak, delegasi efektif, persetujuan sendiri, pengingat dan pemicu approval ulang. Pihak/limit diisi saat konfigurasi; rincian form/alur di Design. Rencana kunjungan tetap memerlukan atasan; SO normal tidak mempunyai approval rutin |

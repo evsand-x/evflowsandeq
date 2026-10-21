@@ -110,6 +110,7 @@ export async function financeConfigure(
           code: v.code,
           name: v.name,
           category: v.category,
+          normalBalance: ["LIABILITY", "EQUITY", "REVENUE"].includes(v.category) ? "CREDIT" : "DEBIT",
           controlKind: v.control_kind ?? null,
         },
       });
@@ -140,7 +141,7 @@ export async function financeConfigure(
       if (
         !ids.length ||
         (await tx.financeAccount.count({
-          where: { companyId: c, id: { in: ids }, active: true },
+          where: { companyId: c, id: { in: ids }, active: true, accountType: "DETAIL" },
         })) !== ids.length
       )
         throw new ConflictException("POSTING_ACCOUNT_INVALID");
@@ -162,6 +163,7 @@ export async function financeConfigure(
             companyId: c,
             active: true,
             category: "ASSET",
+            accountType: "DETAIL",
             controlKind: "BANK",
           },
         }))

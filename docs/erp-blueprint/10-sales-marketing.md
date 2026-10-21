@@ -452,3 +452,15 @@ Sales/admin sales: create/update draft, submit, lihat availability dan follow-up
 ## 11. Konfigurasi wajib
 
 Kontrak khusus waktu pengakuan, batas shelf-life, toleransi selisih POD dan daftar alasan close remainder. Kebijakan beberapa POD dalam satu invoice telah difinalkan pada Gelombang A.
+
+## Penyerahan dokumen Office - 16 Oktober 2026
+
+Penyerahan Proforma aktif dan tukar faktur Invoice posted dicatat dengan petugas, PIC penerima, waktu, media dan bukti privat. Riwayat disimpan sebagai audit event commercial_document.handed_over yang terikat perusahaan dan identitas dokumen. Janji bayar merupakan tindak lanjut, tidak mengubah TOP/jatuh tempo, saldo AR atau status pembayaran. Kontrak dan permission: [API](04-api.md). Struktur enam tab SO, antrean dokumen, ringkasan dan penyerahan mengikuti [cakupan Redesign Sales](../development/sales-redesign-2026-10-16.md). Penggabungan POD belum tersedia pada implementasi draft Invoice saat ini.
+
+## Izin submenu operasional — 16 Oktober 2026
+
+IAM-01/04: Prospek memakai `crm_prospect`, Kontak `crm_contact`, Pelanggan CRM `crm_customer`, Peluang `crm_opportunity`, Aktivitas `crm_activity`, Penawaran `crm_quote`, PO/SP `crm_customer_order`. Tindakan yang tersedia memiliki capability individual; tidak ada grant induk CRM. Proforma dan Backorder memakai izin baca sendiri. Proyeksi pelanggan CRM tetap terbatas; Master Pelanggan memakai izin terpisah. Data kontak pada detail memerlukan `crm_contact.read`. Pembuatan institusi dari Prospek juga memerlukan `crm_customer.create`. Tidak menambahkan CRUD yang belum memiliki endpoint.
+
+## Pintu masuk Peluang dan Pelanggan — 16 Oktober 2026
+
+CRM menampilkan Prospek, Peluang dan Kontak. Daftar Peluang perusahaan dapat dibuka dengan izin crm_opportunity.read tanpa izin Prospek. Pengguna berizin Prospek dapat membuka sumber untuk proses peluang yang sudah tersedia. Pelanggan tetap dikelola di Master Data; tautan dari prospek/kontak memeriksa izin Master Pelanggan. Tidak ada migrasi atau perubahan siklus bisnis peluang.

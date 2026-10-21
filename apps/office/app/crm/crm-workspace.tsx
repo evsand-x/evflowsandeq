@@ -1,4 +1,5 @@
 "use client";
+import { CustomerCreateForm } from "./customer-create-form";
 import { Suspense, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -34,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { apiRequest } from "@/lib/api";
+import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
 import { DashboardSidebar } from "../dashboard-sidebar";
 import { ExecutiveTopbar } from "../dashboard-executive";
@@ -53,12 +55,7 @@ import "./crm-modern.css";
 type Row = CrmProspect | CrmContact | CrmCustomer;
 type Detail = CrmProspect & CrmContact & CrmCustomer & { contacts?: CrmContact[] };
 function allowed(principal: AuthPrincipal, code: string) {
-  return principal.permissions.some(
-    (p) =>
-      p.code === code &&
-      ["company", "privileged"].includes(p.scope_type) &&
-      (!p.scope_id || p.scope_id === principal.company_id),
-  );
+  return hasCompanyPermission(principal, code);
 }
 function date(value: string | null) {
   return value
@@ -145,12 +142,13 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
   const resource = path[0] ?? "prospects";
   const isCustomer = resource === "customers";
   const isContact = resource === "contacts";
+  const permissionResource = isCustomer
+    ? "crm_customer"
+    : isContact
+      ? "crm_contact"
+      : "crm_prospect";
   const label = isCustomer ? "Pelanggan" : isContact ? "Kontak" : "Prospek";
-  const base = preview
-    ? `/preview/crm/${resource}`
-    : isCustomer
-      ? "/master-data/customers"
-      : `/crm/${resource}`;
+  const base = preview ? `/preview/crm/${resource}` : `/crm/${resource}`;
   const id = path[1] && path[1] !== "new" ? path[1] : undefined;
   const form =
     path.includes("new") ||
@@ -162,9 +160,7 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
   const state = preview ? params.get("state") : null;
   const outcomeLost = params.get("outcome") === "lost";
   const permitted =
-    !!principal &&
-    allowed(principal, isCustomer ? "master_data.read" : "crm.read") &&
-    state !== "denied";
+    !!principal && allowed(principal, `${permissionResource}.read`) && state !== "denied";
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState(isContact ? "ACTIVE" : "all");
@@ -471,7 +467,9 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
             : detail.customer.name
       : label;
   const formBack = id ? `${base}/${id}` : base;
-  const requiredPermission = path.includes("status") ? "crm.update" : "crm.create";
+  const requiredPermission = opportunity
+    ? `crm_opportunity.${path.includes("win") ? "update" : "create"}`
+    : `${permissionResource}.${path.includes("status") || path.includes("edit") ? "update" : "create"}`;
   const invalidRoute =
     !["prospects", "contacts", "customers"].includes(resource) ||
     (id && !detail && !loading && !failed);
@@ -486,7 +484,7 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
       <DashboardSidebar
         principal={principal}
         activeView="executive"
-        activeSection={isCustomer ? "master" : "sales"}
+        activeSection="sales"
         preview={preview}
       />
       <SidebarInset className="min-w-0">
@@ -498,8 +496,7 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
           <header className="executive-heading">
             <div>
               <nav className="executive-breadcrumb" aria-label="Breadcrumb">
-                {isCustomer ? "Master Data" : "Sales & Marketing / CRM"} /{" "}
-                <Link href={base}>{label}</Link>
+                {"Sales & Marketing / CRM"} / <Link href={base}>{label}</Link>
                 {id ? ` / ${detail?.code ?? "Detail"}` : ""}
                 {form && opportunity
                   ? ` / ${path.includes("win") ? (outcomeLost ? "Hasil" : "Win") : "Peluang baru"}`
@@ -519,8 +516,8 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
               {!id &&
                 !form &&
                 (isCustomer
-                  ? allowed(principal, "master_data.read")
-                  : allowed(principal, "crm.create")) && (
+                  ? allowed(principal, "crm_customer.create")
+                  : allowed(principal, `${permissionResource}.create`)) && (
                   <Button asChild>
                     <Link href={`${base}/new`}>
                       <Plus aria-hidden="true" />
@@ -542,20 +539,27 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
           </header>
           {!isCustomer && !id && !form && (
             <nav className="crm-section-nav" aria-label="Bagian CRM">
-              <Link
-                href={preview ? "/preview/crm/prospects" : "/crm/prospects"}
-                aria-current={!isContact ? "page" : undefined}
-              >
-                <Building2 aria-hidden="true" />
-                Prospek
-              </Link>
-              <Link
-                href={preview ? "/preview/crm/contacts" : "/crm/contacts"}
-                aria-current={isContact ? "page" : undefined}
-              >
-                <Users aria-hidden="true" />
-                Kontak
-              </Link>
+              {allowed(principal!, "crm_prospect.read") && (
+                <Link
+                  href={preview ? "/preview/crm/prospects" : "/crm/prospects"}
+                  aria-current={!isContact ? "page" : undefined}
+                >
+                  <Building2 aria-hidden="true" />
+                  Prospek
+                </Link>
+              )}
+              {allowed(principal!, "crm_contact.read") && (
+                <Link
+                  href={preview ? "/preview/crm/contacts" : "/crm/contacts"}
+                  aria-current={isContact ? "page" : undefined}
+                >
+                  <Users aria-hidden="true" />
+                  Kontak
+                </Link>
+              )}
+              {allowed(principal!, "crm_opportunity.read") && (
+                <Link href="/crm/opportunities">Peluang</Link>
+              )}
               <span>Hubungan pelanggan, dalam satu tempat</span>
             </nav>
           )}
@@ -601,7 +605,11 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
                 preview={preview}
               />
             ) : isCustomer ? (
-              <Notice>Form kelengkapan Master Pelanggan belum tersedia.</Notice>
+              path.includes("new") ? (
+                <CustomerCreateForm />
+              ) : (
+                <Notice>Form kelengkapan Master Pelanggan belum tersedia.</Notice>
+              )
             ) : !allowed(principal, requiredPermission) && !isContact ? (
               <Notice>Anda tidak memiliki izin untuk tindakan ini.</Notice>
             ) : (
@@ -628,7 +636,13 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
               <>
                 <div className="crm-meta">
                   <StateBadge value={detail.state} />
-                  <span>{detail.customer.name}</span>
+                  {allowed(principal, "master_customer.read") ? (
+                    <Link className="crm-record-link" href={customerHref(detail.customer.id)}>
+                      {detail.customer.name}
+                    </Link>
+                  ) : (
+                    <span>{detail.customer.name}</span>
+                  )}
                 </div>
                 <CrmForm
                   key={id}
@@ -670,7 +684,7 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
                     <TabsTrigger value="sales">Riwayat penjualan</TabsTrigger>
                   </TabsList>
                   <TabsContent value="contacts">
-                    {allowed(principal, "crm.read") ? (
+                    {allowed(principal, "crm_contact.read") ? (
                       <DataTable
                         data={detail.contacts ?? []}
                         columns={contactColumns}
@@ -705,7 +719,7 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
                   <div className="crm-actions">
                     <StateBadge value={detail.customer.relationship_stage} />
                     <StateBadge value={detail.approach_status} />
-                    {allowed(principal, "crm.update") && (
+                    {allowed(principal, `${permissionResource}.update`) && (
                       <Button variant="ghost" size="sm" asChild>
                         <Link href={`${base}/${id}/status`}>Ubah Status</Link>
                       </Button>
@@ -728,7 +742,7 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
                     >
                       Catat Follow-up
                     </Button>
-                    {allowed(principal, "master_data.read") && (
+                    {allowed(principal, "master_customer.read") && (
                       <Button variant="outline" size="sm" asChild>
                         <Link href={customerHref(detail.customer.id)}>Lengkapi Data Pelanggan</Link>
                       </Button>
@@ -834,7 +848,7 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
                         : {})}
                     />
                     <div className="crm-actions crm-below-table">
-                      {allowed(principal, "crm.create") && (
+                      {allowed(principal, `${permissionResource}.create`) && (
                         <>
                           <Button variant="outline" size="sm" asChild>
                             <Link href={`${base}/${id}/needs/new`}>Tambah Produk / Kebutuhan</Link>
@@ -857,7 +871,7 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
                       principal={principal}
                       prospectId={id!}
                       base={`${base}/${id}`}
-                      canCreate={allowed(principal, "crm.create")}
+                      canCreate={allowed(principal, "crm_opportunity.create")}
                     />
                   </TabsContent>
                   <TabsContent value="contacts">
@@ -867,7 +881,7 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
                       total={detail.contacts?.length ?? 0}
                       label="kontak"
                     />
-                    {allowed(principal, "crm.create") && (
+                    {allowed(principal, "crm_contact.create") && (
                       <Button className="crm-below-table" variant="outline" size="sm" asChild>
                         <Link
                           href={`${preview ? "/preview/crm" : "/crm"}/contacts/new?customer=${detail.customer.id}`}
@@ -1133,7 +1147,7 @@ function Workspace({ path, preview = false }: { path: string[]; preview?: boolea
                     <strong>Identitas pelanggan</strong>
                     <span>Cari institusi yang sudah terdaftar sebelum menambah prospek baru.</span>
                   </div>
-                  {allowed(principal, "master_data.read") ? (
+                  {allowed(principal, "master_customer.read") ? (
                     <Button variant="outline" size="sm" asChild>
                       <Link href={customerHref()}>Buka Master Pelanggan ↗</Link>
                     </Button>
@@ -1175,7 +1189,7 @@ function Pipeline({
   const [search, setSearch] = useState("");
   const drafts = useQuery({
     queryKey: ["crm", principal.company_id, principal.user_id, "opportunities", prospectId],
-    enabled: !preview,
+    enabled: !preview && allowed(principal, "crm_opportunity.read"),
     queryFn: ({ signal }) =>
       apiRequest<{ data: CrmOpportunity[] }>(`/crm/prospects/${prospectId}/opportunities`, {
         signal,

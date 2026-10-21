@@ -22,7 +22,9 @@ async function main() {
   const codes = [
     "warehouse.read",
     "finance.read",
-    "fulfillment.read",
+    "outbound_picking.read",
+    "outbound_checking.read",
+    "outbound_shipping.read",
     "delivery_receipt.read",
     "sales_invoice.read",
     "customer_receipt.read",

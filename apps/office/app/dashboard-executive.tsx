@@ -169,14 +169,14 @@ export function ExecutiveDashboard({
       title: "Pelanggan",
       note: "Temukan data pelanggan",
       href: "/master-data/customers",
-      permission: "master_data.read",
+      permission: "master_customer.read",
       icon: Building2,
     },
     {
       title: "Pemenuhan & POD",
       note: "Pantau pengiriman pesanan",
       href: "/operations/warehouse",
-      permission: "fulfillment.read",
+      permission: "outbound_checking.read",
       icon: Truck,
     },
     {

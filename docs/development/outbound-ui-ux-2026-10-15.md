@@ -1,28 +1,37 @@
-# UI/UX Barang Keluar (Outbound) — 15 Oktober 2026
+# UI/UX Barang Keluar — implementasi 16 Oktober 2026
 
-## Arah pengguna
+## Arah dan cakupan
 
-- Cakupan: shell lengkap Outbound pada aplikasi Office operasional.
-- Tahap: Picking, Checking/Packing, Pengiriman, POD, dan Retur.
-- Tampilan awal: daftar tugas outbound dengan ringkasan status dan antrean tindakan.
-- Data harus berasal dari sesi, izin, dan endpoint operasional nyata. Tahap tanpa sumber endpoint menampilkan state belum tersedia.
+Pengguna menyetujui struktur 15 halaman `Sketsa UI Barang Keluar.pdf`, termasuk badge dan warna tombol. Fokus desktop; sidebar dan identitas aplikasi tetap konsisten. Lima tahap: Pick Slip, Checking/Packing, Pengiriman, POD dan Retur; masing-masing memiliki daftar, form dan detail. Kolom produk, batch dan ED dipisah.
 
-## Sumber aturan
-
-- `docs/erp-blueprint/07-design.md`: struktur menu Warehouse & Logistik serta layar fulfillment/pengiriman.
-- `docs/erp-blueprint/11-warehouse-logistik.md`: picking dari reservation, checking sebelum packing/SJ, dispatch ke transit, POD sebagai konfirmasi penerimaan, dan retur ke karantina.
-- APP-03/NFR-05: tabel TanStack, label selain warna, responsive dan aksesibilitas.
+Sumber aturan: domain 11 Warehouse/Logistik dan alur OTC, Finance untuk Invoice/credit note, IAM-01/04 untuk akses, APP-03/NFR-05 untuk tabel serta aksesibilitas. Blueprint mengatur otorisasi dan mutasi; sketsa pengguna mengatur komposisi visual.
 
 ## Implementasi
 
-- Sidebar Barang Keluar memuat empat dokumen outbound yang terpisah (Picking, Checking/Packing, Surat Jalan/Pengiriman, POD) dan Retur sebagai dokumen pengecualian. Semua memakai shell `OperationsWorkspace` yang sama dengan menu operasional lain, tetapi detail, tindakan, dan filter datanya berbeda.
-- Shell menampilkan navigasi tahap horizontal yang konsisten dengan state aktif dan tetap dapat digeser pada viewport sempit.
-- Daftar tahap menampilkan antrean tindakan kontekstual, loading/error/empty state, dan tautan detail yang mempertahankan tahap aktif.
-- Picking memakai route `/operations/pick-slips`; Checking/Packing, Pengiriman dan POD memakai `/operations/warehouse?stage=...` dengan daftar fulfillment yang sudah tersedia.
-- Endpoint daftar fulfillment menerima filter `stage=checking|shipping|pod`, sehingga tiga antrean memakai data backend yang berbeda: picking sudah `PICKED`, pengiriman sudah `CHECKED`, dan POD masih `DISPATCHED` atau `PARTIALLY_DELIVERED`.
-- Retur memakai route `/operations/returns` pada shell yang sama dan menampilkan keterangan jujur bahwa endpoint penerimaan retur belum tersedia, tanpa data simulasi.
-- Tindakan detail tetap membuka route fulfillment operasional yang sudah ada dan izin backend tetap berwenang.
+- `OutboundWorkspace` pada route operasional `/operations/pick-slips`, `/operations/warehouse?stage=checking|shipping|pod` dan `/operations/returns`. Detail memakai ID; `view=form` membuka form, `/returns/new` menerima retur.
+- Tab tahap, kartu ringkasan, pencarian/filter status, pagination 25 baris, badge dengan titik dan teks, tombol hijau primer/outline, panel detail dua kolom, riwayat dan footer tindakan.
+- Backend menyediakan antrean company-scoped, status turunan, KPI dari seluruh hasil pencarian (sebelum pagination), daftar/detail retur dan lookup POD/locator karantina. Data biaya stok dan harga unit retur tidak diproyeksikan pada detail retur.
+- Picking: qty aktual, alasan selisih, simpan draft dengan revision check, konfirmasi, serta penyelesaian kekurangan melalui command yang tersedia. Draft tidak mengonfirmasi picking.
+- Checking: qty dan kondisi per baris; backend menolak mismatch/kerusakan sebelum Packing List terbit. Metadata kemasan tersimpan pada snapshot dokumen.
+- Pengiriman: sopir, kendaraan, waktu, toggle ongkir/PPN; rencana disimpan sebelum dispatch. Retry mempertahankan idempotency command dan hasil save shipment; pengiriman ganda dicegah selama rangkaian tindakan.
+- POD: qty diterima default sisa transit, nama penerima, waktu/bukti; opsional buat draft Invoice melalui command resmi setelah POD tersimpan.
+- Retur: sumber POD dan locator karantina dicari melalui lookup, penerimaan fisik ke karantina; detail memperlihatkan referensi dan barang.
+- Migration `20261016090000_outbound_return_capability` mendaftarkan permission endpoint `customer_return.receive`, tanpa grant otomatis. Role demo khusus disinkronkan melalui AccessService berdasarkan permintaan full-access sebelumnya; audit dan pencabutan sesi tetap berlaku.
 
-## Batas verifikasi
+## Stack dan kontrol
 
-TypeScript dan validator repository dijalankan. Pemeriksaan browser pada route operasional memerlukan sesi pengguna berizin; route tanpa sesi menampilkan penolakan akses sesuai kontrak.
+Next.js/React/TypeScript, komponen Button/Input/SelectionField bersama, CSS scoped dengan warna sketsa, TanStack Query untuk cache company/user/permissions, TanStack Table untuk daftar dan produk, Sonner untuk konfirmasi hasil server: digunakan. Tabel memakai pagination/filter backend dengan urutan createdAt/ID tetap; sort interaktif belum tersedia. Aplikasi mobile tidak termasuk cakupan. Semua mutasi tetap melalui command transaksi, locking, audit dan idempotency; saldo tidak diedit langsung.
+
+## Bukti pengujian
+
+- Office typecheck, backend build, contracts build, scoped ESLint dan validator repository lulus.
+- Tiga unit test status: pembatalan, pengiriman selesai/POD sebagian, dan shortage decimal presisi.
+- Satu integration test PostgreSQL terisolasi: draft OPEN/pickedAt null, revision increment, replay idempotent, stale revision ditolak, checking mismatch/kerusakan ditolak, checking valid menjadi CHECKED. Test memakai company khusus dan dibersihkan; 19 test lain pada file tidak dijalankan.
+- Browser sesi demo lokal: daftar Pick Slip menampilkan 6 tahap nyata (2 siap, 4 selesai), form memuat produk/batch/ED/locator, draft qty 10 berhasil disimpan dan detail tetap Siap diambil. Kontrak runtime lama ditemukan saat QA, contracts dibuild ulang dan API watcher dimuat ulang; save kemudian berhasil.
+- Pengukuran DOM sebelumnya: tombol primer rgb(8,127,91), tinggi sekitar 36px; badge sukses rgb(232,245,238), tinggi sekitar 26px. Screenshot browser gagal ditangkap; tidak mengklaim verifikasi visual pixel-perfect.
+
+## Selisih yang masih terbuka terhadap PDF
+
+Belum lengkap: penggantian batch/locator di form, prioritas tugas, master sopir/kendaraan, kontak penerima dan alasan selisih POD; pengajuan retur sebelum penerimaan fisik, pemeriksaan mutu/release/pemusnahan, serta bukti PDF 10MB. Bukti saat ini JPEG/PNG maksimal 2MB. Kesiapan pembayaran diperiksa server ketika dispatch; belum berupa preflight lengkap. KPI mengikuti sumber nyata, bukan angka hari ini yang belum tersedia. Fitur yang belum didukung diberi keterangan dan tidak dipalsukan sebagai tindakan berhasil. Pemeriksaan semua transisi shipping/POD/retur melalui UI masih diperlukan sebelum dianggap setara penuh 15 halaman sketsa.
+
+QA lanjutan: daftar Checking 4 dokumen, Pengiriman 4 (termasuk Selesai), POD 3 (1 menunggu), Retur empty state dan form penerimaan dapat dibuka. Toggle ongkir mengaktifkan nominal. Endpoint outbound tanpa sesi menghasilkan HTTP 401. Viewport override tidak tercermin pada DOM (tetap 4363px), sehingga verifikasi 1440px belum terbukti; override direset.

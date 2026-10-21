@@ -90,6 +90,53 @@ export class CrmService {
     }
   }
 
+  async updateContact(
+    companyId: string,
+    actorId: string,
+    id: string,
+    version: number,
+    input: Record<string, unknown>,
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.contact.findFirst({ where: { id, companyId } });
+      if (!current) throw new NotFoundException("Kontak tidak ditemukan.");
+      if (current.version !== version)
+        throw new PreconditionFailedException("Kontak berubah. Muat ulang sebelum menyimpan.");
+      if (current.customerId !== input.customer_id)
+        throw new ConflictException("Pelanggan kontak tidak dapat dipindahkan melalui form ini.");
+      const data = {
+        fullName: String(input.full_name).trim(),
+        nickname: nullable(input.nickname),
+        jobTitle: nullable(input.job_title),
+        department: nullable(input.department),
+        picFunctions: input.pic_functions as Prisma.InputJsonValue,
+        phone: nullable(input.phone),
+        email: nullable(input.email),
+        birthDate: dateOrNull(input.birth_date),
+        notes: nullable(input.notes),
+        updatedById: actorId,
+        version: { increment: 1 },
+      };
+      const changed = await tx.contact.updateMany({ where: { id, companyId, version }, data });
+      if (changed.count !== 1)
+        throw new PreconditionFailedException("Kontak berubah. Muat ulang sebelum menyimpan.");
+      const updated = await tx.contact.findFirstOrThrow({
+        where: { id, companyId },
+        include: contactInclude,
+      });
+      await this.audit.recordWith(tx, {
+        companyId,
+        actorId,
+        action: "crm.contact.updated",
+        resourceType: "contact",
+        resourceId: id,
+        before: current,
+        after: updated,
+      });
+      return updated;
+    });
+  }
+
   async createProspect(
     companyId: string,
     actorId: string,
@@ -282,7 +329,10 @@ export class CrmService {
     else if (resourceType === "prospect") where.prospectId = resourceId;
     else if (resourceType === "opportunity") where.opportunityId = resourceId;
     else throw new NotFoundException("Jenis sumber aktivitas tidak tersedia.");
-    return prisma.crmActivity.findMany({ where, orderBy: [{ occurredAt: "desc" }, { id: "desc" }] });
+    return prisma.crmActivity.findMany({
+      where,
+      orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+    });
   }
 
   async registerAttachment(
@@ -294,7 +344,11 @@ export class CrmService {
     const objectKey = String(input.object_key).trim();
     if (!objectKey.startsWith(`${companyId}/`) || objectKey.includes(".."))
       throw new ConflictException("Lokasi lampiran tidak valid untuk perusahaan ini.");
-    await this.assertAttachmentResource(companyId, String(input.resource_type), String(input.resource_id));
+    await this.assertAttachmentResource(
+      companyId,
+      String(input.resource_type),
+      String(input.resource_id),
+    );
     const request = requestIdentity(companyId, actorId, "attachment", input, requestKey);
     return prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${request.id}, 0))::text`;
@@ -323,7 +377,11 @@ export class CrmService {
         action: "crm.attachment.registered",
         resourceType: "attachment",
         resourceId: created.id,
-        after: { resourceType: created.resourceType, resourceId: created.resourceId, scanState: created.scanState },
+        after: {
+          resourceType: created.resourceType,
+          resourceId: created.resourceId,
+          scanState: created.scanState,
+        },
         metadata: { request_hash: request.hash },
       });
       return created;
@@ -342,30 +400,54 @@ export class CrmService {
     const customer = await prisma.customer.findFirst({ where: { id: customerId, companyId } });
     if (!customer) throw new NotFoundException("Pelanggan tidak ditemukan dalam perusahaan aktif.");
     if (prospectId) {
-      const prospect = await prisma.prospect.findFirst({ where: { id: prospectId, companyId, customerId } });
-      if (!prospect) throw new ConflictException("Prospek tidak terkait dengan pelanggan penawaran.");
+      const prospect = await prisma.prospect.findFirst({
+        where: { id: prospectId, companyId, customerId },
+      });
+      if (!prospect)
+        throw new ConflictException("Prospek tidak terkait dengan pelanggan penawaran.");
     }
     if (opportunityId) {
-      const opportunity = await prisma.opportunity.findFirst({ where: { id: opportunityId, companyId, customerId } });
-      if (!opportunity) throw new ConflictException("Peluang tidak terkait dengan pelanggan penawaran.");
+      const opportunity = await prisma.opportunity.findFirst({
+        where: { id: opportunityId, companyId, customerId },
+      });
+      if (!opportunity)
+        throw new ConflictException("Peluang tidak terkait dengan pelanggan penawaran.");
     }
     const lines = (input.lines as Array<Record<string, unknown>>) ?? [];
-    const productIds = lines.map((line) => nullableUuid(line.product_id)).filter((v): v is string => Boolean(v));
+    const productIds = lines
+      .map((line) => nullableUuid(line.product_id))
+      .filter((v): v is string => Boolean(v));
     const uomIds = lines.map((line) => String(line.uom_id));
-    const sourceNeedIds = lines.map((line) => nullableUuid(line.source_need_id)).filter((v): v is string => Boolean(v));
+    const sourceNeedIds = lines
+      .map((line) => nullableUuid(line.source_need_id))
+      .filter((v): v is string => Boolean(v));
     const [products, uoms, sourceNeeds] = await Promise.all([
-      prisma.product.findMany({ where: { companyId, id: { in: productIds } }, select: { id: true } }),
+      prisma.product.findMany({
+        where: { companyId, id: { in: productIds } },
+        select: { id: true },
+      }),
       prisma.uom.findMany({ where: { companyId, id: { in: uomIds } }, select: { id: true } }),
-      sourceNeedIds.length ? prisma.prospectNeed.findMany({ where: { id: { in: sourceNeedIds }, companyId }, select: { id: true, prospect: { select: { customerId: true } } } }) : [],
+      sourceNeedIds.length
+        ? prisma.prospectNeed.findMany({
+            where: { id: { in: sourceNeedIds }, companyId },
+            select: { id: true, prospect: { select: { customerId: true } } },
+          })
+        : [],
     ]);
     if (products.length !== new Set(productIds).size || uoms.length !== new Set(uomIds).size)
       throw new NotFoundException("Produk atau satuan penawaran tidak ditemukan.");
-    if (sourceNeeds.length !== new Set(sourceNeedIds).size || sourceNeeds.some((need) => need.prospect.customerId !== customerId))
+    if (
+      sourceNeeds.length !== new Set(sourceNeedIds).size ||
+      sourceNeeds.some((need) => need.prospect.customerId !== customerId)
+    )
       throw new ConflictException("Kebutuhan sumber tidak terkait dengan pelanggan penawaran.");
     const request = requestIdentity(companyId, actorId, "quote", input, requestKey);
     return prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${request.id}, 0))::text`;
-      const existing = await tx.quote.findFirst({ where: { id: request.id, companyId }, include: quoteInclude });
+      const existing = await tx.quote.findFirst({
+        where: { id: request.id, companyId },
+        include: quoteInclude,
+      });
       if (existing) {
         await checkReplay(tx, request.id, request.hash);
         return existing;
@@ -379,7 +461,9 @@ export class CrmService {
           prospectId,
           opportunityId,
           code,
-          validUntil: input.valid_until ? new Date(`${String(input.valid_until)}T00:00:00.000Z`) : null,
+          validUntil: input.valid_until
+            ? new Date(`${String(input.valid_until)}T00:00:00.000Z`)
+            : null,
           currency: String(input.currency ?? "IDR"),
           notes: nullable(input.notes),
           createdById: actorId,
@@ -387,13 +471,16 @@ export class CrmService {
           lines: {
             create: lines.map((line) => {
               const quantity = new Prisma.Decimal(String(line.quantity));
-              const unitPrice = line.unit_price == null ? null : new Prisma.Decimal(String(line.unit_price));
-              const discount = line.discount == null ? null : new Prisma.Decimal(String(line.discount));
+              const unitPrice =
+                line.unit_price == null ? null : new Prisma.Decimal(String(line.unit_price));
+              const discount =
+                line.discount == null ? null : new Prisma.Decimal(String(line.discount));
               if (quantity.lte(0) || (unitPrice && unitPrice.lt(0)) || (discount && discount.lt(0)))
                 throw new ConflictException("Jumlah, harga, dan diskon tidak boleh negatif.");
               const gross = unitPrice ? quantity.mul(unitPrice) : null;
               const netAmount = gross && discount ? gross.sub(discount) : gross;
-              if (netAmount && netAmount.lt(0)) throw new ConflictException("Diskon melebihi nilai bruto.");
+              if (netAmount && netAmount.lt(0))
+                throw new ConflictException("Diskon melebihi nilai bruto.");
               return {
                 companyId,
                 sourceNeedId: nullableUuid(line.source_need_id),
@@ -449,19 +536,37 @@ export class CrmService {
     };
     const [customer, contact, prospect, opportunity] = await Promise.all([
       ids.customer ? prisma.customer.findFirst({ where: { id: ids.customer, companyId } }) : null,
-      ids.contact ? prisma.contact.findFirst({ where: { id: ids.contact, companyId, state: "ACTIVE" } }) : null,
+      ids.contact
+        ? prisma.contact.findFirst({ where: { id: ids.contact, companyId, state: "ACTIVE" } })
+        : null,
       ids.prospect ? prisma.prospect.findFirst({ where: { id: ids.prospect, companyId } }) : null,
-      ids.opportunity ? prisma.opportunity.findFirst({ where: { id: ids.opportunity, companyId } }) : null,
+      ids.opportunity
+        ? prisma.opportunity.findFirst({ where: { id: ids.opportunity, companyId } })
+        : null,
     ]);
-    if ((ids.customer && !customer) || (ids.contact && !contact) || (ids.prospect && !prospect) || (ids.opportunity && !opportunity))
+    if (
+      (ids.customer && !customer) ||
+      (ids.contact && !contact) ||
+      (ids.prospect && !prospect) ||
+      (ids.opportunity && !opportunity)
+    )
       throw new NotFoundException("Sumber aktivitas tidak ditemukan dalam perusahaan aktif.");
-    const customerIds = [customer?.id, contact?.customerId, prospect?.customerId, opportunity?.customerId].filter(Boolean);
+    const customerIds = [
+      customer?.id,
+      contact?.customerId,
+      prospect?.customerId,
+      opportunity?.customerId,
+    ].filter(Boolean);
     if (new Set(customerIds).size > 1)
       throw new ConflictException("Semua tautan aktivitas harus berasal dari pelanggan yang sama.");
     return customerIds[0] ?? null;
   }
 
-  private async assertAttachmentResource(companyId: string, resourceType: string, resourceId: string) {
+  private async assertAttachmentResource(
+    companyId: string,
+    resourceType: string,
+    resourceId: string,
+  ) {
     const exists =
       resourceType === "customer"
         ? await prisma.customer.count({ where: { id: resourceId, companyId } })
@@ -474,7 +579,8 @@ export class CrmService {
               : resourceType === "activity"
                 ? await prisma.crmActivity.count({ where: { id: resourceId, companyId } })
                 : 0;
-    if (!exists) throw new NotFoundException("Sumber lampiran tidak ditemukan dalam perusahaan aktif.");
+    if (!exists)
+      throw new NotFoundException("Sumber lampiran tidak ditemukan dalam perusahaan aktif.");
   }
 
   async updateProspectStatus(
@@ -611,25 +717,58 @@ export class CrmService {
     }
   }
 
-  async createCustomerOrder(companyId: string, actorId: string, input: Record<string, unknown>, key: string) {
+  async createCustomerOrder(
+    companyId: string,
+    actorId: string,
+    input: Record<string, unknown>,
+    key: string,
+  ) {
     const request = requestIdentity(companyId, actorId, "customer-order", input, key);
     return prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${request.id}, 0))::text`;
-      const existing = await tx.customerOrder.findFirst({ where: { id: request.id, companyId }, include: { opportunity: true } });
-      if (existing) { await checkReplay(tx, request.id, request.hash); return existing; }
-      const opportunity = await tx.opportunity.findFirst({ where: { id: String(input.opportunity_id), companyId } });
-      if (!opportunity) throw new NotFoundException("Peluang tidak ditemukan dalam perusahaan aktif.");
+      const existing = await tx.customerOrder.findFirst({
+        where: { id: request.id, companyId },
+        include: { opportunity: true },
+      });
+      if (existing) {
+        await checkReplay(tx, request.id, request.hash);
+        return existing;
+      }
+      const opportunity = await tx.opportunity.findFirst({
+        where: { id: String(input.opportunity_id), companyId },
+      });
+      if (!opportunity)
+        throw new NotFoundException("Peluang tidak ditemukan dalam perusahaan aktif.");
       const evidence = (input.evidence_attachment_ids as string[] | undefined) ?? [];
       if (evidence.length) {
-        const count = await tx.attachment.count({ where: { companyId, id: { in: evidence }, scanState: "AVAILABLE" } });
-        if (count !== evidence.length) throw new ConflictException("Bukti PO/SP belum tersedia atau belum lolos pemeriksaan.");
+        const count = await tx.attachment.count({
+          where: { companyId, id: { in: evidence }, scanState: "AVAILABLE" },
+        });
+        if (count !== evidence.length)
+          throw new ConflictException("Bukti PO/SP belum tersedia atau belum lolos pemeriksaan.");
       }
-      const order = await tx.customerOrder.create({ data: {
-        id: request.id, companyId, customerId: opportunity.customerId, opportunityId: opportunity.id,
-        kind: String(input.kind) as never, referenceNo: String(input.reference_no).trim(),
-        evidenceAttachmentIds: evidence as Prisma.InputJsonValue, createdById: actorId,
-      }, include: { opportunity: true } });
-      await this.audit.recordWith(tx, { companyId, actorId, action: "crm.customer_order.created", resourceType: "customer_order", resourceId: order.id, after: { opportunityId: opportunity.id, kind: order.kind, referenceNo: order.referenceNo }, metadata: { request_hash: request.hash } });
+      const order = await tx.customerOrder.create({
+        data: {
+          id: request.id,
+          companyId,
+          customerId: opportunity.customerId,
+          opportunityId: opportunity.id,
+          kind: String(input.kind) as never,
+          referenceNo: String(input.reference_no).trim(),
+          evidenceAttachmentIds: evidence as Prisma.InputJsonValue,
+          createdById: actorId,
+        },
+        include: { opportunity: true },
+      });
+      await this.audit.recordWith(tx, {
+        companyId,
+        actorId,
+        action: "crm.customer_order.created",
+        resourceType: "customer_order",
+        resourceId: order.id,
+        after: { opportunityId: opportunity.id, kind: order.kind, referenceNo: order.referenceNo },
+        metadata: { request_hash: request.hash },
+      });
       return order;
     });
   }
@@ -639,45 +778,140 @@ export class CrmService {
       const order = await tx.customerOrder.findFirst({ where: { id, companyId } });
       if (!order) throw new NotFoundException("PO/SP pelanggan tidak ditemukan.");
       if (order.state === "VERIFIED") return order;
-      const updated = await tx.customerOrder.update({ where: { id }, data: { state: "VERIFIED", verifiedAt: new Date(), verifiedById: actorId } });
-      await this.audit.recordWith(tx, { companyId, actorId, action: "crm.customer_order.verified", resourceType: "customer_order", resourceId: id, before: { state: order.state }, after: { state: updated.state } });
+      const updated = await tx.customerOrder.update({
+        where: { id },
+        data: { state: "VERIFIED", verifiedAt: new Date(), verifiedById: actorId },
+      });
+      await this.audit.recordWith(tx, {
+        companyId,
+        actorId,
+        action: "crm.customer_order.verified",
+        resourceType: "customer_order",
+        resourceId: id,
+        before: { state: order.state },
+        after: { state: updated.state },
+      });
       return updated;
     });
   }
 
-  async winOpportunity(companyId: string, actorId: string, id: string, input: Record<string, unknown>) {
+  async winOpportunity(
+    companyId: string,
+    actorId: string,
+    id: string,
+    input: Record<string, unknown>,
+  ) {
     return prisma.$transaction(async (tx) => {
-      const opportunity = await tx.opportunity.findFirst({ where: { id, companyId }, include: { lines: true, outcome: true } });
-      if (!opportunity) throw new NotFoundException("Peluang tidak ditemukan dalam perusahaan aktif.");
-      if (opportunity.state !== "OPEN" && opportunity.state !== "DRAFT") throw new ConflictException("Peluang sudah ditutup.");
-      if (opportunity.version !== Number(input.version)) throw new PreconditionFailedException("Peluang berubah. Muat ulang sebelum menyimpan.");
-      const order = await tx.customerOrder.findFirst({ where: { id: String(input.customer_order_id), companyId, opportunityId: id, customerId: opportunity.customerId, state: "VERIFIED" } });
-      if (!order) throw new ConflictException("Win hanya dapat dicatat dengan PO/SP pelanggan yang sudah diverifikasi.");
+      const opportunity = await tx.opportunity.findFirst({
+        where: { id, companyId },
+        include: { lines: true, outcome: true },
+      });
+      if (!opportunity)
+        throw new NotFoundException("Peluang tidak ditemukan dalam perusahaan aktif.");
+      if (opportunity.state !== "OPEN" && opportunity.state !== "DRAFT")
+        throw new ConflictException("Peluang sudah ditutup.");
+      if (opportunity.version !== Number(input.version))
+        throw new PreconditionFailedException("Peluang berubah. Muat ulang sebelum menyimpan.");
+      const order = await tx.customerOrder.findFirst({
+        where: {
+          id: String(input.customer_order_id),
+          companyId,
+          opportunityId: id,
+          customerId: opportunity.customerId,
+          state: "VERIFIED",
+        },
+      });
+      if (!order)
+        throw new ConflictException(
+          "Win hanya dapat dicatat dengan PO/SP pelanggan yang sudah diverifikasi.",
+        );
       const rows = (input.lines as Array<Record<string, unknown>>) ?? [];
       const seen = new Set<string>();
       const data = rows.map((row) => {
-        const line = opportunity.lines.find((candidate) => candidate.id === row.opportunity_line_id);
+        const line = opportunity.lines.find(
+          (candidate) => candidate.id === row.opportunity_line_id,
+        );
         const quantity = new Prisma.Decimal(String(row.quantity));
-        if (!line || seen.has(String(row.opportunity_line_id)) || quantity.lessThanOrEqualTo(0) || (line.estimatedQty && quantity.greaterThan(line.estimatedQty))) throw new ConflictException("Jumlah Win melebihi kebutuhan peluang atau baris tidak valid.");
-        seen.add(line.id); return { companyId, lineId: line.id, quantity };
+        if (
+          !line ||
+          seen.has(String(row.opportunity_line_id)) ||
+          quantity.lessThanOrEqualTo(0) ||
+          (line.estimatedQty && quantity.greaterThan(line.estimatedQty))
+        )
+          throw new ConflictException(
+            "Jumlah Win melebihi kebutuhan peluang atau baris tidak valid.",
+          );
+        seen.add(line.id);
+        return { companyId, lineId: line.id, quantity };
       });
       if (!data.length) throw new ConflictException("Minimal satu baris harus dimenangkan.");
-      const outcome = await tx.opportunityOutcome.create({ data: { companyId, opportunityId: id, kind: "WON", customerOrderId: order.id, maintainStrategy: String(input.maintain_strategy).trim(), createdById: actorId, lines: { create: data } }, include: { lines: true, customerOrder: true } });
-      await tx.opportunity.update({ where: { id }, data: { state: "CLOSED_WON", version: { increment: 1 }, updatedById: actorId } });
-      await this.audit.recordWith(tx, { companyId, actorId, action: "crm.opportunity.won", resourceType: "opportunity", resourceId: id, after: { customerOrderId: order.id, lineCount: data.length } });
+      const outcome = await tx.opportunityOutcome.create({
+        data: {
+          companyId,
+          opportunityId: id,
+          kind: "WON",
+          customerOrderId: order.id,
+          maintainStrategy: String(input.maintain_strategy).trim(),
+          createdById: actorId,
+          lines: { create: data },
+        },
+        include: { lines: true, customerOrder: true },
+      });
+      await tx.opportunity.update({
+        where: { id },
+        data: { state: "CLOSED_WON", version: { increment: 1 }, updatedById: actorId },
+      });
+      await this.audit.recordWith(tx, {
+        companyId,
+        actorId,
+        action: "crm.opportunity.won",
+        resourceType: "opportunity",
+        resourceId: id,
+        after: { customerOrderId: order.id, lineCount: data.length },
+      });
       return outcome;
     });
   }
 
-  async loseOpportunity(companyId: string, actorId: string, id: string, input: Record<string, unknown>) {
+  async loseOpportunity(
+    companyId: string,
+    actorId: string,
+    id: string,
+    input: Record<string, unknown>,
+  ) {
     return prisma.$transaction(async (tx) => {
-      const opportunity = await tx.opportunity.findFirst({ where: { id, companyId }, include: { outcome: true } });
-      if (!opportunity) throw new NotFoundException("Peluang tidak ditemukan dalam perusahaan aktif.");
-      if (opportunity.state !== "OPEN" && opportunity.state !== "DRAFT") throw new ConflictException("Peluang sudah ditutup.");
-      if (opportunity.version !== Number(input.version)) throw new PreconditionFailedException("Peluang berubah. Muat ulang sebelum menyimpan.");
-      const outcome = await tx.opportunityOutcome.create({ data: { companyId, opportunityId: id, kind: "LOST", reason: String(input.reason).trim(), maintainStrategy: input.maintain_strategy ? String(input.maintain_strategy).trim() : null, createdById: actorId } });
-      await tx.opportunity.update({ where: { id }, data: { state: "CLOSED_LOST", version: { increment: 1 }, updatedById: actorId } });
-      await this.audit.recordWith(tx, { companyId, actorId, action: "crm.opportunity.lost", resourceType: "opportunity", resourceId: id, after: { reason: outcome.reason } });
+      const opportunity = await tx.opportunity.findFirst({
+        where: { id, companyId },
+        include: { outcome: true },
+      });
+      if (!opportunity)
+        throw new NotFoundException("Peluang tidak ditemukan dalam perusahaan aktif.");
+      if (opportunity.state !== "OPEN" && opportunity.state !== "DRAFT")
+        throw new ConflictException("Peluang sudah ditutup.");
+      if (opportunity.version !== Number(input.version))
+        throw new PreconditionFailedException("Peluang berubah. Muat ulang sebelum menyimpan.");
+      const outcome = await tx.opportunityOutcome.create({
+        data: {
+          companyId,
+          opportunityId: id,
+          kind: "LOST",
+          reason: String(input.reason).trim(),
+          maintainStrategy: input.maintain_strategy ? String(input.maintain_strategy).trim() : null,
+          createdById: actorId,
+        },
+      });
+      await tx.opportunity.update({
+        where: { id },
+        data: { state: "CLOSED_LOST", version: { increment: 1 }, updatedById: actorId },
+      });
+      await this.audit.recordWith(tx, {
+        companyId,
+        actorId,
+        action: "crm.opportunity.lost",
+        resourceType: "opportunity",
+        resourceId: id,
+        after: { reason: outcome.reason },
+      });
       return outcome;
     });
   }

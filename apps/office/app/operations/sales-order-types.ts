@@ -3,11 +3,12 @@ import Decimal from "decimal.js";
 export type OrderLine = NonNullable<Row["lines"]>[number] & {
   productId: string;
   product: { name: string; code: string; baseUom?: { name: string } };
+  allocations?: { acceptedQuantity: string; inTransitQuantity: string; returnedQuantity: string }[];
   closedQuantity: string;
   remainder: string;
   subtotal: string;
   taxAmount: string | null;
-  taxSnapshot?: { name: string; rate: string } | null;
+  taxSnapshot?: { name: string; rate: string; operational_tax_id?: string } | null;
 };
 export type Order = Omit<Row, "lines" | "total" | "taxAmount"> & {
   lines: OrderLine[];

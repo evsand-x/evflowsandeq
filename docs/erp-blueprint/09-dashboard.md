@@ -1,5 +1,7 @@
 # Domain Dashboard
 
+Keputusan izin 16 Oktober 2026: tujuh tampilan Dashboard yang operasional masing-masing memiliki capability `dashboard_<view>.read` untuk peran biasa. Admin Sistem memiliki akses bawaan penuh. Izin tampilan hanya membuka layar/API terkait; setiap metrik, antrean, laporan dan ekspor tetap mengikuti izin serta scope sumber. Peran baru memperoleh capability katalog saat dibuat, sedangkan peran lama diatur Admin Sistem. Tidak ada grant otomatis untuk peran lama pada migrasi katalog.
+
 Dokumen ini adalah sumber domain kanonis untuk modul ini. Judul ‘Bagian asal’ mempertahankan keterlacakan isi sebelum konsolidasi; prioritas keputusan tetap mengikuti Peta Dokumen.
 
 

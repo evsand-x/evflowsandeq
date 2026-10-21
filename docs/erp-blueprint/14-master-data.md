@@ -289,3 +289,7 @@ Tabel berikut adalah **jejak relasi lintas domain**, bukan daftar tabel yang sem
 | price_lists / price_list_items | channel/customer scope, effective dates; product_id, uom_id, currency, price, minimum_margin, discount_limit |
 | product_purchase_price_versions | product_id, uom_id, currency, reference_unit_price, effective_from/to, created_by, reason; menyimpan Harga Beli acuan yang diisi pada form produk, terpisah dari valuasi/HPP |
 | warehouses / locations | company_id, code, name, address, timezone, responsible_user, active; warehouse_id, code, name, parent_location_id, type receiving/storage/quarantine/transit/consignment/dispatch/return, storage_profile_id, pick_sequence, capacity nullable, active |
+
+## Capability submenu operasional — 16 Oktober 2026
+
+IAM-01/04: izin umum `master_data.*` diganti `master_product`, `master_customer`, `master_supplier`, `master_vendor`, `master_warehouse`, `master_locator`, `master_operational_item`, serta `master_product_category`, `master_uom`, `master_customer_channel`, `master_rayon` per tindakan yang sudah tersedia. Penamaan ini berlaku pada implementasi endpoint `/master-data` saat ini. Pengelolaan kontak tetap memakai `crm_contact`; Pelanggan CRM memakai `crm_customer` yang terpisah dari Master Pelanggan. Lookup referensi minimal pada formulir pelanggan tidak memberi akses halaman pengelolaan referensi. Tidak menambahkan hard delete atau mutasi saldo.

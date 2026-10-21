@@ -1,4 +1,5 @@
 import {
+  isAccessAdministrator,
   warehouseDashboardQuerySchema,
   type AuthPrincipal,
   type WarehouseDashboardData,
@@ -10,7 +11,7 @@ import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/com
 export class WarehouseDashboardService {
   async read(principal: AuthPrincipal, rawQuery: unknown): Promise<WarehouseDashboardData> {
     const grants = principal.permissions.filter((p) => p.code === "warehouse.read");
-    const companyWide = grants.some(
+    const companyWide = isAccessAdministrator(principal) || grants.some(
       (p) =>
         ["company", "privileged"].includes(p.scope_type) &&
         (!p.scope_id || p.scope_id === principal.company_id),

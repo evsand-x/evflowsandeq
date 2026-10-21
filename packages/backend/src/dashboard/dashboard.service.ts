@@ -1,4 +1,8 @@
-import type { AuthPrincipal, DashboardSummary } from "@evflow/contracts";
+import {
+  isAccessAdministrator,
+  type AuthPrincipal,
+  type DashboardSummary,
+} from "@evflow/contracts";
 import { prisma } from "@evflow/database";
 import { Injectable } from "@nestjs/common";
 
@@ -15,12 +19,14 @@ const definitionVersion = "crm-prospect-institutions-v1";
 export class DashboardService {
   async summary(principal: AuthPrincipal): Promise<DashboardSummary> {
     const now = new Date();
-    const canReadCrm = principal.permissions.some(
-      (permission) =>
-        permission.code === "crm.read" &&
-        ["company", "privileged"].includes(permission.scope_type) &&
-        (!permission.scope_id || permission.scope_id === principal.company_id),
-    );
+    const canReadCrm =
+      isAccessAdministrator(principal) ||
+      principal.permissions.some(
+        (permission) =>
+          permission.code === "crm_prospect.read" &&
+          ["company", "privileged"].includes(permission.scope_type) &&
+          (!permission.scope_id || permission.scope_id === principal.company_id),
+      );
     if (!canReadCrm)
       return { company_id: principal.company_id, as_of: now.toISOString(), sales: null };
 

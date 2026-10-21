@@ -4,6 +4,7 @@ import { Prisma } from "@evflow/database";
 import { transactionCommand } from "../common/transaction-command";
 import { AuditService } from "../common/audit.service";
 import type { ApprovalSnapshot, ApprovalStep } from "../procurement/approval-controls";
+import { isCompanyAdministrator } from "../identity/administrator";
 import { requireEvidence } from "./document-controls";
 import { z } from "zod";
 
@@ -201,7 +202,8 @@ export async function decideException(
     const { hash, order } = await orderBasis(tx, c, row.salesOrderId);
     if (hash !== row.materialHash) throw new ConflictException("APPROVAL_REVISION_CHANGED");
     const snapshot = row.policySnapshot as ApprovalSnapshot;
-    if (!snapshot.allow_self && row.requesterId === a)
+    const administrator = await isCompanyAdministrator(tx, c, a);
+    if (!administrator && !snapshot.allow_self && row.requesterId === a)
       throw new ForbiddenException("SELF_APPROVAL_FORBIDDEN");
     const actions = await tx.transactionApprovalAction.findMany({
       where: { companyId: c, sourceId: id },
@@ -217,7 +219,7 @@ export async function decideException(
     const step = snapshot.steps.findIndex((s, n) => !completed(s, n));
     if (
       step < 0 ||
-      !snapshot.steps[step]!.user_ids.includes(a) ||
+      (!administrator && !snapshot.steps[step]!.user_ids.includes(a)) ||
       !(await tx.companyMembership.findFirst({
         where: { companyId: c, userId: a, active: true, user: { active: true } },
       }))
@@ -239,7 +241,7 @@ export async function decideException(
     const state =
       i.decision !== "APPROVED"
         ? i.decision
-        : snapshot.steps.every((s, n) => completed(s, n, [...actions, vote]))
+        : administrator || snapshot.steps.every((s, n) => completed(s, n, [...actions, vote]))
           ? "APPROVED"
           : "SUBMITTED";
     const after = await tx.salesExceptionRequest.update({

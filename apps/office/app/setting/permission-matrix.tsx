@@ -1,542 +1,704 @@
 "use client";
-
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
+import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { apiRequest, ApiError } from "@/lib/api";
+import { SelectionField } from "@/components/web/selection-field";
+import { apiRequest } from "@/lib/api";
+import { type Permission, permissionPresentation, actionLabels } from "@/lib/iam";
 import {
-  actionLabels,
-  permissionPresentation,
-  type Permission,
-  type Role,
-  type User,
-} from "@/lib/iam";
+  matrixPermissionChecked,
+  missingMatrixActionLabel,
+  navigationMatrixRows,
+  matrixTree,
+  visibleMatrixTree,
+  toggleMatrixBranch,
+  matrixSubtreePermissions,
+  matrixSelectionState,
+  type MatrixTreeRow,
+} from "@/lib/access-matrix-navigation";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
-import "./permission-matrix.css";
-
-const crud = [
-  ["read", "Lihat"],
-  ["create", "Buat"],
-  ["update", "Ubah draf"],
-  ["delete", "Hapus draf"],
-] as const;
-const tabLabels = [
-  ["crud", "CRUD"],
-  ["special", "Tindakan khusus"],
-  ["scope", "Cakupan & data sensitif"],
-  ["members", "Anggota"],
-  ["history", "Riwayat"],
-] as const;
-const moduleOrder = [
-  "Dashboard",
-  "Sales & Marketing",
-  "Warehouse & Logistik",
-  "Finance",
-  "HRIS",
-  "Master Data",
-  "Setting",
-  "Lainnya",
-];
-const labelFor = (permission: Permission) => permissionPresentation(permission)[1]!;
-
+import { DataTable } from "../crm/crm-common";
+import {
+  Heading,
+  Panel,
+  Value,
+  Note,
+  Status,
+  History,
+  useAccessContext,
+  useRoles,
+  useDirtyGuard,
+  actions,
+  scopes,
+  date,
+  permissionLabel,
+} from "./access-ui";
+type MatrixRow = MatrixTreeRow;
 export function PermissionMatrix({ selectedRoleId }: { selectedRoleId?: string | undefined }) {
-  const router = useRouter();
-  const params = useSearchParams();
-  const { principal } = useSession();
-  const client = useQueryClient();
-  const roleId = selectedRoleId ?? params.get("role");
-  const [tab, setTab] = useState("crud");
-  const [expanded, setExpanded] = useState<string[]>([]);
-  const [draft, setDraft] = useState<Record<string, boolean>>({});
-  const [review, setReview] = useState(false);
-  const [discard, setDiscard] = useState(false);
-  const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState("");
-  const context = [principal?.company_id, principal?.user_id];
-  const roles = useQuery({
-    queryKey: ["setting", "roles", ...context],
-    queryFn: () => apiRequest<{ data: Role[] }>("/roles"),
-  });
+  const params = useSearchParams(),
+    id = selectedRoleId ?? params.get("role"),
+    roles = useRoles(),
+    router = useRouter(),
+    context = useAccessContext(),
+    cache = useQueryClient(),
+    { principal } = useSession();
+  const can = (p: string) => !!principal && hasCompanyPermission(principal, p),
+    editable = can("role.permission.update");
   const permissions = useQuery({
     queryKey: ["setting", "permissions", ...context],
     queryFn: () => apiRequest<{ data: Permission[] }>("/permissions"),
+    enabled: can("permission.read"),
   });
-  const canReadUsers = Boolean(principal && hasCompanyPermission(principal, "user.read"));
-  const users = useQuery({
-    queryKey: ["setting", "users", ...context],
-    queryFn: () => apiRequest<{ data: User[] }>("/users"),
-    enabled: tab === "members" && canReadUsers,
-  });
-  const role = roles.data?.data.find((item) => item.id === roleId);
-  const grants = role?.permissions ?? [];
-  const changed = Object.keys(draft).length;
-  useEffect(() => {
-    if (!changed) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    const confirmLogout = (event: Event) => {
-      event.preventDefault();
-      if (saving) return;
-      const proceed = (event as CustomEvent<{ proceed: () => void }>).detail.proceed;
-      setPendingLeave(() => proceed);
-      setDiscard(true);
-    };
-    const guardLink = (event: MouseEvent) => {
-      const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
-      if (
-        link &&
-        link.getAttribute("target") !== "_blank" &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.shiftKey &&
-        link.getAttribute("href") !== window.location.pathname
-      ) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        if (saving) return;
-        const href = link.getAttribute("href")!;
-        setPendingLeave(() => () => router.push(href));
-        setDiscard(true);
-      }
-    };
-    document.addEventListener("click", guardLink, true);
-    window.addEventListener("evflow:before-logout", confirmLogout);
-    return () => {
-      window.removeEventListener("beforeunload", warn);
-      document.removeEventListener("click", guardLink, true);
-      window.removeEventListener("evflow:before-logout", confirmLogout);
-    };
-  }, [changed, saving, router]);
+  const [tab, setTab] = useState("matrix"),
+    [expanded, setExpanded] = useState<Record<string, boolean>>({
+      "Sales & Marketing": true,
+      "Sales & Marketing › CRM": true,
+      "Master Data": true,
+    }),
+    [search, setSearch] = useState(""),
+    [show, setShow] = useState("all"),
+    [draft, setDraft] = useState<Record<string, boolean>>({}),
+    [review, setReview] = useState(false),
+    [saving, setSaving] = useState(false),
+    [deleting, setDeleting] = useState(false),
+    [deleteOpen, setDeleteOpen] = useState(false),
+    [error, setError] = useState("");
+  const role = roles.data?.data.find((r) => r.id === id),
+    adminRole = role?.code === "ADMIN_SYSTEM",
+    grants = role?.permissions ?? [],
+    changed = Object.keys(draft).length;
+  useDirtyGuard(changed > 0 && !saving);
   const original = (id: string) =>
-    grants.some(
-      (grant) => grant.permission_id === id && grant.scope_type === "company" && !grant.scope_id,
-    );
-  const checked = (permission: Permission) => draft[permission.id] ?? original(permission.id);
-  const change = (items: Permission[], value: boolean) =>
-    setDraft((current) => {
-      const next = { ...current };
-      for (const item of items) {
-        if (value === original(item.id)) delete next[item.id];
-        else next[item.id] = value;
+    grants.some((g) => g.permission_id === id && g.scope_type === "company" && !g.scope_id);
+  const checked = (p: Permission) => matrixPermissionChecked(adminRole, p.id, grants, draft);
+  const change = (p: Permission, value: boolean) =>
+    setDraft((old) => {
+      const next = { ...old };
+      if (value === original(p.id)) delete next[p.id];
+      else next[p.id] = value;
+      return next;
+    });
+  const selectAll = () => {
+    setDraft((old) => {
+      const next = { ...old };
+      for (const permission of permissions.data?.data ?? []) {
+        if (original(permission.id)) delete next[permission.id];
+        else next[permission.id] = true;
       }
       return next;
     });
-  const groups = useMemo(() => {
-    const modules = new Map<string, Map<string, Permission[]>>();
-    for (const permission of permissions.data?.data ?? []) {
-      const module = permissionPresentation(permission)[0]!;
-      const resources = modules.get(module) ?? new Map<string, Permission[]>();
-      resources.set(permission.resource, [
-        ...(resources.get(permission.resource) ?? []),
-        permission,
-      ]);
-      modules.set(module, resources);
-    }
-    return [...modules].sort(([a], [b]) => moduleOrder.indexOf(a) - moduleOrder.indexOf(b));
-  }, [permissions.data]);
-  const columns = crud;
-  const cell = (items: Permission[], action: string, label: string) => {
-    const applicable = items.filter((item) => item.action === action);
-    if (!applicable.length)
-      return (
-        <span className="matrix-inapplicable" aria-label={`${label}: tidak berlaku`}>
-          —
-        </span>
-      );
-    const count = applicable.filter(checked).length;
-    return (
-      <Checkbox
-        disabled={saving}
-        checked={count === applicable.length ? true : count ? "indeterminate" : false}
-        onCheckedChange={(value) => change(applicable, value === true)}
-        aria-label={label}
-      />
+  };
+  const groups = useMemo(
+    () => navigationMatrixRows(permissions.data?.data ?? []),
+    [permissions.data],
+  );
+  const filtered = groups.filter(
+    (row) =>
+      (!search ||
+        `${row.path} ${row.items.map(permissionLabel).join(" ")}`
+          .toLowerCase()
+          .includes(search.toLowerCase())) &&
+      (show === "all" ||
+        row.items.some((p) =>
+          show === "allowed" ? checked(p) : show === "changed" ? p.id in draft : !checked(p),
+        )),
+  );
+  const tree = useMemo(() => matrixTree(groups), [groups]);
+  const filtering = !!search || show !== "all";
+  const matchedPaths = new Set(filtered.map((row) => row.path));
+  const rows = visibleMatrixTree(
+    tree,
+    expanded,
+    filtering ? (row) => matchedPaths.has(row.path) : undefined,
+  );
+  const toggleBranch = (row: MatrixRow) => {
+    const allRows = visibleMatrixTree(tree, {}, () => true);
+    setExpanded((old) =>
+      toggleMatrixBranch(
+        Object.fromEntries(
+          allRows
+            .filter((item) => item.children.length)
+            .map((item) => [item.path, old[item.path] ?? filtering]),
+        ),
+        row.path,
+        old[row.path] ?? filtering,
+      ),
     );
   };
-  const save = async () => {
-    if (!role || saving) return;
+  const control = (p: Permission, label: string) => (
+    <span
+      key={p.id}
+      className={`access-check ${p.id in draft ? "is-changed" : ""} ${adminRole ? "is-inherited" : ""}`}
+    >
+      <Checkbox
+        disabled={saving || !editable || adminRole}
+        checked={checked(p)}
+        aria-label={`${label} (${p.code})${adminRole ? ", hak otomatis Admin Sistem" : ""}`}
+        onCheckedChange={(v) => change(p, v === true)}
+      />
+    </span>
+  );
+  const bulkControl = (items: Permission[], label: string) =>
+    items.length ? (
+      <span className="access-check access-group-check">
+        <Checkbox
+          disabled={saving || !editable || adminRole}
+          checked={matrixSelectionState(items, checked)}
+          aria-label={label}
+          onCheckedChange={(value) =>
+            setDraft((old) => {
+              const next = { ...old };
+              for (const p of items) {
+                if ((value === true) === original(p.id)) delete next[p.id];
+                else next[p.id] = value === true;
+              }
+              return next;
+            })
+          }
+        />
+      </span>
+    ) : null;
+  const columns: ColumnDef<MatrixRow>[] = [
+    {
+      accessorKey: "path",
+      header: "Hak akses",
+      cell: ({ row }) => (
+        <div
+          className={`access-tree-label ${row.original.children.length ? "is-branch" : ""}`}
+          style={{ paddingLeft: row.original.depth * 18 }}
+        >
+          {row.original.children.length ? (
+            <button
+              type="button"
+              className="access-tree-toggle"
+              aria-expanded={expanded[row.original.path] ?? filtering}
+              aria-label={`${(expanded[row.original.path] ?? filtering) ? "Tutup" : "Buka"} ${row.original.path}`}
+              onClick={() => toggleBranch(row.original)}
+            >
+              <ChevronRight aria-hidden="true" size={15} />
+              <span>{row.original.label}</span>
+            </button>
+          ) : (
+            <span className="access-tree-leaf">{row.original.label}</span>
+          )}
+          {!row.original.items.length && !row.original.children.length && (
+            <span className="access-unavailable">Izin belum tersedia</span>
+          )}
+          {row.original.children.length > 0 && (
+            <span className="access-group-summary">
+              {matrixSubtreePermissions(row.original).filter(checked).length}/
+              {matrixSubtreePermissions(row.original).length} izin dipilih
+            </span>
+          )}
+          {row.original.items[0] && permissionPresentation(row.original.items[0])[2] && (
+            <span className="access-sensitive">Data sensitif</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "select-row",
+      header: "Semua",
+      cell: ({ row }) =>
+        bulkControl(
+          matrixSubtreePermissions(row.original),
+          `Pilih semua izin ${row.original.path}`,
+        ),
+    },
+    ...actions.map(([action, label]) => ({
+      id: action,
+      header: label,
+      cell: ({ row }: { row: { original: MatrixRow } }) =>
+        !row.original.items.length && row.original.children.length ? (
+          bulkControl(
+            matrixSubtreePermissions(row.original).filter((p) => p.action === action),
+            `Pilih semua ${label}: ${row.original.path}`,
+          )
+        ) : row.original.items.filter((p) => p.action === action).length ? (
+          row.original.items
+            .filter((p) => p.action === action)
+            .map((p) => control(p, `${row.original.path}: ${label}`))
+        ) : (
+          <span className="access-cell-state">
+            {missingMatrixActionLabel(row.original, action)}
+          </span>
+        ),
+    })),
+    {
+      id: "special",
+      header: "Tindakan khusus",
+      cell: ({ row }) =>
+        !row.original.items.length && row.original.children.length ? null : (
+          <div className="access-special">
+            {row.original.items
+              .filter((p) => !actions.some(([a]) => a === p.action))
+              .map((p) => (
+                <label key={p.id}>
+                  {control(p, permissionLabel(p))}
+                  {actionLabels[p.action] ?? p.action.replaceAll("_", " ")}
+                </label>
+              ))}
+            {!row.original.items.some((p) => !actions.some(([a]) => a === p.action)) && (
+              <span className="access-cell-state">Belum tersedia</span>
+            )}
+          </div>
+        ),
+    },
+    {
+      id: "scope",
+      header: "Cakupan",
+      cell: ({ row }) =>
+        !row.original.items.length && row.original.children.length ? null : (
+          <span className="access-role-badge">
+            {!row.original.items.length
+              ? "Belum tersedia"
+              : adminRole
+                ? "Penuh otomatis"
+                : [
+                    ...new Set([
+                      "Perusahaan",
+                      ...grants
+                        .filter((g) => row.original.items.some((p) => p.id === g.permission_id))
+                        .map((g) => scopes[g.scope_type] ?? g.scope_type),
+                    ]),
+                  ].join(", ")}
+          </span>
+        ),
+    },
+  ];
+  const members = useQuery({
+    queryKey: ["setting", "roles", id, "members", ...context],
+    queryFn: () =>
+      apiRequest<{
+        data: {
+          user_id: string;
+          display_name: string;
+          email: string;
+          active: boolean;
+          assigned_at: string;
+        }[];
+      }>(`/roles/${id}/members`),
+    enabled: !!id && tab === "members" && can("user.read"),
+  });
+  async function save() {
+    if (!role || saving || !editable) return;
     setSaving(true);
-    setSaveError("");
-    const known = new Set((permissions.data?.data ?? []).map((item) => item.id));
+    setError("");
+    const known = new Set(permissions.data?.data.map((p) => p.id));
     const retained = grants
-      .filter(
-        (grant) =>
-          !known.has(grant.permission_id) || grant.scope_type !== "company" || grant.scope_id,
-      )
+      .filter((g) => !known.has(g.permission_id) || g.scope_type !== "company" || g.scope_id)
       .map(({ permission_id, scope_type, scope_id }) => ({ permission_id, scope_type, scope_id }));
-    const company = (permissions.data?.data ?? [])
-      .filter(checked)
-      .map((p) => ({ permission_id: p.id, scope_type: "company", scope_id: null }));
     try {
       await apiRequest(`/roles/${role.id}/permissions`, {
         method: "PATCH",
-        body: JSON.stringify({ permissions: [...retained, ...company] }),
+        body: JSON.stringify({
+          expected_permissions: grants.map(({ permission_id, scope_type, scope_id }) => ({
+            permission_id,
+            scope_type,
+            scope_id,
+          })),
+          permissions: [
+            ...retained,
+            ...(permissions.data?.data ?? [])
+              .filter(checked)
+              .map((p) => ({ permission_id: p.id, scope_type: "company", scope_id: null })),
+          ],
+        }),
       });
       setDraft({});
       setReview(false);
-      await client.invalidateQueries({ queryKey: ["setting"] });
+      await cache.invalidateQueries({ queryKey: ["setting"] });
       toast.success("Hak akses tersimpan");
-    } catch (cause) {
-      setSaveError(cause instanceof ApiError ? cause.message : "Hak akses belum tersimpan.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Perubahan belum tersimpan.");
     } finally {
       setSaving(false);
     }
-  };
-  if (roles.isPending || permissions.isPending)
-    return <p role="status">Memuat matriks hak akses…</p>;
-  if (roles.isError || permissions.isError)
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>
-          Matriks hak akses belum dapat dimuat.{" "}
-          <Button
-            variant="outline"
-            onClick={() => {
-              void roles.refetch();
-              void permissions.refetch();
-            }}
-          >
-            Coba lagi
-          </Button>
-        </AlertDescription>
-      </Alert>
-    );
+  }
+  async function deleteRole() {
+    if (!role || deleting || role.code === "ADMIN_SYSTEM" || !can("role.delete")) return;
+    setDeleting(true);
+    setError("");
+    try {
+      await apiRequest(`/roles/${role.id}`, { method: "DELETE" });
+      await cache.invalidateQueries({ queryKey: ["setting"] });
+      toast.success("Peran dihapus");
+      router.push("/setting/roles");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Peran belum dapat dihapus.");
+      setDeleting(false);
+    }
+  }
+  if (roles.isPending) return <p role="status">Memuat peran…</p>;
+  if (roles.isError) return <p role="alert">{roles.error.message}</p>;
   if (!role)
     return (
-      <Alert>
-        <AlertDescription>
-          Pilih peran dari daftar Peran untuk mengatur matriks hak akses.{" "}
-          <Button variant="outline" onClick={() => router.push("/setting/roles")}>
-            Ke daftar Peran
-          </Button>
-        </AlertDescription>
-      </Alert>
+      <p>
+        Pilih peran dari{" "}
+        <Link href="/setting/roles" className="access-link">
+          daftar Peran
+        </Link>
+        .
+      </p>
     );
-  const leave = () => {
-    setPendingLeave(null);
-    if (changed) setDiscard(true);
-    else router.push("/setting/roles");
-  };
+  const catalog = permissions.data?.data ?? [];
   return (
-    <div className="permission-matrix">
-      <nav aria-label="Breadcrumb" className="matrix-breadcrumb">
-        Setting <span>/</span> <button onClick={leave}>Peran</button>
-      </nav>
-      <h1>Peran — Matriks Hak Akses</h1>
-      <section className="matrix-panel" aria-labelledby="role-detail-title">
-        <h2 id="role-detail-title">Detail peran</h2>
-        <dl className="matrix-role-details">
-          {[
-            ["Nama peran", role.name],
-            ["Status", role.active ? "Aktif" : "Nonaktif"],
-            ["Anggota", `${role.member_count} pengguna`],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-      <Tabs value={tab} onValueChange={setTab} className="matrix-tabs">
+    <div className="access-workspace access-role-detail">
+      <Heading
+        title={role.name}
+        section="roles"
+        trail={`${role.name} / ${tab === "matrix" ? "Hak Akses" : tab === "scope" ? "Cakupan & Data Sensitif" : tab === "members" ? "Anggota" : "Riwayat"}`}
+        back="/setting/roles"
+      >
+        {can("role.update") && (
+          <Button variant="outline" asChild>
+            <Link href={`/setting/roles/${role.id}/edit`}>Ubah peran</Link>
+          </Button>
+        )}
+        {role.code !== "ADMIN_SYSTEM" && can("role.delete") && (
+          <Button variant="outline" onClick={() => setDeleteOpen(true)}>
+            Hapus peran
+          </Button>
+        )}
+      </Heading>
+      <Panel title="Detail peran">
+        <div className="access-overview">
+          <Value label="Nama peran">{role.name}</Value>
+          <Value label="Status">
+            <Status active={role.active} />
+          </Value>
+          <Value label="Anggota">{role.member_count} pengguna</Value>
+          <Value label="Hak akses">
+            {adminRole
+              ? "Penuh dalam perusahaan aktif"
+              : `${new Set(grants.map((g) => g.code)).size} izin`}
+          </Value>
+        </div>
+      </Panel>
+      {adminRole && (
+        <Note>
+          Semua tindakan yang tersedia di katalog tercentang otomatis untuk Admin Sistem. Hak ini
+          tidak bergantung pada grant tersimpan dan tidak dapat diubah melalui matriks.
+        </Note>
+      )}
+      {!adminRole && grants.length === 0 && (
+        <Note>
+          Peran ini belum memiliki izin tersimpan. Untuk memberi akses penuh sesuai katalog saat
+          ini, pilih <strong>Pilih semua izin</strong>, tinjau dampaknya, lalu simpan. Perubahan
+          hanya berlaku untuk peran ini.
+        </Note>
+      )}
+      <Tabs className="access-tabs" value={tab} onValueChange={setTab}>
         <TabsList aria-label="Pengaturan peran">
-          {tabLabels.map(([value, label]) => (
-            <TabsTrigger key={value} value={value}>
-              {label}
+          {[
+            ["matrix", "Matriks Hak Akses"],
+            ["scope", "Cakupan & Data Sensitif"],
+            ["members", "Anggota"],
+            ["history", "Riwayat"],
+          ].map(([v, l]) => (
+            <TabsTrigger value={v!} key={v}>
+              {l}
             </TabsTrigger>
           ))}
         </TabsList>
-        {(tab === "crud" || tab === "special") && (
-          <p className="matrix-legend">
-            ✓ Diizinkan <span>□ Tidak diizinkan</span> <span>— Tidak berlaku</span>
-          </p>
-        )}
-        {["crud"].map((value) => (
-          <TabsContent key={value} value={value} className="matrix-panel">
-            <h2>{value === "crud" ? "Matriks CRUD" : "Tindakan khusus"}</h2>
-            <Table
-              className="matrix-grid"
-              style={{
-                minWidth: value === "crud" ? 720 : Math.max(720, columns.length * 140 + 260),
-              }}
-            >
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Hak Akses</TableHead>
-                  {columns.map(([action, label]) => (
-                    <TableHead key={action}>{label}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {groups.map(([module, resources]) => {
-                  const items = [...resources.values()]
-                    .flat()
-                    .filter((item) => columns.some(([action]) => action === item.action));
-                  if (!items.length) return null;
-                  const open = expanded.includes(`${value}:${module}`);
-                  return (
-                    <Fragment key={module}>
-                      <TableRow>
-                        <TableCell>
-                          <button
-                            className="matrix-group-toggle"
-                            aria-expanded={open}
-                            onClick={() =>
-                              setExpanded((current) =>
-                                open
-                                  ? current.filter((key) => key !== `${value}:${module}`)
-                                  : [...current, `${value}:${module}`],
-                              )
-                            }
-                          >
-                            {open ? <ChevronDown /> : <ChevronRight />}
-                            {module}
-                          </button>
-                        </TableCell>
-                        {columns.map(([action, label]) => (
-                          <TableCell key={action}>
-                            {cell(items, action, `${module}: ${label}`)}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                      {open &&
-                        [...resources]
-                          .filter(([, list]) =>
-                            list.some((p) => columns.some(([action]) => action === p.action)),
-                          )
-                          .map(([resource, list]) => (
-                            <TableRow key={resource} className="matrix-resource-row">
-                              <TableCell title={resource}>{labelFor(list[0]!)}</TableCell>
-                              {columns.map(([action, label]) => (
-                                <TableCell key={action}>
-                                  {cell(list, action, `${labelFor(list[0]!)}: ${label}`)}
-                                </TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                    </Fragment>
-                  );
-                })}
-                {!groups.length && (
-                  <TableRow>
-                    <TableCell colSpan={columns.length + 1}>
-                      Belum ada hak akses dalam katalog.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TabsContent>
-        ))}
-        <TabsContent value="special" className="matrix-panel">
-          <h2>Tindakan khusus</h2>
-          {groups.map(([module, resources]) => {
-            const specialResources = [...resources]
-              .map(
-                ([resource, items]) =>
-                  [
-                    resource,
-                    items.filter((p) => !crud.some(([action]) => action === p.action)),
-                  ] as const,
-              )
-              .filter(([, items]) => items.length);
-            if (!specialResources.length) return null;
-            return (
-              <section key={module} className="matrix-special-module">
-                <h3>{module}</h3>
-                {specialResources.map(([resource, items]) => (
-                  <div key={resource} className="matrix-special-resource">
-                    <strong>{labelFor(items[0]!)}</strong>
-                    <div>
-                      {items.map((p) => (
-                        <label key={p.id}>
-                          <Checkbox
-                            disabled={saving}
-                            checked={checked(p)}
-                            onCheckedChange={(value) => change([p], value === true)}
-                          />
-                          <span>{actionLabels[p.action] ?? p.action.replaceAll("_", " ")}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </section>
-            );
-          })}
-        </TabsContent>
-        <TabsContent value="scope" className="matrix-panel">
-          <h2>Cakupan & data sensitif</h2>
-          <p>
-            Checkbox CRUD dan tindakan khusus mengatur cakupan perusahaan. Cakupan khusus yang
-            tersimpan tetap dipertahankan; pengeditannya belum tersedia di layar ini. Akses data
-            sensitif tetap mengikuti izin dan cakupan yang diperiksa server.
-          </p>
-          <ul className="matrix-grants">
-            {grants.map((grant, index) => (
-              <li key={`${grant.permission_id}:${index}`}>
-                <strong>{grant.code}</strong>
-                <span>
-                  {grant.scope_type}
-                  {grant.scope_id ? ` · ${grant.scope_id}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {!grants.length && <p>Peran ini belum memiliki hak akses tersimpan.</p>}
-        </TabsContent>
-        <TabsContent value="members" className="matrix-panel">
-          <h2>Anggota peran</h2>
-          {!canReadUsers ? (
-            <p>Anda tidak memiliki izin melihat pengguna.</p>
-          ) : users.isPending ? (
-            <p role="status">Memuat anggota…</p>
-          ) : users.isError ? (
-            <p role="alert">
-              Anggota belum dapat dimuat.{" "}
-              <Button variant="outline" onClick={() => void users.refetch()}>
-                Coba lagi
-              </Button>
+        <TabsContent value="matrix">
+          <Note>
+            Setiap tampilan Dashboard yang operasional memiliki izin Lihat tersendiri. Data di
+            dalamnya tetap mengikuti izin dan cakupan fitur sumber. Menu yang belum operasional
+            tetap tampil. “Belum tersedia” berarti izin tindakan belum tersedia atau belum
+            dipetakan; “Tidak berlaku” berarti tindakan tidak relevan untuk fitur tersebut. Setiap
+            submenu memiliki izin sendiri. Checkbox pada kelompok memilih izin anak satu per satu;
+            tanda sebagian berarti hanya beberapa izin anak dipilih.
+          </Note>
+          {!can("permission.read") ? (
+            <p className="access-caption">Anda tidak memiliki izin membaca katalog hak akses.</p>
+          ) : permissions.isError ? (
+            <p role="alert" className="access-error">
+              {permissions.error.message}
             </p>
           ) : (
-            <ul className="matrix-grants">
-              {users.data?.data
-                .filter((user) => user.roles.some((r) => r.id === role.id))
-                .map((user) => (
-                  <li key={user.user_id}>
-                    <strong>{user.display_name}</strong>
-                    <span>
-                      {user.email} · {user.active ? "Aktif" : "Nonaktif"}
+            <div className="access-matrix-table">
+              <DataTable
+                label="matriks hak akses"
+                data={rows}
+                columns={columns}
+                total={filtered.length}
+                footerLabel={`${rows.length} baris ditampilkan · ${filtered.length} menu${filtering ? " sesuai filter" : ""}`}
+                busy={permissions.isPending}
+                showColumns={false}
+                toolbar={
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        setExpanded(
+                          Object.fromEntries(
+                            visibleMatrixTree(tree, {}, () => true)
+                              .filter((row) => row.children.length)
+                              .map((row) => [row.path, true]),
+                          ),
+                        )
+                      }
+                    >
+                      Buka semua menu
+                    </Button>
+                    <Button variant="outline" onClick={() => setExpanded({})}>
+                      Tutup semua menu
+                    </Button>
+                    {!adminRole && editable && (
+                      <Button
+                        variant="outline"
+                        disabled={
+                          saving ||
+                          permissions.isPending ||
+                          !(permissions.data?.data ?? []).some((p) => !checked(p))
+                        }
+                        onClick={selectAll}
+                      >
+                        Pilih semua izin
+                      </Button>
+                    )}
+                    <Input
+                      aria-label="Cari hak akses"
+                      placeholder="Cari hak akses…"
+                      value={search}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        setExpanded({});
+                      }}
+                    />
+                    <SelectionField
+                      label="Tampilkan"
+                      value={[show]}
+                      options={[
+                        { id: "all", name: "Semua" },
+                        { id: "allowed", name: "Diizinkan" },
+                        { id: "denied", name: "Tidak diizinkan" },
+                        { id: "changed", name: "Berubah" },
+                      ]}
+                      onChange={(v) => {
+                        setShow(v[0] ?? "all");
+                        setExpanded({});
+                      }}
+                    />
+                    <span className="access-legend">
+                      ☑ Diizinkan · □ Tidak diizinkan · Belum tersedia: izin belum dapat diatur ·
+                      Tidak berlaku: tindakan tidak relevan
                     </span>
-                  </li>
-                ))}
-              {!users.data?.data.some((user) => user.roles.some((r) => r.id === role.id)) && (
-                <li>Belum ada anggota pada peran ini.</li>
-              )}
-            </ul>
+                  </>
+                }
+              />
+            </div>
           )}
         </TabsContent>
-        <TabsContent value="history" className="matrix-panel">
-          <h2>Riwayat perubahan</h2>
-          <p>
-            Perubahan hak akses dicatat oleh backend. Tampilan riwayat peran belum terhubung karena
-            endpoint pembacaan riwayat IAM belum tersedia.
-          </p>
+        <TabsContent value="scope">
+          <DataTable
+            showColumns={false}
+            data={grants}
+            total={grants.length}
+            columns={[
+              {
+                accessorKey: "code",
+                header: "Hak akses",
+                cell: ({ row }) => {
+                  const p = catalog.find((p) => p.id === row.original.permission_id);
+                  return p ? permissionLabel(p) : row.original.code;
+                },
+              },
+              {
+                id: "scope",
+                header: "Cakupan data",
+                cell: ({ row }) => (
+                  <fieldset disabled>
+                    <SelectionField
+                      label={`Cakupan ${row.original.code}`}
+                      value={[row.original.scope_type]}
+                      options={Object.entries(scopes).map(([id, name]) => ({ id, name }))}
+                      onChange={() => {}}
+                    />
+                  </fieldset>
+                ),
+              },
+              {
+                id: "description",
+                header: "Keterangan",
+                cell: ({ row }) =>
+                  row.original.scope_id
+                    ? `Cakupan tertentu · ${row.original.scope_id}`
+                    : row.original.scope_type === "company"
+                      ? "Perusahaan aktif"
+                      : "Mengikuti cakupan tersimpan",
+              },
+            ]}
+          />
+          <div className="access-tab-actions">
+            <h2>Data sensitif</h2>
+            <DataTable
+              showColumns={false}
+              data={[
+                "Harga modal / biaya modal",
+                "Gaji / payroll",
+                "Rekening",
+                "Dokumen pribadi",
+              ].map((name) => ({ name }))}
+              total={4}
+              columns={[
+                { accessorKey: "name", header: "Data" },
+                {
+                  id: "allowed",
+                  header: "Boleh dilihat",
+                  cell: () => "Izin khusus belum tersedia di katalog",
+                },
+              ]}
+            />
+            <Note>
+              Cakupan tersimpan tetap dipertahankan. Matriks mengubah izin cakupan perusahaan;
+              pengaturan cakupan khusus dan empat izin data sensitif terpisah belum tersedia.
+            </Note>
+          </div>
+        </TabsContent>
+        <TabsContent value="members">
+          {!can("user.read") ? (
+            <p className="access-caption">Anda tidak memiliki izin melihat pengguna.</p>
+          ) : members.isError ? (
+            <p role="alert">{members.error.message}</p>
+          ) : (
+            <DataTable
+              showColumns={false}
+              busy={members.isPending}
+              data={members.data?.data ?? []}
+              total={members.data?.data.length ?? 0}
+              columns={[
+                {
+                  accessorKey: "display_name",
+                  header: "Nama",
+                  cell: ({ row }) => (
+                    <Link href={`/setting/users/${row.original.user_id}`} className="access-link">
+                      {row.original.display_name}
+                    </Link>
+                  ),
+                },
+                { accessorKey: "email", header: "Email" },
+                {
+                  id: "active",
+                  header: "Status",
+                  cell: ({ row }) => <Status active={row.original.active} />,
+                },
+                {
+                  accessorKey: "assigned_at",
+                  header: "Ditetapkan sejak",
+                  cell: ({ row }) => date(row.original.assigned_at),
+                },
+              ]}
+            />
+          )}
+          <div className="access-tab-actions">
+            <Note>Penugasan peran dilakukan dari menu Pengguna. Daftar ini hanya baca.</Note>
+          </div>
+        </TabsContent>
+        <TabsContent value="history">
+          <History kind="roles" id={role.id} />
         </TabsContent>
       </Tabs>
-      <aside className="matrix-boundary">
-        <h2>Batas perubahan</h2>
-        <p>
-          Hapus draf hanya tersedia pada jenis yang mengizinkan. Dokumen terbit atau diposting tidak
-          dapat diubah atau dihapus langsung. Cakupan ditetapkan per tindakan.
-        </p>
-        <p>
-          Hanya Admin Sistem dapat mengubah matriks. Checkbox mengatur izin peran yang dipilih;
-          pengguna dapat memiliki beberapa peran.
-        </p>
-      </aside>
-      {saveError && !review && (
-        <Alert variant="destructive">
-          <AlertDescription>{saveError}</AlertDescription>
-        </Alert>
-      )}
-      <div className="matrix-actions">
-        {changed > 0 && <span role="status">{changed} perubahan belum disimpan</span>}
-        <Button variant="outline" disabled={saving} onClick={leave}>
-          Batal
-        </Button>
-        <Button disabled={!changed || saving} onClick={() => setReview(true)}>
-          Tinjau perubahan
-        </Button>
-      </div>
+      <footer className="access-sticky-actions">
+        <span role="status">
+          <strong>{changed} perubahan belum disimpan</strong> · sel yang berubah ditandai
+        </span>
+        <div className="access-actions">
+          <Button
+            variant="outline"
+            disabled={!changed || saving}
+            onClick={() => {
+              setDraft({});
+              setError("");
+            }}
+          >
+            Batalkan perubahan
+          </Button>
+          <Button disabled={!changed || saving || !editable} onClick={() => setReview(true)}>
+            Tinjau perubahan
+          </Button>
+        </div>
+      </footer>
       <Dialog
         open={review}
-        onOpenChange={(open) => {
-          if (!saving) setReview(open);
+        onOpenChange={(v) => {
+          if (!saving) setReview(v);
         }}
       >
-        <DialogContent className="matrix-review">
+        <DialogContent className="access-review">
           <DialogHeader>
             <DialogTitle>Tinjau perubahan</DialogTitle>
             <DialogDescription>
-              {role.name} · {changed} perubahan pada cakupan perusahaan. Perubahan berlaku untuk{" "}
+              {role.name} · {changed} perubahan pada cakupan perusahaan. Berlaku untuk{" "}
               {role.member_count} anggota peran; sesi terdampak akan dicabut.
             </DialogDescription>
           </DialogHeader>
-          <ul className="matrix-grants">
-            {(permissions.data?.data ?? [])
+          <div className="access-review-list">
+            {catalog
               .filter((p) => p.id in draft)
               .map((p) => (
-                <li key={p.id}>
-                  <strong>{p.code}</strong>
+                <div key={p.id}>
+                  <strong>{permissionLabel(p)}</strong>
                   <span>
                     {draft[p.id] ? "Tidak diizinkan → Diizinkan" : "Diizinkan → Tidak diizinkan"}
                   </span>
-                </li>
+                </div>
               ))}
-          </ul>
-          {saveError && (
-            <Alert variant="destructive">
-              <AlertDescription>{saveError}</AlertDescription>
-            </Alert>
+          </div>
+          <Note>Perubahan dicatat di Riwayat beserta pelakunya.</Note>
+          {error && (
+            <p role="alert" className="access-error">
+              {error}
+            </p>
           )}
           <DialogFooter>
             <Button variant="outline" disabled={saving} onClick={() => setReview(false)}>
               Kembali
             </Button>
             <Button disabled={saving || !changed} onClick={() => void save()}>
-              {saving ? "Menyimpan…" : "Simpan perubahan"}
+              {saving ? "Menyimpan…" : "Terapkan perubahan"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={discard} onOpenChange={setDiscard}>
+      <Dialog open={deleteOpen} onOpenChange={(open) => !deleting && setDeleteOpen(open)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Batalkan perubahan?</DialogTitle>
-            <DialogDescription>{changed} perubahan hak akses belum disimpan.</DialogDescription>
+            <DialogTitle>Hapus peran {role.name}?</DialogTitle>
+            <DialogDescription>
+              Peran akan dilepas dari {role.member_count} pengguna. Sesi mereka dicabut dan
+              perubahan dicatat.
+            </DialogDescription>
           </DialogHeader>
+          {error && (
+            <p role="alert" className="access-error">
+              {error}
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDiscard(false)}>
-              Lanjut mengedit
+            <Button variant="outline" disabled={deleting} onClick={() => setDeleteOpen(false)}>
+              Batal
             </Button>
-            <Button
-              onClick={() => {
-                setDraft({});
-                setDiscard(false);
-                if (pendingLeave) pendingLeave();
-                else router.push("/setting/roles");
-              }}
-            >
-              Buang perubahan
+            <Button disabled={deleting} onClick={() => void deleteRole()}>
+              {deleting ? "Menghapus…" : "Hapus peran"}
             </Button>
           </DialogFooter>
         </DialogContent>

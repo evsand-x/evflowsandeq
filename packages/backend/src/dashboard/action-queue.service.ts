@@ -77,7 +77,8 @@ export class ActionQueueService {
           ? "Riwayat penyelesaian tugas belum tersedia."
           : "Sumber persetujuan belum tersedia.",
     };
-    const canRead = hasDomainAccess(principal, "crm.read") && ["all", "sales"].includes(q.module);
+    const canRead =
+      hasDomainAccess(principal, "crm_prospect.read") && ["all", "sales"].includes(q.module);
     if (!canRead) {
       if (q.tab === "followups")
         result.reason = "Sumber tindak lanjut yang diizinkan belum tersedia.";

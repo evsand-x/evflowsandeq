@@ -1,4 +1,8 @@
 import {
+  RequireResourcePermission,
+  resourcePermissionCode,
+} from "../identity/resource-permissions";
+import {
   Body,
   Controller,
   Get,
@@ -24,7 +28,9 @@ import { previewProforma } from "./proforma";
 import { requestException, decideException, manageException } from "./exception-controls";
 import { OtcPtpService } from "../otc-ptp.service";
 import { processExceptionEvaluations } from "./exception-evaluation";
-import { shipmentSchema } from "@evflow/contracts";
+import { isAccessAdministrator, shipmentSchema } from "@evflow/contracts";
+import { outboundList, returnList, returnDetail, returnSources } from "./outbound-read";
+import { listHandoffs, saveHandoff } from "./commercial-handoff";
 
 const uuid = (v: string) => z.string().uuid().parse(v);
 const key = (v?: string) => {
@@ -33,40 +39,43 @@ const key = (v?: string) => {
   return v;
 };
 const readPermission: Record<string, string> = {
-  WAREHOUSE_CONTROL: "fulfillment.read",
+  PROFORMA_HANDOFF: "proforma.issue",
+  INVOICE_HANDOFF: "sales_invoice.read",
+  WAREHOUSE_CONTROL: "outbound_checking.read",
   SALES_ORDER: "sales_order.read",
   POD: "delivery_receipt.read",
   PAYMENT: "customer_receipt.read",
   TAX: "tax_component.read",
+  TAX_OUTPUT: "tax_output.read",
+  TAX_INPUT: "tax_input.read",
 };
 const writePermission: Record<string, string> = {
+  PROFORMA_HANDOFF: "proforma.issue",
+  INVOICE_HANDOFF: "sales_invoice.post",
   WAREHOUSE_CONTROL: "fulfillment.check",
   SALES_ORDER: "sales_order.create",
   POD: "delivery_receipt.confirm",
   PAYMENT: "customer_receipt.post",
   TAX: "tax_component.create",
+  TAX_OUTPUT: "tax_output.update",
+  TAX_INPUT: "tax_input.update",
 };
 function allowed(req: AuthenticatedRequest, permission: string) {
-  if (
-    !req.auth.permissions.some(
-      (p) =>
-        p.code === permission &&
-        ["company", "privileged"].includes(p.scope_type) &&
-        (!p.scope_id || p.scope_id === req.auth.company_id),
-    )
-  )
-    throw new ForbiddenException();
+  if (!hasPermission(req, permission)) throw new ForbiddenException();
 }
 function allowedAny(req: AuthenticatedRequest, permissions: string[]) {
   if (!permissions.some((permission) => hasPermission(req, permission)))
     throw new ForbiddenException();
 }
 function hasPermission(req: AuthenticatedRequest, permission: string) {
-  return req.auth.permissions.some(
-    (p) =>
-      p.code === permission &&
-      ["company", "privileged"].includes(p.scope_type) &&
-      (!p.scope_id || p.scope_id === req.auth.company_id),
+  return (
+    isAccessAdministrator(req.auth) ||
+    req.auth.permissions.some(
+      (p) =>
+        p.code === permission &&
+        ["company", "privileged"].includes(p.scope_type) &&
+        (!p.scope_id || p.scope_id === req.auth.company_id),
+    )
   );
 }
 @Controller("operations")
@@ -90,8 +99,13 @@ export class OperationsController {
   ) {
     return { data: await previewProforma(req.auth.company_id, uuid(id), body) };
   }
+  @Get("warehouse-backorders")
+  @RequirePermissions("warehouse_allocation.read")
+  async warehouseBackorders(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    return this.backorders(query, req);
+  }
   @Get("backorders")
-  @RequirePermissions("sales_order.read")
+  @RequirePermissions("sales_backorder.read")
   async backorders(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
     const q = z
       .object({
@@ -309,7 +323,18 @@ export class OperationsController {
   async upload(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
     const i = z
       .object({
-        purpose: z.enum(["SALES_ORDER", "POD", "PAYMENT", "TAX", "WAREHOUSE_CONTROL"]),
+        purpose: z.enum([
+          "CUSTOMER_MASTER",
+          "SALES_ORDER",
+          "POD",
+          "PAYMENT",
+          "TAX",
+          "TAX_OUTPUT",
+          "TAX_INPUT",
+          "WAREHOUSE_CONTROL",
+          "PROFORMA_HANDOFF",
+          "INVOICE_HANDOFF",
+        ]),
         name: z.string().min(1).max(200),
         base64: z
           .string()
@@ -319,7 +344,9 @@ export class OperationsController {
       })
       .strict()
       .parse(body);
-    allowed(req, writePermission[i.purpose]!);
+    if (i.purpose === "CUSTOMER_MASTER")
+      allowedAny(req, ["master_customer.create", "master_customer.update"]);
+    else allowed(req, writePermission[i.purpose]!);
     return {
       data: await this.service.upload(
         req.auth.company_id,
@@ -336,8 +363,43 @@ export class OperationsController {
       where: { companyId: req.auth.company_id, id: uuid(id) },
     });
     if (!metadata) throw new NotFoundException();
-    allowed(req, readPermission[metadata.purpose]!);
+    if (metadata.purpose === "CUSTOMER_MASTER") allowed(req, "master_customer.read");
+    else if (metadata.purpose === "PROFORMA_HANDOFF") allowed(req, "proforma.read");
+    else if (metadata.purpose === "TAX" && hasPermission(req, "tax_output.read") && await prisma.officialTaxDocument.findFirst({ where: { companyId: req.auth.company_id, evidenceId: metadata.id, sourceType: "SALES_INVOICE" } })) { /* Legacy output attachment remains scoped to its document. */ }
+    else allowed(req, readPermission[metadata.purpose]!);
     return { data: await this.service.evidence(req.auth.company_id, id) };
+  }
+  @Get("commercial-handoffs/:kind/:id")
+  async handoffs(
+    @Param("kind") kind: string,
+    @Param("id") id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const k = z.enum(["proforma", "invoice"]).parse(kind);
+    if (k === "invoice") allowed(req, "sales_invoice.read");
+    else allowed(req, "proforma.read");
+    return { data: await listHandoffs(req.auth.company_id, k, uuid(id)) };
+  }
+  @Post("commercial-handoffs/:kind/:id")
+  async handoff(
+    @Param("kind") kind: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") replay: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const k = z.enum(["proforma", "invoice"]).parse(kind);
+    allowed(req, k === "invoice" ? "sales_invoice.post" : "proforma.issue");
+    return {
+      data: await saveHandoff(
+        req.auth.company_id,
+        req.auth.user_id,
+        k,
+        uuid(id),
+        body,
+        key(replay),
+      ),
+    };
   }
   @Get("lookups")
   @RequirePermissions("sales_order.create")
@@ -346,12 +408,14 @@ export class OperationsController {
   }
   @Get("order-options")
   async orderOptions(@Req() req: AuthenticatedRequest) {
-    const canCreate = req.auth.permissions.some(
-      (p) =>
-        p.code === "sales_order.create" &&
-        ["company", "privileged"].includes(p.scope_type) &&
-        (!p.scope_id || p.scope_id === req.auth.company_id),
-    );
+    const canCreate =
+      isAccessAdministrator(req.auth) ||
+      req.auth.permissions.some(
+        (p) =>
+          p.code === "sales_order.create" &&
+          ["company", "privileged"].includes(p.scope_type) &&
+          (!p.scope_id || p.scope_id === req.auth.company_id),
+      );
     allowed(req, canCreate ? "sales_order.create" : "sales_order.update");
     return { data: await this.service.lookups(req.auth.company_id) };
   }
@@ -474,6 +538,51 @@ export class OperationsController {
       data: await this.service.approvalPolicy(req.auth.company_id, req.auth.user_id, i, key(k)),
     };
   }
+  @Get("outbound/:stage")
+  @RequireResourcePermission("outbound", "read", "params", "stage")
+  async outbound(
+    @Param("stage") stage: string,
+    @Query() query: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const s = z.enum(["picking", "checking", "shipping", "pod"]).parse(stage);
+    const q = z
+      .object({
+        page: z.coerce.number().int().min(1).max(10000).default(1),
+        search: z.string().max(100).default(""),
+        status: z.string().max(80).default(""),
+      })
+      .strict()
+      .parse(query);
+    return { data: await outboundList(req.auth.company_id, s, q.page, q.search, q.status) };
+  }
+  @Get("outbound/:stage/:id")
+  @RequireResourcePermission("outbound", "read", "params", "stage")
+  async outboundDetail(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: await this.service.batch(req.auth.company_id, uuid(id)) };
+  }
+  @Get("returns")
+  @RequirePermissions("customer_return.receive")
+  async returns(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const q = z
+      .object({
+        page: z.coerce.number().int().min(1).max(10000).default(1),
+        search: z.string().max(100).default(""),
+      })
+      .strict()
+      .parse(query);
+    return { data: await returnList(req.auth.company_id, q.page, q.search) };
+  }
+  @Get("return-sources")
+  @RequirePermissions("customer_return.receive")
+  async returnSources(@Req() req: AuthenticatedRequest) {
+    return { data: await returnSources(req.auth.company_id) };
+  }
+  @Get("returns/:id")
+  @RequirePermissions("customer_return.receive")
+  async returnDetail(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: await returnDetail(req.auth.company_id, uuid(id)) };
+  }
   @Get("lists/:kind")
   async list(
     @Param("kind") kind: string,
@@ -481,14 +590,17 @@ export class OperationsController {
     @Req() req: AuthenticatedRequest,
   ) {
     const type = z.enum(["orders", "warehouse", "pick-slips", "invoices", "proformas"]).parse(kind);
-    if (type === "proformas") allowedAny(req, ["sales_order.read", "proforma.issue"]);
+    if (type === "proformas") allowed(req, "proforma.read");
     else
       allowed(
         req,
         {
           orders: "sales_order.read",
-          warehouse: "fulfillment.read",
-          "pick-slips": "fulfillment.read",
+          warehouse: resourcePermissionCode(
+            { family: "outbound", action: "read", source: "query", key: "stage" },
+            (query as { stage?: string }).stage ?? "checking",
+          ),
+          "pick-slips": "outbound_picking.read",
           invoices: "sales_invoice.read",
         }[type],
       );
@@ -498,15 +610,45 @@ export class OperationsController {
         search: z.string().max(100).default(""),
         state: z.enum(["DRAFT", "OPEN", "CLOSED", "CANCELLED"]).optional(),
         stage: z.enum(["checking", "shipping", "pod"]).optional(),
+        view: z
+          .enum([
+            "ALL",
+            "ISSUED",
+            "REVISION_REQUIRED",
+            "SUPERSEDED",
+            "PENDING",
+            "UNPAID",
+            "PARTIAL",
+            "PAID",
+            "OVERDUE",
+            "HANDOFF",
+          ])
+          .optional(),
       })
       .strict()
       .parse(query);
-    return { data: await this.service.list(req.auth.company_id, type, q.page, q.search, q.state, q.stage) };
+    return {
+      data: await this.service.list(
+        req.auth.company_id,
+        type,
+        q.page,
+        q.search,
+        q.state,
+        q.stage,
+        q.view,
+      ),
+    };
   }
   @Get("proformas/:id")
   async proforma(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    allowedAny(req, ["sales_order.read", "proforma.issue"]);
-    return { data: await this.service.proforma(req.auth.company_id, uuid(id)) };
+    allowed(req, "proforma.read");
+    return {
+      data: await this.service.proforma(
+        req.auth.company_id,
+        uuid(id),
+        hasPermission(req, "customer_receipt.read"),
+      ),
+    };
   }
   @Get("orders/:id")
   @RequirePermissions("sales_order.read")
@@ -514,7 +656,7 @@ export class OperationsController {
     return { data: await this.service.order(req.auth.company_id, uuid(id)) };
   }
   @Get("warehouse/:id")
-  @RequirePermissions("fulfillment.read")
+  @RequirePermissions("outbound_checking.read")
   async batch(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return { data: await this.service.batch(req.auth.company_id, uuid(id)) };
   }
@@ -566,8 +708,12 @@ export class OperationsController {
       row.kind.startsWith("INVOICE")
         ? "sales_invoice.read"
         : row.kind.startsWith("PROFORMA")
-          ? "sales_order.read"
-          : "fulfillment.read",
+          ? "proforma.read"
+          : row.kind.startsWith("PICK")
+            ? "outbound_picking.read"
+            : row.kind.startsWith("PACK")
+              ? "outbound_checking.read"
+              : "outbound_shipping.read",
     );
     return { data: row };
   }

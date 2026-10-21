@@ -203,6 +203,7 @@ export async function postReversal(c: string, a: string, id: string, key: string
         where: { companyId: c, journalId: journal.id },
       });
       const reversal = await postLedger(tx, a, {
+        reversalOfJournalId: journal.id,
         businessDate: new Date(s.input.occurred_at),
         accountIds: journal.lines.map((l) => l.accountId),
         data: journal.lines.map((l) => {

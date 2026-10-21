@@ -48,11 +48,76 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
+.outbound-page-subtitle {
+  margin-top: 4px;
+  color: var(--ev-color-muted);
+  font-size: 13px;
+}
+.outbound-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.outbound-summary-card {
+  display: flex;
+  min-height: 76px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--ev-color-border);
+  border-radius: var(--ev-radius-card);
+  background: var(--ev-color-card);
+}
+.outbound-summary-card strong {
+  color: var(--ev-color-primary);
+  font-size: 24px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.outbound-summary-card span {
+  color: var(--ev-color-muted);
+  font-size: 12px;
+}
+.outbound-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.outbound-queue-label {
+  color: var(--ev-color-text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.outbound-toolbar input {
+  max-width: 360px;
+}
+.otc-workspace select {
+  min-height: 36px;
+  border: 1px solid var(--ev-color-border);
+  border-radius: var(--ev-radius-control);
+  background: var(--ev-color-card);
+  padding: 6px 10px;
+  color: var(--ev-color-text);
+  font-size: 13px;
+}
 @media (max-width: 720px) {
   .outbound-stage-nav {
     margin-inline: -4px;
     border-inline: 0;
     border-radius: 0;
+  }
+  .outbound-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .outbound-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .outbound-toolbar input {
+    max-width: none;
   }
 }
 .otc-form-grid {

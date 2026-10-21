@@ -1,5 +1,20 @@
 # Features — backlog dan tahap implementasi
 
+## Submenu Akun dan migrasi master — 16 Oktober 2026
+
+Tahap Akun (FIN-01/IAM-04/APP-03): daftar/buat/edit/detail, query/filter/pagination, akun Header/Detail, validasi hierarki, izin independen, audit dan impor master sekali tersedia. Saldo awal, UI impor/ekspor umum, hapus interaktif, reklasifikasi khusus, dimensi dan laporan saldo masih cakupan lanjutan; bukan klaim seluruh modul akuntansi selesai. Migrasi konfigurasi akun uji ke 156 akun impor menjaga jurnal lama.
+
+### Penyempurnaan master pajak — 16 Oktober 2026
+
+Penyempurnaan master mencakup filter penggunaan dan validasi backend, label kolom, kelompok akun, serta riwayat nilai konfigurasi. PPN Penjualan 11% dibuat sebagai data perusahaan berdasarkan permintaan pengguna, tidak menjadi seed/default universal.
+
+## Pembaruan pajak operasional — 16 Oktober 2026
+
+Cakupan aktif FIN-08 adalah master pajak operasional serta dua daftar faktur dari transaksi. Coretax, PPh Badan, bukti potong dan rekonsiliasi/masa pajak sebagai workspace terpisah ditunda sesuai keputusan terbaru. Backend pemilihan master terintegrasi SO dan supplier invoice; form SO menyediakan pilihan pajak. Penyediaan form supplier invoice tersendiri bukan bagian perubahan workspace ini. Lampiran resmi memakai evidence JPEG/PNG maksimal 2 MB yang tersedia; PDF belum didukung.
+
+
+Izin baca terpisah untuk tujuh tampilan Dashboard operasional berada dalam cakupan IAM-01/04 dan DSH-01; katalog, matriks, navigasi dan API harus selaras. Menu yang belum operasional tetap tampak tanpa grant semu. Pengosongan grant peran lama yang diminta pengguna telah diterapkan pada database development lokal, bukan melalui migration produksi.
+
 ## Perubahan 7 Oktober 2026 — proforma manual
 
 OTC-05/15: submit/evaluasi SO tidak lagi menerbitkan proforma. Preview dan penerbitan
@@ -137,7 +152,7 @@ Sumber domain: [Master Data](14-master-data.md). Butir di bawah adalah entitas/k
 | Produk: kategori, UOM/konversi, NIE dan bukti, profil mutu, Harga Beli Acuan dan Harga Jual Standar pada detail Produk | P1 dasar; P2 masa berlaku lengkap | MD-01/02; harga jual standar memakai mekanisme pricelist Sales |
 | Pelanggan: identitas, wilayah, PIC, legalitas, onboarding dan tautan read-only ke fasilitas kredit/piutang | P1 dasar; P2 kelengkapan/verifikasi | MD-04/05; TOP/limit di Finance, opening AR di Finance |
 | Supplier dan Vendor terpisah: identitas, PIC, legalitas, kontrak/tautan agreement dan status | P1 dasar; P2 verifikasi lengkap | MD-03; TOP per PO/kontrak Pengadaan, rekening dan AP di Finance |
-| Gudang/locator, Item Operasional dan Referensi Reusable | P1 dasar; P2 masa berlaku lengkap | MD-01–03, FIN-13; movement/stok di Warehouse |
+| Gudang/locator, Item Operasional dan referensi kategori/UOM/channel/rayon pada form terkait | P1 dasar; P2 masa berlaku lengkap | MD-01–04, FIN-13; movement/stok di Warehouse; tanpa submenu referensi tersendiri |
 
 ## 6. Setting
 
@@ -150,7 +165,7 @@ Sumber domain: [Setting](15-setting.md). Setting mengelola policy global/default
 | Tiga belas submenu Setting sesuai navigasi: Profil Perusahaan, Pengguna, Peran (dengan Matriks Hak Akses pada detail peran), Kebijakan Operasional, Kebijakan Pelanggan Baru, Kredit & Exposure global, Pengaturan Persetujuan, Template Cetak, Penomoran Dokumen, Daftar Referensi & Alasan, Periode & Closing, Impor/Ekspor & Arsip, Audit | P1 dasar; approval/template/import lengkap bertahap | IAM-01–10, CFG-01–07, MIG-01 |
 | Profil Perusahaan editable langsung dari UI; dokumen issued mempertahankan snapshot | P1 | APP-00, IAM-10 |
 | Kebijakan Operasional lintas modul dengan versi, validasi dan snapshot | P1 dasar; P2 seluruh katalog | CFG-01–07, dokumen 40 |
-| Pengguna multi-peran, Matriks Hak Akses dan pratinjau izin efektif | P1 | IAM-01/04 |
+| Pengguna multi-peran, Matriks Hak Akses, peran baru berizin penuh sesuai katalog saat dibuat, perluasan peran lama satu per satu, pratinjau izin efektif, hapus/arsip pengguna dan hapus peran dari daftar | P1 | IAM-01/04/11 |
 | Aturan persetujuan untuk unlock SO dan exception domain lain, limit serta delegasi | P1 aturan inti; P2 konfigurasi lengkap | OTC-08/09, IAM-02 |
 | Nomor dokumen, template, audit, periode, import staging dan deduplikasi | P1 inti; P2 editor/arsip lengkap | IAM-03, ADM-01, FIN-07, MIG-01 |
 
@@ -227,3 +242,12 @@ Rujukan implementasi dan batas verifikasi: [laporan remediasi backend O2C](../de
 ## Pengelolaan akses — keputusan 7 Oktober 2026
 
 IAM-01/04/11: pengguna dapat memiliki beberapa peran; izin efektif adalah gabungan izin peran aktif sesuai scope. Pengelolaan akun dan peran hanya untuk pemegang peran aktif Admin Sistem (`ADMIN_SYSTEM`) dalam perusahaan sesi, dengan permission aksi yang sesuai. Nama jabatan atau nama tampilan peran bukan bukti administrator. Pengguna → pilih akun → tetapkan beberapa peran; Peran → Atur Hak Akses → ubah checkbox matriks peran → simpan. Menu Pengguna/Peran/Matriks disembunyikan bagi nonadministrator; deep link dan seluruh endpoint `/users`, `/roles`, `/permissions` beserta mutasinya ditolak 403 walaupun permission IAM terlanjur diberikan. Pengaturan bisnis lain tetap mengikuti permission domain. Tidak ada bypass izin transaksi untuk Admin Sistem. Perubahan akses diaudit dan sesi terdampak dicabut. Tidak ada perubahan model database atau migration; implementasi dan batas validasi dicatat pada [catatan pengelolaan akses](../development/iam-admin-only-2026-10-07.md).
+# Keputusan cakupan IAM terbaru — 16 Oktober 2026
+
+P1 IAM mencakup peran fleksibel buat/ubah/hapus, penugasan beberapa peran, matriks fitur/tindakan tanpa kelompok domain, dan Admin Sistem dengan kewenangan penuh termasuk approval sendiri/tanpa penunjukan. Penghapusan peran mencabut sesi anggota dan diaudit. Ini menggantikan batas Admin Sistem pada catatan IAM 7 Oktober.
+
+## Migrasi capability submenu — 16 Oktober 2026
+
+IAM-01/04 mencakup pemisahan CRM, Master Data, referensi, tahapan barang keluar, Proforma dan dua menu Backorder melalui katalog, migrasi grant, enforcement API serta matriks Office. Tidak menambahkan endpoint hapus yang belum ada atau mengubah menu belum operasional menjadi fitur selesai. Gate meliputi isolasi API antar submenu, data kontak terkait, audit/scope migrasi, sesi administrator dan QA visual pada sesi nyata. Bukti dan batas validasi pada catatan hak akses fleksibel.
+
+CRM-01/05, APP-03 (16 Oktober 2026): daftar Peluang tersedia sebagai submenu CRM tersendiri, dengan pencarian dan pagination server serta crm_opportunity.read. Submenu Pelanggan CRM dihapus untuk menghindari duplikasi Master Data; URL lama dialihkan. Tidak mengklaim seluruh pipeline/stage telah dibangun.

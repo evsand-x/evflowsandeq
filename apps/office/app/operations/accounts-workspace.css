@@ -1,0 +1,37 @@
+.accounts-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 180px) minmax(140px, 160px) auto;
+  align-items: end;
+  gap: 12px;
+  width: 100%;
+}
+.accounts-filters > input {
+  min-width: 0;
+}
+.accounts-filters > div {
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .accounts-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .accounts-filters > input {
+    grid-column: 1 / -1;
+  }
+}
+.accounts-actions {
+  display: flex;
+  gap: 14px;
+}
+.accounts-actions a {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+.accounts-classification {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.accounts-classification:disabled {
+  opacity: 0.7;
+}

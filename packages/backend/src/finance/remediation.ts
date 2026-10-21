@@ -8,6 +8,7 @@ import { lockCustomer } from "../sales/transaction-controls";
 import { lineAmounts } from "../sales/pricing-controls";
 import { lockFinance, postLedger } from "./posting";
 import type { ApprovalSnapshot, ApprovalStep } from "../procurement/approval-controls";
+import { isCompanyAdministrator } from "../identity/administrator";
 type Tx = Prisma.TransactionClient;
 const audit = new AuditService(),
   d = (v: string | Prisma.Decimal) => new Prisma.Decimal(v);
@@ -336,7 +337,9 @@ export async function decideFinancialRequest(
       throw new ConflictException("REQUEST_ALREADY_DECIDED");
     const snapshot = row.snapshot as { policy: ApprovalSnapshot },
       p = snapshot.policy;
-    if (!p.allow_self && row.actorId === a) throw new ForbiddenException("SELF_APPROVAL_FORBIDDEN");
+    const administrator = await isCompanyAdministrator(tx, c, a);
+    if (!administrator && !p.allow_self && row.actorId === a)
+      throw new ForbiddenException("SELF_APPROVAL_FORBIDDEN");
     const actions = await tx.transactionApprovalAction.findMany({
       where: { companyId: c, sourceId: id },
     });
@@ -351,7 +354,7 @@ export async function decideFinancialRequest(
     const step = p.steps.findIndex((s, n) => !done(s, n));
     if (
       step < 0 ||
-      !p.steps[step]!.user_ids.includes(a) ||
+      (!administrator && !p.steps[step]!.user_ids.includes(a)) ||
       !(await tx.companyMembership.findFirst({
         where: { companyId: c, userId: a, active: true, user: { active: true } },
       }))
@@ -371,7 +374,9 @@ export async function decideFinancialRequest(
       },
     });
     const terminal =
-      i.decision === "REJECTED" || p.steps.every((s, n) => done(s, n, [...actions, vote]));
+      administrator ||
+      i.decision === "REJECTED" ||
+      p.steps.every((s, n) => done(s, n, [...actions, vote]));
     if (terminal)
       await tx.o2cControlEvent.create({
         data: {
@@ -493,7 +498,20 @@ export async function postFinancialRequest(
     } else if (expectedKind === "TAX_CORRECTION") {
       const note = await tx.creditNote.findFirstOrThrow({
         where: { companyId: c, id: s.input.credit_note_id },
-        include: { salesInvoice: true },
+        include: {
+          salesInvoice: true,
+          customerReturn: {
+            include: {
+              lines: {
+                include: {
+                  deliveryReceiptLine: {
+                    include: { allocation: { include: { salesOrderLine: true } } },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
       const value = d(s.amount);
       if (note.taxAmount.gt(0)) throw new ConflictException("RETURN_TAX_ALREADY_CORRECTED");
@@ -513,9 +531,24 @@ export async function postFinancialRequest(
         data: { outstandingAmount: { decrement: ar } },
       });
       await tx.creditNote.update({ where: { id: note.id }, data: { taxAmount: value } });
+      const taxes = note.customerReturn.lines.map((line) => {
+        const orderLine = line.deliveryReceiptLine.allocation.salesOrderLine;
+        return {
+          accountId: (orderLine.taxSnapshot as { account_id?: string } | null)?.account_id,
+          amount: lineAmounts(orderLine, line.quantity).tax,
+        };
+      });
+      if (!taxes.reduce((sum, tax) => sum.add(tax.amount), d("0")).eq(value))
+        throw new ConflictException("RETURN_TAX_SNAPSHOT_MISMATCH");
       await postLedger(tx, a, {
+        accountIds: [...taxes.map((tax) => tax.accountId), undefined, undefined],
         data: [
-          { ...source, kind: "SALES_TAX", debit: value, credit: d("0") },
+          ...taxes.map((tax) => ({
+            ...source,
+            kind: "SALES_TAX" as const,
+            debit: Prisma.Decimal.max(tax.amount, 0),
+            credit: Prisma.Decimal.max(tax.amount.neg(), 0),
+          })),
           { ...source, kind: "AR", debit: d("0"), credit: ar },
           { ...source, kind: "CUSTOMER_ADVANCE", debit: d("0"), credit },
         ],

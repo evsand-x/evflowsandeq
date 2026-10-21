@@ -1,0 +1,1 @@
+ALTER TABLE operational_taxes ADD COLUMN usage TEXT NOT NULL DEFAULT 'BOTH' CHECK (usage IN ('SALES', 'PURCHASE', 'BOTH'));

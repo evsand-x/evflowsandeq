@@ -41,7 +41,12 @@ function useData<T>(path: string, enabled = true) {
   });
 }
 
-export function Backorders({ command, pending, can }: Props) {
+export function Backorders({
+  command,
+  pending,
+  can,
+  warehouse = false,
+}: Props & { warehouse?: boolean }) {
   const [search, setSearch] = useState(""),
     [page, setPage] = useState(1);
   type Remainder = {
@@ -52,7 +57,8 @@ export function Backorders({ command, pending, can }: Props) {
     salesOrder: { id: string; number: string; version: number; customer: { name: string } };
   };
   const q = useData<{ rows: Remainder[]; total: number }>(
-    `/operations/backorders?page=${page}&search=${encodeURIComponent(search)}`,
+    `/operations/${warehouse ? "warehouse-backorders" : "backorders"}?page=${page}&search=${encodeURIComponent(search)}`,
+    can(warehouse ? "warehouse_allocation.read" : "sales_backorder.read"),
   );
   return (
     <>
@@ -79,11 +85,14 @@ export function Backorders({ command, pending, can }: Props) {
           {
             id: "order",
             header: "SO / pelanggan",
-            cell: ({ row }) => (
-              <Link href={`/operations/orders/${row.original.salesOrder.id}`}>
-                {row.original.salesOrder.number} · {row.original.salesOrder.customer.name}
-              </Link>
-            ),
+            cell: ({ row }) =>
+              can("sales_order.read") ? (
+                <Link href={`/operations/orders/${row.original.salesOrder.id}`}>
+                  {row.original.salesOrder.number} · {row.original.salesOrder.customer.name}
+                </Link>
+              ) : (
+                `${row.original.salesOrder.number} · ${row.original.salesOrder.customer.name}`
+              ),
           },
           { id: "product", header: "Produk", cell: ({ row }) => row.original.product.name },
           { accessorKey: "orderedQuantity", header: "Dipesan" },

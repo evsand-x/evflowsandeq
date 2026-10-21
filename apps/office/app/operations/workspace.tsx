@@ -1,5 +1,13 @@
 "use client";
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  SalesPeriod,
+  SalesNavigation,
+  SalesBadge,
+  DocumentHandoff,
+  HandoffStatus,
+  InvoiceProgress,
+} from "./sales-experience";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -56,6 +64,7 @@ export type Row = {
   snapshot?: unknown;
   issuedSnapshot?: { version?: number; notes?: string; reference?: string };
   deliveryReceiptId?: string;
+  handoff?: string;
   invoices?: { id: string; number: string; state: string }[];
   version: number;
   id: string;
@@ -207,7 +216,9 @@ export function Panel({ title, children }: { title: string; children: ReactNode 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle role="heading" aria-level={2}>
+          {title}
+        </CardTitle>
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>
@@ -241,13 +252,14 @@ export function TextField({
   );
 }
 export function Upload({ purpose, onChange }: { purpose: string; onChange: (id: string) => void }) {
+  const uploadId = useId();
   const [state, setState] = useState("");
   const [busy, setBusy] = useState(false);
   return (
     <Field>
-      <FieldLabel htmlFor={`upload-${purpose}`}>Bukti dokumen (JPEG/PNG, maksimal 2 MB)</FieldLabel>
+      <FieldLabel htmlFor={uploadId}>Bukti dokumen (JPEG/PNG, maksimal 2 MB)</FieldLabel>
       <Input
-        id={`upload-${purpose}`}
+        id={uploadId}
         type="file"
         accept="image/jpeg,image/png"
         disabled={busy}
@@ -311,6 +323,7 @@ export function Evidence({ id }: { id?: string | undefined }) {
   );
 }
 const warehouseStageTitles: Record<string, string> = {
+  picking: "Pick Slip",
   checking: "Checking / Packing",
   shipping: "Pengiriman",
   pod: "POD",
@@ -323,6 +336,72 @@ const outboundStages = [
   { key: "pod", label: "POD", href: "/operations/warehouse?stage=pod" },
   { key: "returns", label: "Retur", href: "/operations/returns" },
 ] as const;
+
+function outboundSubtitle(kind: string, stage?: string) {
+  if (kind === "pick-slips") return "Antrean tindakan: siapkan dan konfirmasi pengambilan barang.";
+  if (kind === "returns") return "Penerimaan dan penyelesaian barang retur pelanggan.";
+  if (stage === "checking") return "Periksa hasil picking, lalu kemas dan terbitkan Packing List.";
+  if (stage === "shipping") return "Siapkan pengemudi dan kendaraan, lalu dispatch Surat Jalan.";
+  if (stage === "pod") return "Konfirmasi barang diterima pelanggan dan simpan bukti penerimaan.";
+  return "Pantau pemenuhan barang keluar berdasarkan dokumen operasional.";
+}
+
+function OutboundSummary({
+  kind,
+  stage,
+  rows,
+  total,
+}: {
+  kind: string;
+  stage?: string;
+  rows: Row[];
+  total: number;
+}) {
+  const cards =
+    kind === "pick-slips"
+      ? [
+          [rows.filter((row) => !row.pickList).length, "Belum dibuat"],
+          [rows.filter((row) => row.pickList?.state === "OPEN").length, "Siap diambil"],
+          [
+            rows.filter((row) => row.pickList?.state === "PICKED").length,
+            "Sebagian / selesai diambil",
+          ],
+          [total, "Total antrean"],
+        ]
+      : stage === "checking"
+        ? [
+            [total, "Perlu dicek"],
+            [rows.filter((row) => row.pickList?.state === "CHECKED").length, "Packing List terbit"],
+            [rows.filter((row) => row.state === "CANCELLED").length, "Ditahan / dibatalkan"],
+            [total, "Total antrean"],
+          ]
+        : stage === "shipping"
+          ? [
+              [total, "Siap disiapkan"],
+              [rows.filter((row) => row.pickList?.state === "CHECKED").length, "Checking selesai"],
+              [rows.filter((row) => row.state === "ALLOCATED").length, "Menunggu dispatch"],
+              [total, "Total antrean"],
+            ]
+          : [
+              [total, "Menunggu POD"],
+              [
+                rows.filter((row) => row.state === "PARTIALLY_DELIVERED").length,
+                "Sebagian diterima",
+              ],
+              [rows.filter((row) => row.state === "DELIVERED").length, "Selesai"],
+              [total, "Total antrean"],
+            ];
+  return (
+    <div className="outbound-summary" aria-label="Ringkasan tugas outbound">
+      {cards.map(([value, label]) => (
+        <div className="outbound-summary-card" key={String(label)}>
+          <strong>{value}</strong>
+          <span>{label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: string }) {
   const { principal, state } = useSession();
@@ -349,14 +428,14 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
   const permission =
     {
       orders: "sales_order.read",
-      backorders: "sales_order.read",
-      "warehouse-backorders": "sales_order.read",
-      "pick-slips": "fulfillment.read",
-      warehouse: "fulfillment.read",
-      returns: "fulfillment.read",
+      backorders: "sales_backorder.read",
+      "warehouse-backorders": "warehouse_allocation.read",
+      "pick-slips": "outbound_picking.read",
+      warehouse: "outbound_checking.read",
+      returns: "customer_return.receive",
       invoices: "sales_invoice.read",
       "invoice-create": "sales_invoice.post",
-      documents: "fulfillment.read",
+      documents: "outbound_checking.read",
     }[kind] ?? "";
   const enabled =
     !!principal &&
@@ -381,7 +460,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
         : creating
           ? can("sales_order.create")
           : kind === "documents"
-            ? ["sales_order.read", "fulfillment.read", "sales_invoice.read"].some(can)
+            ? ["sales_order.read", "outbound_checking.read", "sales_invoice.read"].some(can)
             : can(permission));
   const endpoint =
     kind === "documents"
@@ -390,11 +469,19 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
         ? "/receivables/invoice-candidates"
         : id && !creating
           ? `/operations/${kind === "pick-slips" ? "warehouse" : kind}/${id}`
-          : `/operations/lists/${kind === "warehouse-backorders" ? "backorders" : kind}?page=${page}&search=${encodeURIComponent(search)}${kind === "warehouse" && stage && warehouseStageTitles[stage] ? `&stage=${stage}` : ""}`;
+          : `/operations/${["backorders", "warehouse-backorders"].includes(kind) ? kind : `lists/${kind}`}?page=${page}&search=${encodeURIComponent(search)}${kind === "warehouse" && stage && warehouseStageTitles[stage] ? `&stage=${stage}` : ""}`;
+  const [invoiceFilter, setInvoiceFilter] = useState("ALL");
   const query = useQuery({
-    queryKey: ["operations", principal?.user_id, principal?.company_id, endpoint],
+    queryKey: ["operations", principal?.user_id, principal?.company_id, endpoint, invoiceFilter],
     queryFn: () =>
-      apiRequest<{ data: Row & { rows: Row[]; total: number; snapshot: unknown } }>(endpoint),
+      apiRequest<{
+        data: Row & {
+          rows: Row[];
+          total: number;
+          snapshot: unknown;
+          summary?: Record<string, number>;
+        };
+      }>(kind === "invoices" && !id ? `${endpoint}&view=${invoiceFilter}` : endpoint),
     enabled:
       enabled &&
       !creating &&
@@ -406,7 +493,8 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
   const candidateQuery = useQuery({
     queryKey: ["operations", principal?.user_id, principal?.company_id, "invoice-candidates"],
     queryFn: () => apiRequest<{ data: Row[] }>("/receivables/invoice-candidates"),
-    enabled: enabled && invoiceCreation,
+    enabled:
+      enabled && (invoiceCreation || (kind === "invoices" && !id && can("sales_invoice.post"))),
   });
   const command: Command = async (url, body = {}) => {
     const fingerprint = `${url}:${JSON.stringify(body)}`;
@@ -469,7 +557,8 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
             ? stage
             : "checking"
           : undefined;
-  const stageQuery = kind === "warehouse" && stage && warehouseStageTitles[stage] ? `?stage=${stage}` : "";
+  const stageQuery =
+    kind === "warehouse" && stage && warehouseStageTitles[stage] ? `?stage=${stage}` : "";
   const columns: ColumnDef<Row>[] = [
     {
       accessorKey: "number",
@@ -494,11 +583,27 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
       cell: ({ row: r }) =>
         r.original.customer?.name ?? r.original.salesOrder?.customer?.name ?? "—",
     },
-    ...(outboundView ? [{
-      id: "salesOrder", header: "Sales Order",
-      cell: ({ row: r }: { row: { original: Row } }) => r.original.salesOrder?.number ?? "—",
-    }] : []),
-    ...(kind !== "invoices"
+    ...(outboundView
+      ? [
+          {
+            id: "salesOrder",
+            header: "Sales Order",
+            cell: ({ row: r }: { row: { original: Row } }) => r.original.salesOrder?.number ?? "—",
+          },
+        ]
+      : []),
+    ...(kind === "invoices"
+      ? [
+          {
+            id: "handoff",
+            header: "Tukar faktur",
+            cell: ({ row: r }: { row: { original: Row } }) => (
+              <SalesBadge>{r.original.handoff ?? "Belum terverifikasi"}</SalesBadge>
+            ),
+          },
+        ]
+      : []),
+    ...(kind !== "invoices" && kind !== "warehouse"
       ? [
           {
             accessorKey: "state",
@@ -531,7 +636,10 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                   variant="outline"
                   className="so-status"
                   data-state={status ?? undefined}
-                  title={invoiceDocumentNote(r.original.state) ?? "Status pembayaran berdasarkan sisa tagihan"}
+                  title={
+                    invoiceDocumentNote(r.original.state) ??
+                    "Status pembayaran berdasarkan sisa tagihan"
+                  }
                 >
                   {status ?? "—"}
                 </Badge>
@@ -554,18 +662,89 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
             id: "description",
             header: "Keterangan",
             cell: ({ row: r }: { row: { original: Row } }) =>
-              invoiceDocumentNote(r.original.state) ?? r.original.description ?? "Belum terverifikasi",
+              invoiceDocumentNote(r.original.state) ??
+              r.original.description ??
+              "Belum terverifikasi",
           },
         ]
       : []),
-    ...(kind === "warehouse" ? [
-      { id: "pickState", header: "Status picking", cell: ({ row: r }: { row: { original: Row } }) => <Badge variant="outline">{r.original.pickList?.state ?? "Belum dibuat"}</Badge> },
-      { id: "action", header: "Tindakan", cell: ({ row: r }: { row: { original: Row } }) => (
-        <Button variant="outline" size="sm" asChild><Link href={`/operations/warehouse/${r.original.id}${stageQuery}`}>
-          {stage === "checking" ? "Periksa barang" : stage === "shipping" ? "Siapkan pengiriman" : stage === "pod" ? "Buka penerimaan" : "Buka detail"}
-        </Link></Button>
-      ) },
-    ] : []),
+    ...(kind === "warehouse"
+      ? [
+          ...(stage === "checking"
+            ? [
+                {
+                  id: "pickedQuantity",
+                  header: "Diambil",
+                  cell: ({ row: r }: { row: { original: Row } }) =>
+                    r.original.pickList?.lines?.length ?? "—",
+                },
+              ]
+            : []),
+          ...(stage === "shipping"
+            ? [
+                {
+                  id: "shipmentRequirement",
+                  header: "Syarat kirim",
+                  cell: ({ row: r }: { row: { original: Row } }) =>
+                    r.original.pickList?.state === "CHECKED" ? "Lengkap" : "Belum lengkap",
+                },
+              ]
+            : []),
+          ...(stage === "pod"
+            ? [
+                {
+                  id: "podStatus",
+                  header: "Status POD",
+                  cell: ({ row: r }: { row: { original: Row } }) =>
+                    r.original.state === "PARTIALLY_DELIVERED"
+                      ? "Sebagian diterima"
+                      : "Menunggu POD",
+                },
+              ]
+            : []),
+          {
+            id: "stageState",
+            header:
+              stage === "checking"
+                ? "Status checking"
+                : stage === "shipping"
+                  ? "Status pengiriman"
+                  : "Status POD",
+            cell: ({ row: r }: { row: { original: Row } }) => (
+              <Badge variant="outline">
+                {stage === "checking"
+                  ? r.original.pickList?.state === "CHECKED"
+                    ? "Packing List terbit"
+                    : "Perlu dicek"
+                  : stage === "shipping"
+                    ? r.original.state === "DISPATCHED"
+                      ? "Dalam perjalanan"
+                      : "Siap dikirim"
+                    : r.original.state === "PARTIALLY_DELIVERED"
+                      ? "Sebagian diterima"
+                      : "Menunggu POD"}
+              </Badge>
+            ),
+          },
+          {
+            id: "action",
+            header: "Tindakan",
+            cell: ({ row: r }: { row: { original: Row } }) => (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/operations/warehouse/${r.original.id}${stageQuery}`}>
+                  {stage === "checking"
+                    ? "Periksa barang"
+                    : stage === "shipping"
+                      ? "Siapkan pengiriman"
+                      : stage === "pod"
+                        ? "Buka penerimaan"
+                        : "Buka detail"}
+                </Link>
+              </Button>
+            ),
+          },
+        ]
+      : []),
     ...(kind === "pick-slips"
       ? [
           {
@@ -592,9 +771,19 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                   <Badge variant="outline">Menunggu tindakan</Badge>
                 );
               }
+              const actionLabel =
+                r.original.pickList?.state === "OPEN"
+                  ? "Mulai picking"
+                  : r.original.pickList?.state === "PICKED"
+                    ? "Lanjutkan"
+                    : r.original.pickList?.state === "CHECKED"
+                      ? "Lihat Pick Slip"
+                      : "Buka Pick Slip";
               return (
                 <Button variant="outline" size="sm" asChild>
-                  <Link href={`/operations/warehouse/${r.original.id}`}>Buka Pick Slip</Link>
+                  <Link href={`/operations/warehouse/${r.original.id}?stage=picking`}>
+                    {actionLabel}
+                  </Link>
                 </Button>
               );
             },
@@ -630,7 +819,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
       <SidebarInset className="min-w-0">
         <ExecutiveTopbar companyName={principal.company_name} />
         <main
-          className={`executive-content crm-content otc-workspace ${["invoices", "invoice-create"].includes(kind) ? "so-workspace" : ""}`}
+          className={`executive-content crm-content otc-workspace ${["invoices", "invoice-create"].includes(kind) ? "so-workspace sales-sketch" : ""}`}
         >
           <header className="executive-heading">
             <div>
@@ -662,11 +851,24 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                       }[kind]
                     : creating
                       ? "Buat Sales Order"
-                      : (row?.number ?? (kind === "warehouse" && stage ? warehouseStageTitles[stage] : undefined) ?? titles[kind] ?? "Halaman tidak ditemukan")}
+                      : (row?.number ??
+                        (kind === "warehouse" && stage ? warehouseStageTitles[stage] : undefined) ??
+                        titles[kind] ??
+                        "Halaman tidak ditemukan")}
               </h1>
+              {kind === "invoices" && (
+                <p>
+                  {id
+                    ? `Jatuh tempo ${formatDate(row?.dueDate)} · sesuai POD dan termin`
+                    : "Tagihan dan piutang: pantau penagihan dan penyerahan dokumen."}
+                </p>
+              )}
+              {outboundView && (
+                <p className="outbound-page-subtitle">{outboundSubtitle(kind, stage)}</p>
+              )}
             </div>
             <div className="crm-actions">
-              {id && (
+              {id && kind !== "invoices" && (
                 <Button variant="outline" asChild>
                   <Link
                     href={`/operations/${proformaDocument ? "proformas" : kind === "documents" ? "warehouse" : kind}${stageQuery}`}
@@ -684,28 +886,8 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                   </Link>
                 </Button>
               )}
-              {!id && kind === "invoices" && (
-                can("sales_invoice.post") ? (
-                  <Button asChild>
-                    <Link href="/operations/invoice-create">
-                      <Plus />
-                      Buat Invoice
-                    </Link>
-                  </Button>
-                ) : can("sales_invoice.read") ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled
-                    title="Memerlukan izin posting Invoice"
-                    aria-label="Buat Invoice — memerlukan izin posting Invoice"
-                  >
-                    <Plus />
-                    Buat Invoice
-                  </Button>
-                ) : null
-              )}
             </div>
+            {["invoices", "invoice-create"].includes(kind) && <SalesNavigation active="invoices" />}
           </header>
           {outboundView && (
             <nav className="outbound-stage-nav" aria-label="Tahap Barang Keluar">
@@ -724,13 +906,75 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
               ))}
             </nav>
           )}
-          {!id && kind === "invoices" && can("sales_invoice.read") && !can("sales_invoice.post") && (
-            <Alert className="mb-4">
-              <AlertDescription>
-                Anda dapat melihat Tagihan, tetapi belum memiliki izin posting Invoice. Hubungi
-                Administrator atau Finance Supervisor untuk mengaktifkan tindakan ini.
-              </AlertDescription>
-            </Alert>
+          {kind === "invoices" && id && (
+            <Button className="sales-back" variant="outline" asChild>
+              <Link href="/operations/invoices">← Kembali ke daftar</Link>
+            </Button>
+          )}
+          {outboundView && !id && kind !== "returns" && (
+            <OutboundSummary
+              kind={kind}
+              {...(stage ? { stage } : {})}
+              rows={row?.rows ?? []}
+              total={row?.total ?? 0}
+            />
+          )}
+          {!id &&
+            kind === "invoices" &&
+            can("sales_invoice.read") &&
+            !can("sales_invoice.post") && (
+              <Alert className="mb-4">
+                <AlertDescription>
+                  Anda dapat melihat Tagihan, tetapi belum memiliki izin posting Invoice. Hubungi
+                  Administrator atau Finance Supervisor untuk mengaktifkan tindakan ini.
+                </AlertDescription>
+              </Alert>
+            )}
+          {kind === "invoices" && !id && enabled && (
+            <>
+              <div className="sales-list-tabs" aria-label="Antrean Invoice">
+                {can("sales_invoice.post") && (
+                  <Link href="/operations/invoice-create">Siap ditagih (POD)</Link>
+                )}
+                {[
+                  ["ALL", "Semua"],
+                  ["HANDOFF", "Perlu tukar faktur"],
+                  ["OVERDUE", "Jatuh tempo"],
+                  ["PARTIAL", "Dibayar sebagian"],
+                  ["PAID", "Lunas"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={invoiceFilter === value}
+                    onClick={() => {
+                      setInvoiceFilter(value!);
+                      setPage(1);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="so-kpis">
+                {[
+                  ["READY", "Siap ditagih (POD)"],
+                  ["HANDOFF", "Perlu tukar faktur"],
+                  ["OVERDUE", "Jatuh tempo"],
+                  ["PAID", "Lunas"],
+                ].map(([key, label]) => (
+                  <Panel key={key} title={label!}>
+                    <strong className="sales-kpi-number">
+                      {key === "READY"
+                        ? candidateQuery.data?.data
+                          ? `${candidateQuery.data.data.length}${candidateQuery.data.data.length === 100 ? "+" : ""}`
+                          : "—"
+                        : (query.data?.data.summary?.[key!] ?? "—")}
+                    </strong>
+                  </Panel>
+                ))}
+              </div>
+            </>
           )}
           {!enabled ? (
             <ErrorBox message="Izin Anda belum mencukupi untuk layar ini." />
@@ -740,12 +984,6 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                 <ErrorBox message={error || String(query.error || candidateQuery.error)} />
               )}
               {query.isFetching && <p role="status">Memuat data terbaru…</p>}
-              {outboundView && !id && kind !== "returns" && (
-                <Panel title="Antrean tindakan">
-                  <p>{kind === "pick-slips" ? "Siapkan Pick Slip dan konfirmasikan pengambilan barang sesuai alokasi." : stage === "checking" ? "Periksa hasil picking sebelum menerbitkan packing dan menyiapkan pengiriman." : stage === "shipping" ? "Lengkapi pengiriman untuk barang yang sudah lolos checking. Kelayakan kirim diperiksa kembali oleh server." : stage === "pod" ? "Catat penerimaan pelanggan untuk pengiriman yang belum terselesaikan." : "Pantau seluruh tahap pemenuhan pesanan."}</p>
-                  <p role="status">{query.isError ? "Jumlah tugas belum dapat dimuat." : row ? `${row.total} tahap pemenuhan sesuai pencarian` : "Memuat jumlah tugas…"}</p>
-                </Panel>
-              )}
               {invoiceCreation ? (
                 <InvoiceCreation
                   rows={candidateQuery.data?.data ?? []}
@@ -754,7 +992,12 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                   onCreated={() => router.push("/operations/invoices")}
                 />
               ) : ["backorders", "warehouse-backorders"].includes(kind) ? (
-                <Backorders can={can} command={command} pending={pending} />
+                <Backorders
+                  can={can}
+                  command={command}
+                  pending={pending}
+                  warehouse={kind === "warehouse-backorders"}
+                />
               ) : financeControl ? (
                 <FinanceWorkspace
                   kind={kind}
@@ -772,30 +1015,132 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                   onCreated={(id) => router.push(`/operations/orders/${id}`)}
                 />
               ) : kind === "returns" ? (
-                <Panel title="Retur Pelanggan">
-                  <p role="status">Daftar dan detail retur belum tersedia pada aplikasi Office. Penerimaan fisik retur dan tindak lanjut kualitas belum dapat dikerjakan dari halaman ini.</p>
-                </Panel>
+                <CustomerReturnForm command={command} pending={pending} />
               ) : !id ? (
-                <DataTable
-                  data={row?.rows ?? []}
-                  columns={columns}
-                  total={row?.total ?? 0}
-                  page={page}
-                  onPage={setPage}
-                  busy={query.isFetching}
-                  label={(kind === "warehouse" && stage ? warehouseStageTitles[stage] : undefined) ?? titles[kind] ?? "Transaksi"}
-                  toolbar={
-                    <Input
-                      aria-label="Cari nomor dokumen"
-                      placeholder="Cari nomor dokumen…"
-                      value={search}
-                      onChange={(e) => {
-                        setSearch(e.target.value);
-                        setPage(1);
-                      }}
-                    />
-                  }
-                />
+                <section className={kind === "invoices" ? "sales-list-panel" : undefined}>
+                  {kind === "invoices" && <h2>Daftar Invoice</h2>}
+                  <DataTable
+                    data={row?.rows ?? []}
+                    columns={
+                      kind === "invoices"
+                        ? [
+                            ...[
+                              "number",
+                              "customer",
+                              "dueDate",
+                              "total",
+                              "outstandingAmount",
+                              "invoiceState",
+                              "handoff",
+                            ]
+                              .map(
+                                (key) =>
+                                  columns.find(
+                                    (c) =>
+                                      c.id === key || ("accessorKey" in c && c.accessorKey === key),
+                                  )!,
+                              )
+                              .filter(Boolean),
+                            {
+                              id: "open",
+                              header: "Tindakan",
+                              cell: ({ row: r }) => (
+                                <Button variant="outline" asChild>
+                                  <Link href={`/operations/invoices/${r.original.id}`}>Buka</Link>
+                                </Button>
+                              ),
+                            },
+                          ]
+                        : columns
+                    }
+                    showColumns={kind !== "invoices"}
+                    total={row?.total ?? 0}
+                    page={page}
+                    onPage={setPage}
+                    busy={query.isFetching}
+                    label={
+                      (kind === "warehouse" && stage ? warehouseStageTitles[stage] : undefined) ??
+                      titles[kind] ??
+                      "Transaksi"
+                    }
+                    toolbar={
+                      <div className="outbound-toolbar">
+                        {kind !== "invoices" && (
+                          <span className="outbound-queue-label">
+                            Antrean tindakan ({row?.total ?? 0})
+                          </span>
+                        )}
+                        <Input
+                          aria-label={
+                            kind === "invoices"
+                              ? "Cari nomor Invoice atau pelanggan"
+                              : "Cari nomor tahap, sales order, atau pelanggan"
+                          }
+                          placeholder={
+                            kind === "invoices"
+                              ? "Cari nomor Invoice atau pelanggan"
+                              : "Cari No. tahap, SO, atau pelanggan"
+                          }
+                          value={search}
+                          onChange={(e) => {
+                            setSearch(e.target.value);
+                            setPage(1);
+                          }}
+                        />
+                        {kind === "invoices" && (
+                          <SelectionField
+                            label="Status Invoice"
+                            hideLabel
+                            value={[invoiceFilter]}
+                            options={[
+                              { id: "ALL", name: "Semua status" },
+                              { id: "UNPAID", name: "Belum dibayar" },
+                              { id: "PARTIAL", name: "Dibayar sebagian" },
+                              { id: "PAID", name: "Lunas" },
+                            ]}
+                            onChange={(v) => {
+                              setInvoiceFilter(v[0] ?? "ALL");
+                              setPage(1);
+                            }}
+                          />
+                        )}
+                        {kind === "invoices" && <SalesPeriod />}
+                        {!id &&
+                          kind === "invoices" &&
+                          (can("sales_invoice.post") ? (
+                            <Button asChild>
+                              <Link href="/operations/invoice-create">
+                                <Plus />
+                                Buat Invoice
+                              </Link>
+                            </Button>
+                          ) : can("sales_invoice.read") ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled
+                              title="Memerlukan izin posting Invoice"
+                              aria-label="Buat Invoice — memerlukan izin posting Invoice"
+                            >
+                              <Plus />
+                              Buat Invoice
+                            </Button>
+                          ) : null)}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setSearch("");
+                            setPage(1);
+                          }}
+                          disabled={!search}
+                        >
+                          Reset filter
+                        </Button>
+                      </div>
+                    }
+                  />
+                </section>
               ) : (
                 row && (
                   <>
@@ -873,14 +1218,14 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                         </Panel>
                       </>
                     )}
-                    {kind === "warehouse" && (
+                    {(["warehouse", "pick-slips"] as string[]).includes(kind) && (
                       <Warehouse
                         key={row.id}
                         row={row}
                         command={command}
                         pending={pending}
                         can={can}
-                        stage={stage ?? "checking"}
+                        stage={kind === "pick-slips" ? "picking" : (stage ?? "checking")}
                       />
                     )}
                     {kind === "invoices" && (
@@ -1059,6 +1404,7 @@ function Warehouse({
   stage?: string;
 }) {
   const isChecking = stage === "checking";
+  const isPicking = stage === "picking";
   const isShipping = stage === "shipping";
   const isPod = stage === "pod";
   const [driver, setDriver] = useState(""),
@@ -1066,67 +1412,282 @@ function Warehouse({
     [receiver, setReceiver] = useState(""),
     [proof, setProof] = useState("");
   const [accepted, setAccepted] = useState<Record<string, string>>({});
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const [checkCondition, setCheckCondition] = useState<Record<string, string>>({});
+  const [packageCount, setPackageCount] = useState("");
+  const [totalWeight, setTotalWeight] = useState("");
+  const [packageType, setPackageType] = useState("Dus");
+  const [packingNotes, setPackingNotes] = useState("");
+  const [labelAttached, setLabelAttached] = useState(false);
   const [freightEnabled, setFreightEnabled] = useState(false),
     [freightAmount, setFreightAmount] = useState(""),
     [freightTaxable, setFreightTaxable] = useState(false);
   const run = (url: string, data?: unknown) => {
     void command(url, data).catch(() => undefined);
   };
+  useEffect(() => {
+    if (!row.pickList) return;
+    setPicked(
+      Object.fromEntries(row.pickList.lines.map((line) => [line.id, line.assignedQuantity])),
+    );
+  }, [row.pickList]);
   return (
     <>
-      <Panel title={isChecking ? "Dokumen Checking / Packing" : isShipping ? "Dokumen Pengiriman" : isPod ? "Dokumen POD" : "Dokumen Pemenuhan"}>
+      <Panel
+        title={
+          isChecking
+            ? "Dokumen Checking / Packing"
+            : isShipping
+              ? "Dokumen Pengiriman"
+              : isPod
+                ? "Dokumen POD"
+                : "Dokumen Pemenuhan"
+        }
+      >
         <p>
           {row.salesOrder?.number} · {row.salesOrder?.customer?.name} · {row.state}
         </p>
         <p>{row.salesOrder?.deliveryAddress}</p>
       </Panel>
-      <DataTable
-        data={row.allocations ?? []}
-        total={row.allocations?.length ?? 0}
-        columns={[
-          {
-            id: "product",
-            header: "Produk",
-            cell: ({ row: r }) => r.original.stockLot.product.name,
-          },
-          { id: "batch", header: "Batch", cell: ({ row: r }) => r.original.stockLot.batchNo },
-          { accessorKey: "quantity", header: "Dialokasikan" },
-          { accessorKey: "inTransitQuantity", header: "Dalam perjalanan" },
-        ]}
-      />
-      {isChecking && <div className="crm-actions">
-        {row.state === "ALLOCATED" && !row.pickList && can("fulfillment.pick") && (
-          <Button
-            disabled={pending}
-            onClick={() => run(`/fulfillment-batches/${row.id}/create-picking`)}
-          >
-            Buat Picking Slip
-          </Button>
-        )}
-        {row.pickList?.state === "OPEN" && can("fulfillment.pick") && (
-          <Button
-            disabled={pending}
-            onClick={() =>
-              run(`/pick-lists/${row.pickList!.id}/confirm-pick`, {
-                lines: row.pickList!.lines.map((l) => ({
-                  pick_list_line_id: l.id,
-                  picked_quantity: l.assignedQuantity,
-                })),
-              })
-            }
-          >
-            Konfirmasi seluruh picking
-          </Button>
-        )}
-        {row.pickList?.state === "PICKED" && can("fulfillment.check") && (
-          <Button
-            disabled={pending}
-            onClick={() => run(`/pick-lists/${row.pickList!.id}/confirm-check`)}
-          >
-            Konfirmasi checking
-          </Button>
-        )}
-      </div>}
+      {isPicking ? (
+        <form
+          className="web-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!row.pickList) return;
+            run(`/pick-lists/${row.pickList.id}/confirm-pick`, {
+              lines: row.pickList.lines.map((line) => ({
+                pick_list_line_id: line.id,
+                picked_quantity: picked[line.id] ?? "0",
+              })),
+            });
+          }}
+        >
+          <Panel title="Barang yang diambil">
+            <DataTable
+              formTable
+              showColumns={false}
+              data={(row.allocations ?? []).map((allocation) => ({
+                ...allocation,
+                pickLine: row.pickList?.lines.find(
+                  (line) => line.fulfillmentAllocationId === allocation.id,
+                ),
+              }))}
+              total={row.allocations?.length ?? 0}
+              columns={[
+                {
+                  id: "product",
+                  header: "Produk",
+                  cell: ({ row: r }) => r.original.stockLot.product.name,
+                },
+                {
+                  id: "batch",
+                  header: "Batch · ED",
+                  cell: ({ row: r }) =>
+                    `${r.original.stockLot.batchNo} · ${r.original.stockLot.expiryDate?.slice(0, 7) ?? "—"}`,
+                },
+                {
+                  id: "locator",
+                  header: "Locator",
+                  cell: ({ row: r }) => r.original.stockLot.locator?.code ?? "—",
+                },
+                { accessorKey: "quantity", header: "Alokasi" },
+                {
+                  id: "picked",
+                  header: "Diambil",
+                  cell: ({ row: r }) => (
+                    <Input
+                      inputMode="decimal"
+                      aria-label={`Jumlah diambil ${r.original.stockLot.product.name}`}
+                      value={picked[r.original.pickLine?.id ?? ""] ?? ""}
+                      onChange={(event) =>
+                        setPicked((old) => ({
+                          ...old,
+                          [r.original.pickLine?.id ?? ""]: event.target.value,
+                        }))
+                      }
+                      disabled={!r.original.pickLine || row.pickList?.state !== "OPEN"}
+                    />
+                  ),
+                },
+                {
+                  id: "difference",
+                  header: "Selisih",
+                  cell: ({ row: r }) => (
+                    <Badge variant="outline">
+                      {r.original.pickLine &&
+                      picked[r.original.pickLine.id] === r.original.pickLine.assignedQuantity
+                        ? "Sesuai"
+                        : "Perlu ditinjau"}
+                    </Badge>
+                  ),
+                },
+              ]}
+            />
+            <p className="so-help">
+              Jumlah diambil tidak boleh melebihi alokasi. Selisih membutuhkan tindak lanjut sesuai
+              aturan backorder.
+            </p>
+          </Panel>
+          <div className="so-footer so-detail-actions">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setPicked(
+                  Object.fromEntries(
+                    (row.pickList?.lines ?? []).map((line) => [line.id, line.assignedQuantity]),
+                  ),
+                )
+              }
+            >
+              Isi semua sesuai alokasi
+            </Button>
+            <Button
+              type="submit"
+              disabled={pending || !row.pickList || row.pickList.state !== "OPEN"}
+            >
+              Konfirmasi picking
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <DataTable
+          data={row.allocations ?? []}
+          total={row.allocations?.length ?? 0}
+          columns={[
+            {
+              id: "product",
+              header: "Produk",
+              cell: ({ row: r }) => r.original.stockLot.product.name,
+            },
+            { id: "batch", header: "Batch", cell: ({ row: r }) => r.original.stockLot.batchNo },
+            { accessorKey: "quantity", header: "Dialokasikan" },
+            { accessorKey: "inTransitQuantity", header: "Dalam perjalanan" },
+          ]}
+        />
+      )}
+      {isChecking && (
+        <form
+          className="web-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            run(`/pick-lists/${row.pickList!.id}/confirm-check`, {
+              checks: (row.pickList?.lines ?? []).map((line) => ({
+                pick_list_line_id: line.id,
+                condition: checkCondition[line.id] ?? "BAIK",
+              })),
+              packing: {
+                package_count: packageCount || undefined,
+                total_weight_kg: totalWeight || undefined,
+                package_type: packageType || undefined,
+                notes: packingNotes || undefined,
+                label_attached: labelAttached,
+              },
+            });
+          }}
+        >
+          <Panel title="Checking & Packing">
+            <p className="so-help">
+              Checking memverifikasi hasil picking. Packing List diterbitkan server setelah jumlah
+              picking lengkap.
+            </p>
+            <DataTable
+              formTable
+              showColumns={false}
+              data={(row.allocations ?? []).map((allocation) => ({
+                ...allocation,
+                pickLine: row.pickList?.lines.find(
+                  (line) => line.fulfillmentAllocationId === allocation.id,
+                ),
+              }))}
+              total={row.allocations?.length ?? 0}
+              columns={[
+                {
+                  id: "product",
+                  header: "Produk",
+                  cell: ({ row: r }) => r.original.stockLot.product.name,
+                },
+                {
+                  id: "picked",
+                  header: "Diambil",
+                  cell: ({ row: r }) => r.original.pickLine?.assignedQuantity ?? "—",
+                },
+                {
+                  id: "checked",
+                  header: "Dicek",
+                  cell: ({ row: r }) => r.original.pickLine?.assignedQuantity ?? "—",
+                },
+                {
+                  id: "condition",
+                  header: "Kondisi",
+                  cell: ({ row: r }) => (
+                    <select
+                      aria-label={`Kondisi ${r.original.stockLot.product.name}`}
+                      value={checkCondition[r.original.pickLine?.id ?? ""] ?? "BAIK"}
+                      onChange={(event) =>
+                        setCheckCondition((old) => ({
+                          ...old,
+                          [r.original.pickLine?.id ?? ""]: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="BAIK">Baik</option>
+                      <option value="RUSAK">Rusak</option>
+                      <option value="KURANG">Kurang</option>
+                    </select>
+                  ),
+                },
+              ]}
+            />
+            <div className="otc-form-grid">
+              <TextField label="Jumlah koli" value={packageCount} onChange={setPackageCount} />
+              <TextField label="Berat total (kg)" value={totalWeight} onChange={setTotalWeight} />
+              <TextField label="Jenis kemasan" value={packageType} onChange={setPackageType} />
+              <TextField label="Catatan packing" value={packingNotes} onChange={setPackingNotes} />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={labelAttached}
+                onChange={(event) => setLabelAttached(event.target.checked)}
+              />{" "}
+              Label koli sudah ditempel
+            </label>
+            <Button
+              type="submit"
+              disabled={pending || !row.pickList || row.pickList.state !== "PICKED"}
+            >
+              Konfirmasi checking & terbitkan Packing List
+            </Button>
+          </Panel>
+          <div className="crm-actions">
+            {row.state === "ALLOCATED" && !row.pickList && can("fulfillment.pick") && (
+              <Button
+                disabled={pending}
+                onClick={() => run(`/fulfillment-batches/${row.id}/create-picking`)}
+              >
+                Buat Picking Slip
+              </Button>
+            )}
+            {row.pickList?.state === "OPEN" && can("fulfillment.pick") && (
+              <Button
+                disabled={pending}
+                onClick={() =>
+                  run(`/pick-lists/${row.pickList!.id}/confirm-pick`, {
+                    lines: row.pickList!.lines.map((l) => ({
+                      pick_list_line_id: l.id,
+                      picked_quantity: l.assignedQuantity,
+                    })),
+                  })
+                }
+              >
+                Konfirmasi seluruh picking
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
       {isShipping && row.state === "ALLOCATED" && can("fulfillment.dispatch") && (
         <form
           className="web-form"
@@ -1193,7 +1754,8 @@ function Warehouse({
           </Panel>
         </form>
       )}
-      {isPod && ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
+      {isPod &&
+        ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
         can("delivery_receipt.confirm") && (
           <form
             className="web-form"
@@ -1229,39 +1791,46 @@ function Warehouse({
             </Panel>
           </form>
         )}
-      {isShipping && <Panel title="Surat Jalan">
-        {row.documents?.map((doc) => (
-          <p key={doc.id}>
-            <Link href={`/operations/documents/${doc.id}`} className="text-primary underline">
-              {doc.number}
-            </Link>
-          </p>
-        ))}
-      </Panel>}
-      {isPod && <Panel title="POD & penagihan">
-        {row.deliveryReceipts?.map((pod) => (
-          <div key={pod.id}>
-            <p>Penerima: {pod.receiverName}</p>
-            {can("delivery_receipt.read") && <Evidence id={pod.evidenceId} />}
-            {pod.invoices.length
-              ? pod.invoices.map((i) => (
-                  <p key={i.id}>
-                    <Link href={`/operations/invoices/${i.id}`} className="text-primary underline">
-                      {i.number}
-                    </Link>
-                  </p>
-                ))
-              : can("sales_invoice.post") && (
-                  <Button
-                    disabled={pending}
-                    onClick={() => run("/sales-invoices", { delivery_receipt_id: pod.id })}
-                  >
-                    Terbitkan invoice dari POD
-                  </Button>
-                )}
-          </div>
-        ))}
-      </Panel>}
+      {isShipping && (
+        <Panel title="Surat Jalan">
+          {row.documents?.map((doc) => (
+            <p key={doc.id}>
+              <Link href={`/operations/documents/${doc.id}`} className="text-primary underline">
+                {doc.number}
+              </Link>
+            </p>
+          ))}
+        </Panel>
+      )}
+      {isPod && (
+        <Panel title="POD & penagihan">
+          {row.deliveryReceipts?.map((pod) => (
+            <div key={pod.id}>
+              <p>Penerima: {pod.receiverName}</p>
+              {can("delivery_receipt.read") && <Evidence id={pod.evidenceId} />}
+              {pod.invoices.length
+                ? pod.invoices.map((i) => (
+                    <p key={i.id}>
+                      <Link
+                        href={`/operations/invoices/${i.id}`}
+                        className="text-primary underline"
+                      >
+                        {i.number}
+                      </Link>
+                    </p>
+                  ))
+                : can("sales_invoice.post") && (
+                    <Button
+                      disabled={pending}
+                      onClick={() => run("/sales-invoices", { delivery_receipt_id: pod.id })}
+                    >
+                      Terbitkan invoice dari POD
+                    </Button>
+                  )}
+            </div>
+          ))}
+        </Panel>
+      )}
     </>
   );
 }
@@ -1281,93 +1850,214 @@ function InvoiceCreation({
   const [notes, setNotes] = useState("");
   const selected = rows.find((row) => row.id === selectedId);
   const existing = selected?.invoices?.find((invoice) => invoice.state !== "VOID");
-  const save = async () => {
+  const save = async (post = false) => {
     if (!selected || existing) return;
     const result = await command("/sales-invoice-drafts", {
       delivery_receipt_id: selected.id,
       billing_reference: reference,
       notes,
     });
+    if (post) await command("/sales-invoices", { delivery_receipt_id: selected.id });
     router.push(`/operations/invoices/${result.data.id}`);
   };
   return (
-    <div className="web-form">
-      <div className="so-footer so-detail-actions">
+    <div className="web-form sales-compose">
+      <Button className="sales-back" variant="outline" asChild>
+        <Link href="/operations/invoices">← Kembali ke daftar</Link>
+      </Button>
+      <ProformaContents
+        review
+        documentType="Invoice"
+        snapshot={selected?.snapshot ?? { allocations: [] }}
+        beforeContent={
+          <Panel title="1 · Pilih POD">
+            <SelectionField
+              label="Pilih POD"
+              options={rows.map((r) => ({
+                id: r.id,
+                name: `${r.salesOrder?.number} · ${r.salesOrder?.customer?.name} · ${r.fulfillmentBatch?.number} · ${formatDate(r.acceptedAt)}`,
+              }))}
+              value={selectedId ? [selectedId] : []}
+              onChange={(values) => setSelectedId(values[0] ?? "")}
+            />
+            <p className="sales-notice">
+              Pilih satu POD terkonfirmasi. Penggabungan beberapa POD belum didukung; tanggal POD
+              berbeda tetap menjadi Invoice terpisah.
+            </p>
+            <DataTable
+              data={rows}
+              total={rows.length}
+              showColumns={false}
+              columns={[
+                {
+                  id: "select",
+                  header: "Pilih",
+                  cell: ({ row: r }) => (
+                    <input
+                      type="radio"
+                      name="invoice-pod"
+                      aria-label={`Pilih POD ${r.original.salesOrder?.number}`}
+                      checked={selectedId === r.original.id}
+                      onChange={() => setSelectedId(r.original.id)}
+                    />
+                  ),
+                },
+                {
+                  id: "so",
+                  header: "Sales Order",
+                  cell: ({ row: r }) => r.original.salesOrder?.number ?? "—",
+                },
+                {
+                  id: "stage",
+                  header: "Tahap pemenuhan",
+                  cell: ({ row: r }) => r.original.fulfillmentBatch?.number ?? "—",
+                },
+                {
+                  id: "customer",
+                  header: "Pelanggan",
+                  cell: ({ row: r }) => r.original.salesOrder?.customer?.name ?? "—",
+                },
+                {
+                  id: "date",
+                  header: "Tanggal POD",
+                  cell: ({ row: r }) => formatDate(r.original.acceptedAt),
+                },
+              ]}
+            />
+            {!rows.length && <p>Belum ada POD yang siap ditagihkan.</p>}
+          </Panel>
+        }
+        notes={
+          <div className="grid gap-4">
+            <label>
+              Referensi tagihan
+              <Input
+                value={reference}
+                maxLength={200}
+                onChange={(e) => setReference(e.target.value)}
+              />
+            </label>
+            <label>
+              Catatan
+              <Textarea value={notes} maxLength={2000} onChange={(e) => setNotes(e.target.value)} />
+            </label>
+            <p className="sales-notice">
+              Jatuh tempo dihitung dari tanggal POD + termin. Tanggal input, cetak dan tukar faktur
+              tidak mengubah jatuh tempo.
+            </p>
+            <p className="so-help">
+              Produk, jumlah, harga, pajak, dan ongkir mengikuti dokumen sumber. Draft dapat
+              diperbarui sebelum posting.
+            </p>
+          </div>
+        }
+        asideContent={
+          <p className="sales-notice sales-warning">
+            Setelah diposting, Invoice terkunci. Gunakan Simpan draft untuk memeriksa lebih dulu.
+          </p>
+        }
+      />
+      <footer className="so-footer so-detail-actions">
         <Button variant="outline" asChild>
-          <Link href="/operations/invoices">
-            <ArrowLeft />
-            Daftar Invoice
-          </Link>
+          <Link href="/operations/invoices">Batal</Link>
         </Button>
         {existing ? (
           <Button asChild>
             <Link href={`/operations/invoices/${existing.id}`}>Buka Invoice {existing.number}</Link>
           </Button>
         ) : (
-          <Button
-            disabled={pending || !selected}
-            onClick={() => void save().catch(() => undefined)}
-          >
-            {pending ? "Menyimpan…" : "Simpan Draft Invoice"}
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              disabled={pending || !selected}
+              onClick={() => void save().catch(() => undefined)}
+            >
+              Simpan draft
+            </Button>
+            <Button
+              disabled={pending || !selected}
+              onClick={() => void save(true).catch(() => undefined)}
+            >
+              Posting Invoice
+            </Button>
+          </>
         )}
-      </div>
-      <Panel title="Sumber Invoice">
-        <SelectionField
-          label="Pilih POD"
-          options={rows.map((r) => ({
-            id: r.id,
-            name: `${r.salesOrder?.number} · ${r.salesOrder?.customer?.name} · ${r.fulfillmentBatch?.number} · ${formatDate(r.acceptedAt)}`,
-          }))}
-          value={selectedId ? [selectedId] : []}
-          onChange={(values) => setSelectedId(values[0] ?? "")}
-        />
-        {!rows.length && <p>Belum ada POD yang siap ditagihkan.</p>}
-      </Panel>
-      {selected && (
-        <>
-          <div className="so-detail-overview">
-            <div>
-              <span className="so-eyebrow">INVOICE</span>
-              <h2>Draft baru</h2>
-              <p>{selected.salesOrder?.customer?.name}</p>
-            </div>
-            <Badge variant="outline">Belum disimpan</Badge>
-          </div>
-          <ProformaContents
-            documentType="Invoice"
-            snapshot={selected.snapshot}
-            batchNumber={selected.fulfillmentBatch?.number}
-            notes={
-              <div className="grid gap-4">
-                <label>
-                  Referensi tagihan
-                  <Input
-                    value={reference}
-                    maxLength={200}
-                    onChange={(e) => setReference(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Catatan
-                  <Textarea
-                    value={notes}
-                    maxLength={2000}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                </label>
-                <p className="so-help">
-                  Produk, jumlah, harga, pajak, dan ongkir mengikuti dokumen sumber. Draft dapat
-                  diperbarui sebelum posting.
-                </p>
-              </div>
-            }
-          />
-        </>
-      )}
+      </footer>
     </div>
   );
 }
+
+function CustomerReturnForm({ command, pending }: { command: Command; pending: boolean }) {
+  const [customerId, setCustomerId] = useState("");
+  const [invoiceId, setInvoiceId] = useState("");
+  const [deliveryReceiptLineId, setDeliveryReceiptLineId] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [quarantineLocatorId, setQuarantineLocatorId] = useState("");
+  const [batchNo, setBatchNo] = useState("");
+  const [reason, setReason] = useState("");
+  return (
+    <form
+      className="web-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void command(`/customers/${customerId}/returns`, {
+          ...(invoiceId ? { sales_invoice_id: invoiceId } : {}),
+          reason,
+          lines: [
+            {
+              delivery_receipt_line_id: deliveryReceiptLineId,
+              quantity,
+              quarantine_locator_id: quarantineLocatorId,
+              batch_no: batchNo,
+            },
+          ],
+        }).catch(() => undefined);
+      }}
+    >
+      <Alert>
+        <AlertDescription>
+          Pilihan pelanggan, invoice, baris POD, dan locator karantina belum memiliki endpoint
+          lookup pada layanan operasional. Form ini menerima referensi yang sudah diketahui dan
+          tetap divalidasi server.
+        </AlertDescription>
+      </Alert>
+      <Panel title="Dokumen sumber">
+        <div className="otc-form-grid">
+          <TextField label="ID pelanggan" value={customerId} onChange={setCustomerId} />
+          <TextField
+            label="ID invoice (opsional)"
+            value={invoiceId}
+            onChange={setInvoiceId}
+            required={false}
+          />
+          <TextField
+            label="ID baris POD"
+            value={deliveryReceiptLineId}
+            onChange={setDeliveryReceiptLineId}
+          />
+          <TextField label="Alasan retur" value={reason} onChange={setReason} />
+        </div>
+      </Panel>
+      <Panel title="Barang diretur">
+        <div className="otc-form-grid">
+          <TextField label="Kuantitas retur" value={quantity} onChange={setQuantity} />
+          <TextField label="Batch" value={batchNo} onChange={setBatchNo} />
+          <TextField
+            label="ID locator karantina"
+            value={quarantineLocatorId}
+            onChange={setQuarantineLocatorId}
+          />
+        </div>
+      </Panel>
+      <div className="so-footer so-detail-actions">
+        <Button type="submit" disabled={pending}>
+          Ajukan retur
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function Invoice({
   row,
   command,
@@ -1399,25 +2089,196 @@ function Invoice({
   return (
     <>
       <div className="so-print-area web-form">
-        <div className="so-detail-overview">
-          <div>
-            <span className="so-eyebrow">INVOICE</span>
-            <h2>{row.number}</h2>
-            <p>{row.customer?.name ?? "Pelanggan belum tersedia"}</p>
-          </div>
-          <div className="so-dimensions">
-            <div>
-              <span>Status pembayaran</span>
-              <Badge variant="outline">{invoicePaymentStatus(row) ?? "—"}</Badge>
-              {invoiceDocumentNote(row.state) && <p className="so-help">{invoiceDocumentNote(row.state)}</p>}
-            </div>
-            <div>
-              <span>Sales Order</span>
-              <strong>{row.salesOrder?.number ?? "—"}</strong>
-            </div>
-          </div>
-        </div>
+        <InvoiceProgress
+          id={row.id}
+          draft={row.state === "DRAFT"}
+          payment={invoicePaymentStatus(row) ?? null}
+        />
         <ProformaContents
+          documentNumber={row.number}
+          review={row.state === "DRAFT"}
+          beforeContent={
+            row.state === "DRAFT" ? (
+              <Panel title="1 · POD sumber">
+                <p>
+                  {row.salesOrder?.number} · {row.customer?.name}
+                </p>
+                <p className="sales-notice">
+                  Draft mengikuti POD sumber. Jumlah dan harga mengikuti dokumen yang diterima.
+                </p>
+              </Panel>
+            ) : undefined
+          }
+          mainContent={
+            row.state !== "DRAFT" ? (
+              <DocumentHandoff
+                kind="invoice"
+                id={row.id}
+                editable={
+                  ["POSTED", "PARTIALLY_PAID", "PAID"].includes(row.state) &&
+                  can("sales_invoice.post")
+                }
+              />
+            ) : undefined
+          }
+          asideContent={
+            <>
+              {row.state !== "DRAFT" && (
+                <>
+                  <Panel title="Status tagihan">
+                    <div className="sales-checklist">
+                      <div>
+                        <span>Total</span>
+                        <strong>{money(row.total, row.currency)}</strong>
+                      </div>
+                      <div>
+                        <span>Terbayar</span>
+                        <strong>
+                          {row.total != null && row.outstandingAmount != null
+                            ? money(
+                                new Decimal(row.total).sub(row.outstandingAmount).toString(),
+                                row.currency,
+                              )
+                            : "—"}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Sisa</span>
+                        <strong>{money(row.outstandingAmount, row.currency)}</strong>
+                      </div>
+                      <div>
+                        <span>Jatuh tempo</span>
+                        <strong>{formatDate(row.dueDate)}</strong>
+                      </div>
+                    </div>
+                  </Panel>
+                  <Panel title="Checklist dokumen">
+                    <div className="sales-checklist">
+                      <div>
+                        <span>Invoice</span>
+                        <SalesBadge>Siap</SalesBadge>
+                      </div>
+                      <div>
+                        <span>Faktur pajak</span>
+                        <SalesBadge>Belum terverifikasi</SalesBadge>
+                      </div>
+                      <div>
+                        <span>Surat Jalan / POD</span>
+                        <SalesBadge>
+                          {row.deliveryReceiptId ? "Tersedia" : "Belum tersedia"}
+                        </SalesBadge>
+                      </div>
+                      <div>
+                        <span>Kwitansi</span>
+                        <SalesBadge>Belum terlacak</SalesBadge>
+                      </div>
+                    </div>
+                    <HandoffStatus kind="invoice" id={row.id} />
+                  </Panel>
+                </>
+              )}
+              <div className="sales-payment-card">
+                {row.state === "POSTED" && can("customer_receipt.post") && (
+                  <form
+                    className="web-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void command(`/customers/${row.customerId}/receipts`, {
+                        amount,
+                        currency: row.currency,
+                        bank_reference: reference,
+                        bank_account_id: bank,
+                        evidence_id: proof,
+                      })
+                        .then((r) => {
+                          setReceipt(r.data.id);
+                          setAllocationAmount(amount);
+                          setAmount("");
+                          setReference("");
+                          setProof("");
+                        })
+                        .catch(() => undefined);
+                    }}
+                  >
+                    <Panel title="Terima pembayaran (Finance)">
+                      <FieldGroup>
+                        <SelectionField
+                          label="Kas/Bank"
+                          options={(banks.data?.data ?? []).map((b) => ({
+                            id: b.id,
+                            name: `${b.name} · ${b.lastFour}`,
+                          }))}
+                          value={bank ? [bank] : []}
+                          onChange={(v) => setBank(v[0] ?? "")}
+                        />
+                        <TextField label="Jumlah penerimaan" value={amount} onChange={setAmount} />
+                        <TextField
+                          label="Referensi rekening / mutasi bank"
+                          value={reference}
+                          onChange={setReference}
+                        />
+                        <Upload key={receipt} purpose="PAYMENT" onChange={setProof} />
+                        <Button disabled={pending || !proof || !bank}>Catat penerimaan</Button>
+                      </FieldGroup>
+                    </Panel>
+                  </form>
+                )}
+                {row.state === "POSTED" && can("tax_component.read") && (
+                  <details className="sales-finance-detail">
+                    <summary>Komponen pajak (pelanggan WAPU)</summary>
+                    <TaxComponents row={row} can={can} command={command} pending={pending} />
+                  </details>
+                )}
+                {row.state === "POSTED" && can("customer_receipt.allocate") && (
+                  <form
+                    className="web-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void command(`/customer-receipts/${receipt}/allocate`, {
+                        invoice_id: row.id,
+                        amount: allocationAmount,
+                      })
+                        .then(() => setAllocationAmount(""))
+                        .catch(() => undefined);
+                    }}
+                  >
+                    <Panel title="Alokasikan penerimaan">
+                      <FieldGroup>
+                        <SelectionField
+                          label="Penerimaan tersedia"
+                          options={(row.receipts ?? []).map((r) => ({
+                            id: r.id,
+                            name: `${r.bankReference} · tersedia ${r.unallocatedAmount}`,
+                          }))}
+                          value={receipt ? [receipt] : []}
+                          onChange={(v) => setReceipt(v[0] ?? "")}
+                        />
+                        <TextField
+                          label="Jumlah alokasi"
+                          value={allocationAmount}
+                          onChange={setAllocationAmount}
+                        />
+                        <Button disabled={pending || !receipt}>Alokasikan ke invoice</Button>
+                      </FieldGroup>
+                    </Panel>
+                  </form>
+                )}
+                <details className="sales-finance-detail">
+                  <summary>Bukti penerimaan</summary>
+                  <Panel title="Bukti penerimaan">
+                    {row.receipts?.map((r) => (
+                      <div key={r.id}>
+                        <p>
+                          {r.bankReference} · {r.amount} · belum dialokasikan {r.unallocatedAmount}
+                        </p>
+                        <Evidence id={r.evidenceId} />
+                      </div>
+                    ))}
+                  </Panel>
+                </details>
+              </div>
+            </>
+          }
           documentType="Invoice"
           snapshot={row.snapshot}
           issuedAt={row.postedAt ?? undefined}
@@ -1491,110 +2352,6 @@ function Invoice({
           </Button>
         )}
       </div>
-      <Panel title="Status penagihan">
-        <p>
-          Dibuat: {formatDate(row.createdAt)} · Jatuh tempo: {formatDate(row.dueDate)}
-        </p>
-        <p>
-          Sisa tagihan:{" "}
-          {row.state === "POSTED"
-            ? money(row.outstandingAmount, row.currency)
-            : "Belum membentuk piutang"}
-        </p>
-        <p>{row.description ?? "Belum terverifikasi"}</p>
-      </Panel>
-      {row.state === "POSTED" && can("customer_receipt.post") && (
-        <form
-          className="web-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void command(`/customers/${row.customerId}/receipts`, {
-              amount,
-              currency: row.currency,
-              bank_reference: reference,
-              bank_account_id: bank,
-              evidence_id: proof,
-            })
-              .then((r) => {
-                setReceipt(r.data.id);
-                setAllocationAmount(amount);
-                setAmount("");
-                setReference("");
-                setProof("");
-              })
-              .catch(() => undefined);
-          }}
-        >
-          <Panel title="Penerimaan pembayaran">
-            <FieldGroup>
-              <SelectionField
-                label="Kas/Bank"
-                options={(banks.data?.data ?? []).map((b) => ({
-                  id: b.id,
-                  name: `${b.name} · ${b.lastFour}`,
-                }))}
-                value={bank ? [bank] : []}
-                onChange={(v) => setBank(v[0] ?? "")}
-              />
-              <TextField label="Jumlah penerimaan" value={amount} onChange={setAmount} />
-              <TextField
-                label="Referensi rekening / mutasi bank"
-                value={reference}
-                onChange={setReference}
-              />
-              <Upload key={receipt} purpose="PAYMENT" onChange={setProof} />
-              <Button disabled={pending || !proof || !bank}>Catat penerimaan</Button>
-            </FieldGroup>
-          </Panel>
-        </form>
-      )}
-      {row.state === "POSTED" && can("tax_component.read") && (
-        <TaxComponents row={row} can={can} command={command} pending={pending} />
-      )}
-      {row.state === "POSTED" && can("customer_receipt.allocate") && (
-        <form
-          className="web-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void command(`/customer-receipts/${receipt}/allocate`, {
-              invoice_id: row.id,
-              amount: allocationAmount,
-            })
-              .then(() => setAllocationAmount(""))
-              .catch(() => undefined);
-          }}
-        >
-          <Panel title="Alokasikan penerimaan">
-            <FieldGroup>
-              <SelectionField
-                label="Penerimaan tersedia"
-                options={(row.receipts ?? []).map((r) => ({
-                  id: r.id,
-                  name: `${r.bankReference} · tersedia ${r.unallocatedAmount}`,
-                }))}
-                value={receipt ? [receipt] : []}
-                onChange={(v) => setReceipt(v[0] ?? "")}
-              />
-              <TextField
-                label="Jumlah alokasi"
-                value={allocationAmount}
-                onChange={setAllocationAmount}
-              />
-              <Button disabled={pending || !receipt}>Alokasikan ke invoice</Button>
-            </FieldGroup>
-          </Panel>
-        </form>
-      )}
-      <Panel title="Bukti penerimaan">
-        {row.receipts?.map((r) => (
-          <div key={r.id}>
-            <p>
-              {r.bankReference} · {r.amount} · belum dialokasikan {r.unallocatedAmount}
-            </p>
-            <Evidence id={r.evidenceId} />
-          </div>
-        ))}
-      </Panel>
     </>
   );
 }

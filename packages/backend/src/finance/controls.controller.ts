@@ -12,10 +12,12 @@ import {
   ForbiddenException,
 } from "@nestjs/common";
 import { z } from "zod";
+import { isAccessAdministrator } from "@evflow/contracts";
 import { prisma } from "@evflow/database";
 import { AuthGuard } from "../identity/auth.guard";
 import { PermissionGuard } from "../identity/permission.guard";
 import { RequirePermissions } from "../identity/permissions.decorator";
+import { hasResourcePermission } from "../identity/resource-permissions";
 import type { AuthenticatedRequest } from "../identity/auth.types";
 import {
   createTaxComponent,
@@ -252,6 +254,7 @@ export class FinanceControlsController {
       TAX_RULE_CHANGE: ["sales_tax_rule.manage"],
     };
     if (
+      !isAccessAdministrator(r.auth) &&
       required[sourceType].some(
         (code) =>
           !r.auth.permissions.some(
@@ -454,7 +457,19 @@ export class FinanceControlsController {
   async configuration(@Req() r: AuthenticatedRequest) {
     const companyId = r.auth.company_id;
     const [accounts, periods, profiles] = await Promise.all([
-      prisma.financeAccount.findMany({ where: { companyId }, orderBy: { code: "asc" } }),
+      prisma.financeAccount.findMany({
+        where: { companyId },
+        orderBy: { code: "asc" },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          category: true,
+          active: true,
+          accountType: true,
+          controlKind: true,
+        },
+      }),
       prisma.financePeriod.findMany({ where: { companyId }, orderBy: { startsOn: "desc" } }),
       prisma.financePostingProfile.findMany({
         where: { companyId },
@@ -471,6 +486,8 @@ export class FinanceControlsController {
     @Req() r: AuthenticatedRequest,
     @Headers("idempotency-key") k?: string,
   ) {
+    if (kind === "account" && !hasResourcePermission(r.auth, "account.create"))
+      throw new ForbiddenException("Izin membuat akun diperlukan.");
     return {
       data: await financeConfigure(
         r.auth.company_id,
@@ -484,6 +501,7 @@ export class FinanceControlsController {
   @Get("banks")
   async banks(@Req() r: AuthenticatedRequest) {
     if (
+      !isAccessAdministrator(r.auth) &&
       !r.auth.permissions.some(
         (p) =>
           ["customer_receipt.post", "bank_statement.import", "bank_reconciliation.read"].includes(

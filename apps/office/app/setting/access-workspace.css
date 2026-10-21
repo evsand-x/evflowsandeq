@@ -1,0 +1,507 @@
+.access-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+  color: hsl(var(--foreground));
+  width: 100%;
+}
+.permission-matrix-main {
+  padding: 28px 32px;
+  width: 100%;
+  min-width: 0;
+}
+.access-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.access-heading nav {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 10px;
+}
+.access-heading h1 {
+  font-size: 26px;
+  line-height: 1.25;
+  font-weight: 600;
+  margin: 0;
+}
+.access-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.access-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  padding: 24px;
+  min-width: 0;
+}
+.access-panel h2,
+.access-tab-actions h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 18px;
+}
+.access-note {
+  background: color-mix(in srgb, hsl(var(--primary)) 8%, hsl(var(--card)));
+  border: 1px solid color-mix(in srgb, hsl(var(--primary)) 16%, hsl(var(--border)));
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: hsl(var(--primary));
+}
+.access-badge,
+.access-role-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 2px 9px;
+  max-width: 100%;
+  white-space: normal;
+}
+.access-badge {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+.access-badge.is-active {
+  background: color-mix(in srgb, hsl(var(--primary)) 12%, white);
+  color: hsl(var(--primary));
+}
+.access-role-badge {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+}
+.access-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-width: 420px;
+}
+.access-link {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+.access-form,
+.access-form > fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+.access-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 18px;
+}
+.access-form label:not(.access-switch):not(.access-role-option) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.access-field-label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.access-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  min-height: 38px;
+}
+.access-role-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.access-role-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 9px;
+  padding: 16px;
+  cursor: pointer;
+}
+.access-role-option > span {
+  flex: 1;
+}
+.access-role-option strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+.access-role-option small {
+  display: block;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.6;
+}
+.access-role-option > small {
+  text-align: right;
+  max-width: 30%;
+}
+.access-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+}
+.access-value {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.access-value > span {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+.access-value strong {
+  font-weight: 500;
+}
+.access-preview-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.access-preview-stats > div {
+  background: hsl(var(--muted));
+  border-radius: 8px;
+  padding: 12px;
+}
+.access-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  background: hsl(var(--card));
+  overflow: hidden;
+  min-width: 0;
+}
+.access-tabs [role="tablist"] {
+  background: transparent;
+  border-bottom: 1px solid hsl(var(--border));
+  border-radius: 0;
+  padding: 0 16px;
+  height: auto;
+  justify-content: flex-start;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: 100%;
+}
+.access-tabs [role="tab"] {
+  border-radius: 0;
+  height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  box-shadow: none;
+  background: transparent;
+  flex: none;
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+}
+.access-tabs [role="tab"][data-state="active"] {
+  color: hsl(var(--primary));
+  border-bottom-color: hsl(var(--primary));
+  box-shadow: none;
+}
+.access-tabs [role="tabpanel"] {
+  margin: 0;
+  min-width: 0;
+}
+.access-tabs .crm-table-panel {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.access-tab-actions {
+  padding: 18px;
+}
+.access-caption {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  padding: 16px;
+}
+.access-error {
+  color: hsl(var(--destructive));
+  font-size: 13px;
+  padding: 12px;
+}
+.access-workspace .crm-table-toolbar {
+  display: flex;
+  padding: 16px;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+.access-workspace .crm-table-toolbar > [data-slot="field"] {
+  flex: 0 1 200px;
+}
+.access-workspace .crm-table-toolbar > .access-legend {
+  margin-left: auto;
+}
+.access-workspace .crm-table-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  overflow: hidden;
+}
+.access-workspace .crm-table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  gap: 12px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+.access-workspace .crm-table-compact td {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+.access-workspace .crm-table-toolbar > input {
+  flex: 1 1 240px;
+  min-width: 160px;
+}
+.access-workspace .crm-table-panel td {
+  padding: 14px 16px;
+  font-size: 13px;
+}
+.access-workspace .crm-table-panel th {
+  padding: 12px 16px;
+  font-size: 12px;
+  background: color-mix(in srgb, hsl(var(--muted)) 45%, white);
+}
+.access-workspace .crm-table-panel {
+  border-radius: 14px;
+}
+.access-matrix-table table {
+  min-width: 1250px;
+}
+.access-matrix-table .crm-table-panel td {
+  padding: 10px 12px;
+  text-align: center;
+  font-size: 12px;
+}
+.access-matrix-table th:not(:first-child) {
+  text-align: center;
+  white-space: normal;
+  min-width: 64px;
+}
+.access-matrix-table td:first-child,
+.access-matrix-table th:first-child {
+  text-align: left;
+  min-width: 210px;
+}
+.access-matrix-table tr:has(.access-module-label) {
+  background: color-mix(in srgb, hsl(var(--primary)) 5%, white);
+}
+.access-module-label {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+.access-tree-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+.access-tree-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  border-radius: 5px;
+  padding: 5px 3px;
+  color: hsl(var(--foreground));
+  font-weight: 600;
+  cursor: pointer;
+}
+.access-tree-toggle:hover {
+  color: hsl(var(--primary));
+  background: hsl(var(--muted));
+}
+.access-tree-toggle:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+.access-tree-toggle svg {
+  flex-shrink: 0;
+  transition: transform 150ms;
+}
+.access-tree-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.access-tree-leaf {
+  padding: 5px 3px 5px 26px;
+}
+.access-matrix-table tr:has(.access-tree-label.is-branch) {
+  background: color-mix(in srgb, hsl(var(--primary)) 4%, hsl(var(--card)));
+}
+.access-matrix-table td:first-child {
+  min-width: 280px;
+}
+.access-special {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 145px;
+}
+.access-special label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.access-check {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 5px;
+}
+.access-check.is-changed {
+  background: #fff0c5;
+  outline: 1px solid #e3c579;
+}
+.access-check.is-inherited [data-slot="checkbox"]:disabled {
+  opacity: 1;
+}
+.access-unavailable {
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.access-cell-state {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  white-space: normal;
+}
+.access-shared-permission {
+  display: block;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  white-space: normal;
+}
+.access-sensitive {
+  background: #fee2e2;
+  color: #9f2525;
+  border-radius: 5px;
+  font-size: 10px;
+  padding: 2px 5px;
+  margin-left: 5px;
+}
+.access-legend {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  max-width: 220px;
+  align-self: center;
+}
+.access-sticky-actions {
+  position: sticky;
+  bottom: 0;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  padding: 14px 20px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  z-index: 10;
+  font-size: 12px;
+}
+.access-review {
+  max-width: 680px !important;
+}
+.access-review-list {
+  max-height: 45vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.access-review-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: hsl(var(--muted));
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.access-review-list strong {
+  font-weight: 600;
+}
+.access-review-list span {
+  white-space: nowrap;
+}
+.access-role-detail > .access-heading {
+  margin: 0;
+}
+@media (max-width: 1050px) {
+  .access-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .access-role-option > small {
+    max-width: 35%;
+  }
+}
+@media (max-width: 640px) {
+  .permission-matrix-main {
+    padding: 20px 16px;
+  }
+  .access-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .access-heading {
+    align-items: flex-start;
+  }
+  .access-sticky-actions {
+    flex-wrap: wrap;
+  }
+}
+
+.access-group-summary {
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  padding-left: 26px;
+}
+.access-group-check [data-slot="checkbox"][data-state="indeterminate"] {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.access-matrix-table th:first-child,
+.access-matrix-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: hsl(var(--card));
+  z-index: 1;
+  min-width: 300px;
+}
+.access-matrix-table tr:has(.access-tree-label.is-branch) td:first-child {
+  background: hsl(var(--muted));
+}
+.access-matrix-table .access-cell-state {
+  font-size: 10px;
+  line-height: 1.3;
+  display: inline-block;
+  max-width: 72px;
+}

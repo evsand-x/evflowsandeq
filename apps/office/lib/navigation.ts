@@ -9,20 +9,40 @@ export type DashboardView =
   | "actions"
   | "reports";
 
-export const dashboardViews: { id: DashboardView; label: string; permission?: string }[] = [
-  { id: "executive", label: "Ringkasan Eksekutif" },
-  { id: "sales", label: "Sales", permission: "crm.read" },
-  { id: "warehouse", label: "Warehouse & Logistik", permission: "warehouse.read" },
-  { id: "finance", label: "Finance", permission: "finance.read" },
-  { id: "hris", label: "HRIS", permission: "hr.read" },
-  { id: "actions", label: "Tugas & Persetujuan" },
-  { id: "reports", label: "Laporan & Ekspor" },
+export const dashboardViews: {
+  id: DashboardView;
+  label: string;
+  permission: string;
+  sourcePermission?: string;
+}[] = [
+  { id: "executive", label: "Ringkasan Eksekutif", permission: "dashboard_executive.read" },
+  {
+    id: "sales",
+    label: "Sales",
+    permission: "dashboard_sales.read",
+    sourcePermission: "crm_prospect.read",
+  },
+  {
+    id: "warehouse",
+    label: "Warehouse & Logistik",
+    permission: "dashboard_warehouse.read",
+    sourcePermission: "warehouse.read",
+  },
+  {
+    id: "finance",
+    label: "Finance",
+    permission: "dashboard_finance.read",
+    sourcePermission: "finance.read",
+  },
+  { id: "hris", label: "HRIS", permission: "dashboard_hris.read", sourcePermission: "hr.read" },
+  { id: "actions", label: "Tugas & Persetujuan", permission: "dashboard_actions.read" },
+  { id: "reports", label: "Laporan & Ekspor", permission: "dashboard_reports.read" },
 ];
 
 export const moduleNavigation = [
   {
     label: "Sales & Marketing",
-    permission: "crm.read",
+    permission: "crm_prospect.read",
     items: [
       "CRM",
       "Aktivitas Sales",
@@ -72,17 +92,8 @@ export const moduleNavigation = [
   },
   {
     label: "Master Data",
-    permission: "master_data.read",
-    items: [
-      "Produk",
-      "Pelanggan",
-      "Supplier",
-      "Vendor",
-      "Gudang",
-      "Item Operasional",
-      "Referensi Reusable",
-      "Ringkasan Lintas Domain",
-    ],
+    permission: "master_customer.read",
+    items: ["Produk", "Pelanggan", "Supplier", "Vendor", "Gudang", "Item Operasional"],
   },
   {
     label: "Setting",
@@ -106,6 +117,7 @@ export const moduleNavigation = [
 ] as const;
 
 export function hasCompanyPermission(principal: AuthPrincipal, code: string) {
+  if (isAccessAdministrator(principal)) return true;
   if (/^(user|role|permission)\./.test(code) && !isAccessAdministrator(principal)) return false;
   return principal.permissions.some(
     (permission) =>
@@ -118,9 +130,10 @@ export function hasCompanyPermission(principal: AuthPrincipal, code: string) {
 export function visibleDashboardViews(principal: AuthPrincipal) {
   return dashboardViews.filter(
     (view) =>
-      !view.permission ||
-      hasCompanyPermission(principal, view.permission) ||
-      (view.id === "warehouse" && hasWarehouseDashboardPermission(principal)),
+      hasCompanyPermission(principal, view.permission) &&
+      (!view.sourcePermission ||
+        hasCompanyPermission(principal, view.sourcePermission) ||
+        (view.id === "warehouse" && hasWarehouseDashboardPermission(principal))),
   );
 }
 
@@ -144,12 +157,34 @@ export function visibleModules(principal: AuthPrincipal) {
           "transaction_approval.manage",
           "customer.payment_policy.manage",
         ].some((code) => hasCompanyPermission(principal, code))
-      : hasCompanyPermission(principal, module.permission) ||
+      : (module.label === "Sales & Marketing" &&
+          [
+            "crm_contact.read",
+            "crm_opportunity.read",
+            "crm_activity.read",
+          ].some((code) => hasCompanyPermission(principal, code))) ||
+        (module.label === "Master Data" &&
+          [
+            "master_product",
+            "master_supplier",
+            "master_vendor",
+            "master_warehouse",
+            "master_operational_item",
+          ].some((resource) => hasCompanyPermission(principal, `${resource}.read`))) ||
+        hasCompanyPermission(principal, module.permission) ||
         (module.label === "Sales & Marketing" &&
           (hasCompanyPermission(principal, "sales_order.read") ||
-            hasCompanyPermission(principal, "proforma.issue"))) ||
+            ["proforma.read", "sales_backorder.read"].some((code) =>
+              hasCompanyPermission(principal, code),
+            ))) ||
         (module.label === "Warehouse & Logistik" &&
-          hasCompanyPermission(principal, "fulfillment.read")) ||
-        (module.label === "Finance" && hasCompanyPermission(principal, "sales_invoice.read")),
+          [
+            "outbound_picking.read",
+            "outbound_checking.read",
+            "outbound_shipping.read",
+            "delivery_receipt.read",
+            "warehouse_allocation.read",
+          ].some((code) => hasCompanyPermission(principal, code))) ||
+        (module.label === "Finance" && ["account.read", "sales_invoice.read", "tax_master.read", "tax_output.read", "tax_input.read"].some(code => hasCompanyPermission(principal, code))),
   );
 }

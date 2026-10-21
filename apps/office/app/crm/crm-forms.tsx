@@ -25,6 +25,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ApiError, apiRequest } from "@/lib/api";
+import { hasCompanyPermission } from "@/lib/navigation";
 import { SelectionField } from "@/components/web/selection-field";
 import { Choice, Notice, DataTable } from "./crm-common";
 import { customers, functionLabels, statusLabels } from "./crm-fixtures";
@@ -181,45 +182,44 @@ export function CrmForm({
   ]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState("");
-  const canCreate = principal.permissions.some(
-    (p) =>
-      p.code === "crm.create" &&
-      ["company", "privileged"].includes(p.scope_type) &&
-      (!p.scope_id || p.scope_id === principal.company_id),
-  );
-  const canUpdate = principal.permissions.some(
-    (p) =>
-      p.code === "crm.update" &&
-      ["company", "privileged"].includes(p.scope_type) &&
-      (!p.scope_id || p.scope_id === principal.company_id),
-  );
+  const permissionResource = kind === "contact" ? "crm_contact" : "crm_prospect";
+  const canCreate = hasCompanyPermission(principal, `${permissionResource}.create`);
+  const canUpdate = hasCompanyPermission(principal, `${permissionResource}.update`);
   const optionsQuery = useQuery({
-    queryKey: ["crm", principal.company_id, principal.user_id, "options", search, values.customer_id],
+    queryKey: [
+      "crm",
+      principal.company_id,
+      principal.user_id,
+      "options",
+      kind,
+      search,
+      values.customer_id,
+    ],
     enabled: !preview && canCreate && kind !== "status",
     queryFn: ({ signal }) =>
       apiRequest<{ data: Options }>(
-        `/crm/options?q=${encodeURIComponent(search)}${values.customer_id ? `&customer_id=${encodeURIComponent(values.customer_id)}` : ""}`,
+        `/crm/options?resource=${kind === "contact" ? "contacts" : "prospects"}&q=${encodeURIComponent(search)}${values.customer_id ? `&customer_id=${encodeURIComponent(values.customer_id)}` : ""}`,
         { signal },
       ),
   });
   const previewOptions: Options = {
-        customers,
-        owners: [{ id: principal.user_id, name: "Rina" }],
-        channels: [{ id: "preview-channel", name: "Rumah Sakit" }],
-        rayons: [{ id: "preview-rayon", name: "Makassar" }],
-        products: [
-          { id: "p1", name: "Reagen hematologi 3-part" },
-          { id: "p2", name: "Tabung EDTA 3 ml" },
-        ],
-        uoms: [
-          { id: "u1", name: "kit" },
-          { id: "u2", name: "box" },
-        ],
-        contacts: [
-          { id: "preview-contact-1", name: "Andi · Pengadaan" },
-          { id: "preview-contact-2", name: "Sari · Keuangan" },
-        ],
-      };
+    customers,
+    owners: [{ id: principal.user_id, name: "Rina" }],
+    channels: [{ id: "preview-channel", name: "Rumah Sakit" }],
+    rayons: [{ id: "preview-rayon", name: "Makassar" }],
+    products: [
+      { id: "p1", name: "Reagen hematologi 3-part" },
+      { id: "p2", name: "Tabung EDTA 3 ml" },
+    ],
+    uoms: [
+      { id: "u1", name: "kit" },
+      { id: "u2", name: "box" },
+    ],
+    contacts: [
+      { id: "preview-contact-1", name: "Andi · Pengadaan" },
+      { id: "preview-contact-2", name: "Sari · Keuangan" },
+    ],
+  };
   const serverOptions = optionsQuery.data?.data;
   const options: Options = preview
     ? previewOptions
@@ -553,12 +553,15 @@ export function CrmForm({
               multiple
               options={newInstitution ? [] : options.contacts}
               error={errors.contact_ids}
-              placeholder={values.customer_id ? "Pilih kontak terdaftar" : "Pilih pelanggan terlebih dahulu"}
+              placeholder={
+                values.customer_id ? "Pilih kontak terdaftar" : "Pilih pelanggan terlebih dahulu"
+              }
             />
             {text("source", "Sumber prospek")}
             <Field orientation="horizontal" className="web-field-full">
               <Checkbox
                 id="crm-new-institution"
+                disabled={!hasCompanyPermission(principal, "crm_customer.create")}
                 checked={newInstitution}
                 onCheckedChange={(v) => {
                   const creating = v === true;
@@ -861,10 +864,19 @@ export function OpportunityForm({
   const opportunityId = params.get("opportunity_id");
   const lost = params.get("outcome") === "lost";
   const opportunityQuery = useQuery({
-    queryKey: ["crm", principal.company_id, principal.user_id, "opportunity", prospect?.id, opportunityId],
+    queryKey: [
+      "crm",
+      principal.company_id,
+      principal.user_id,
+      "opportunity",
+      prospect?.id,
+      opportunityId,
+    ],
     enabled: win && !preview && !!prospect?.id && !!opportunityId,
     queryFn: ({ signal }) =>
-      apiRequest<{ data: CrmOpportunity[] }>(`/crm/prospects/${prospect!.id}/opportunities`, { signal }),
+      apiRequest<{ data: CrmOpportunity[] }>(`/crm/prospects/${prospect!.id}/opportunities`, {
+        signal,
+      }),
     select: (result) => result.data.find((item) => item.id === opportunityId),
   });
   const opportunityData = preview
@@ -893,16 +905,15 @@ export function OpportunityForm({
     : opportunityQuery.data;
   useEffect(() => {
     if (opportunityData && Object.keys(winQuantities).length === 0) {
-      setWinQuantities(Object.fromEntries(opportunityData.lines.map((line) => [line.id, line.estimated_qty ?? "1"])));
+      setWinQuantities(
+        Object.fromEntries(
+          opportunityData.lines.map((line) => [line.id, line.estimated_qty ?? "1"]),
+        ),
+      );
     }
   }, [opportunityData?.id, winQuantities]);
   const request = useRef<{ key: string; payload: string } | null>(null);
-  const canCreate = principal.permissions.some(
-    (p) =>
-      p.code === "crm.create" &&
-      ["company", "privileged"].includes(p.scope_type) &&
-      (!p.scope_id || p.scope_id === principal.company_id),
-  );
+  const canCreate = hasCompanyPermission(principal, "crm_opportunity.create");
   const mutation = useMutation({
     mutationFn: (body: unknown) => {
       const payload = JSON.stringify(body);
@@ -957,7 +968,11 @@ export function OpportunityForm({
       version: opportunity?.version,
       customer_order_id: crypto.randomUUID(),
       maintain_strategy: maintainStrategy,
-      lines: opportunity?.lines.map((line) => ({ opportunity_line_id: line.id, quantity: winQuantities[line.id] ?? line.estimated_qty ?? "1" })) ?? [],
+      lines:
+        opportunity?.lines.map((line) => ({
+          opportunity_line_id: line.id,
+          quantity: winQuantities[line.id] ?? line.estimated_qty ?? "1",
+        })) ?? [],
     });
     if (!opportunity || !parsed.success || !referenceNo.trim()) {
       setFailure("Pilih peluang, isi nomor PO/SP dan strategi maintain.");
@@ -971,7 +986,12 @@ export function OpportunityForm({
       const order = await apiRequest<{ data: { id: string } }>("/crm/customer-orders", {
         method: "POST",
         headers: { "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ opportunity_id: opportunity.id, kind: orderKind, reference_no: referenceNo.trim(), evidence_attachment_ids: [] }),
+        body: JSON.stringify({
+          opportunity_id: opportunity.id,
+          kind: orderKind,
+          reference_no: referenceNo.trim(),
+          evidence_attachment_ids: [],
+        }),
       });
       await apiRequest(`/crm/customer-orders/${order.data.id}/verify`, { method: "POST" });
       await apiRequest(`/crm/opportunities/${opportunity.id}/win`, {
@@ -989,7 +1009,11 @@ export function OpportunityForm({
     event.preventDefault();
     setFailure("");
     const opportunity = opportunityData;
-    const parsed = loseOpportunitySchema.safeParse({ version: opportunity?.version, reason: notes || lostReason, maintain_strategy: maintainStrategy || continuationReason || null });
+    const parsed = loseOpportunitySchema.safeParse({
+      version: opportunity?.version,
+      reason: notes || lostReason,
+      maintain_strategy: maintainStrategy || continuationReason || null,
+    });
     if (!opportunity || !parsed.success) {
       setFailure("Isi alasan Lost sebelum menyimpan.");
       return;
@@ -999,7 +1023,10 @@ export function OpportunityForm({
       return;
     }
     try {
-      await apiRequest(`/crm/opportunities/${opportunity.id}/lose`, { method: "POST", body: JSON.stringify(parsed.data) });
+      await apiRequest(`/crm/opportunities/${opportunity.id}/lose`, {
+        method: "POST",
+        body: JSON.stringify(parsed.data),
+      });
       toast.success("Peluang berhasil dicatat sebagai Lost.");
       await client.invalidateQueries({ queryKey: ["crm"] });
       router.push(back);
@@ -1010,35 +1037,123 @@ export function OpportunityForm({
   if (win && lost)
     return (
       <form className="web-form crm-form" onSubmit={submitLost}>
-        {failure && <Alert variant="destructive"><AlertDescription>{failure}</AlertDescription></Alert>}
-        {!opportunityId ? <Notice>Pilih peluang dari tab Peluang &amp; Pipeline untuk mencatat Lost.</Notice> : !preview && opportunityQuery.isLoading ? <p role="status">Memuat peluang…</p> : !opportunityData ? <Notice>Peluang tidak ditemukan atau belum dapat diakses.</Notice> : <>
-          <FormSection title="Penutupan jumlah sisa">
-            <FieldGroup className="web-form-grid">
-              <TextField label="Periode asal" value={closePeriod} onChange={setClosePeriod} />
-              <Choice label="Jumlah sisa yang ditutup *" value={opportunityData.lines[0]?.id ?? "none"} onChange={() => undefined} options={Object.fromEntries(opportunityData.lines.map((line) => [line.id, `${line.estimated_qty ?? "Belum diketahui"} ${line.uom?.name ?? ""} · ${line.product?.name ?? line.description ?? "Produk"}`]))} />
-              <Choice label="Alasan Lost *" value={lostReason || "deadline"} onChange={setLostReason} options={{ deadline: "Tenggat akhir bulan", budget: "Anggaran pelanggan belum tersedia", competitor: "Memilih pemasok lain" }} />
-              <TextField label="Catatan *" value={notes} onChange={setNotes} area required fullWidth />
-              <TextField label="Tanggal penutupan" value={closeDate} onChange={setCloseDate} type="date" />
-              <TextField label="Stage terakhir" value="Penawaran · 40%" onChange={() => undefined} disabled />
-            </FieldGroup>
-          </FormSection>
-          <FormSection title="Salin sisa ke periode berikutnya">
-            <FieldGroup className="web-form-grid">
-              <Choice label="Tindak lanjut" value={continuation} onChange={setContinuation} options={{ "Buat peluang lanjutan setelah review": "Buat peluang lanjutan setelah review", none: "Tidak dilanjutkan" }} />
-              <Choice label="Periode baru *" value={newPeriod} onChange={setNewPeriod} options={{ "Oktober 2026": "Oktober 2026", "November 2026": "November 2026" }} />
-              <TextField label="Penanggung jawab *" value={responsible} onChange={setResponsible} required />
-              <TextField label="Alasan melanjutkan *" value={continuationReason} onChange={setContinuationReason} area required fullWidth />
-            </FieldGroup>
-          </FormSection>
-          <p className="crm-form-note">Peluang lama tetap Lost. Peluang baru menautkan sisa yang disalin; jumlah yang sudah Win tidak ikut disalin.</p>
-          <div className="web-form-footer"><Button type="button" variant="outline" asChild><Link href={back}>Batal</Link></Button><Button type="submit" variant="outline">Catat Lost Saja</Button><Button type="submit">Catat Lost &amp; Buat Lanjutan</Button></div>
-        </>}
+        {failure && (
+          <Alert variant="destructive">
+            <AlertDescription>{failure}</AlertDescription>
+          </Alert>
+        )}
+        {!opportunityId ? (
+          <Notice>Pilih peluang dari tab Peluang &amp; Pipeline untuk mencatat Lost.</Notice>
+        ) : !preview && opportunityQuery.isLoading ? (
+          <p role="status">Memuat peluang…</p>
+        ) : !opportunityData ? (
+          <Notice>Peluang tidak ditemukan atau belum dapat diakses.</Notice>
+        ) : (
+          <>
+            <FormSection title="Penutupan jumlah sisa">
+              <FieldGroup className="web-form-grid">
+                <TextField label="Periode asal" value={closePeriod} onChange={setClosePeriod} />
+                <Choice
+                  label="Jumlah sisa yang ditutup *"
+                  value={opportunityData.lines[0]?.id ?? "none"}
+                  onChange={() => undefined}
+                  options={Object.fromEntries(
+                    opportunityData.lines.map((line) => [
+                      line.id,
+                      `${line.estimated_qty ?? "Belum diketahui"} ${line.uom?.name ?? ""} · ${line.product?.name ?? line.description ?? "Produk"}`,
+                    ]),
+                  )}
+                />
+                <Choice
+                  label="Alasan Lost *"
+                  value={lostReason || "deadline"}
+                  onChange={setLostReason}
+                  options={{
+                    deadline: "Tenggat akhir bulan",
+                    budget: "Anggaran pelanggan belum tersedia",
+                    competitor: "Memilih pemasok lain",
+                  }}
+                />
+                <TextField
+                  label="Catatan *"
+                  value={notes}
+                  onChange={setNotes}
+                  area
+                  required
+                  fullWidth
+                />
+                <TextField
+                  label="Tanggal penutupan"
+                  value={closeDate}
+                  onChange={setCloseDate}
+                  type="date"
+                />
+                <TextField
+                  label="Stage terakhir"
+                  value="Penawaran · 40%"
+                  onChange={() => undefined}
+                  disabled
+                />
+              </FieldGroup>
+            </FormSection>
+            <FormSection title="Salin sisa ke periode berikutnya">
+              <FieldGroup className="web-form-grid">
+                <Choice
+                  label="Tindak lanjut"
+                  value={continuation}
+                  onChange={setContinuation}
+                  options={{
+                    "Buat peluang lanjutan setelah review": "Buat peluang lanjutan setelah review",
+                    none: "Tidak dilanjutkan",
+                  }}
+                />
+                <Choice
+                  label="Periode baru *"
+                  value={newPeriod}
+                  onChange={setNewPeriod}
+                  options={{ "Oktober 2026": "Oktober 2026", "November 2026": "November 2026" }}
+                />
+                <TextField
+                  label="Penanggung jawab *"
+                  value={responsible}
+                  onChange={setResponsible}
+                  required
+                />
+                <TextField
+                  label="Alasan melanjutkan *"
+                  value={continuationReason}
+                  onChange={setContinuationReason}
+                  area
+                  required
+                  fullWidth
+                />
+              </FieldGroup>
+            </FormSection>
+            <p className="crm-form-note">
+              Peluang lama tetap Lost. Peluang baru menautkan sisa yang disalin; jumlah yang sudah
+              Win tidak ikut disalin.
+            </p>
+            <div className="web-form-footer">
+              <Button type="button" variant="outline" asChild>
+                <Link href={back}>Batal</Link>
+              </Button>
+              <Button type="submit" variant="outline">
+                Catat Lost Saja
+              </Button>
+              <Button type="submit">Catat Lost &amp; Buat Lanjutan</Button>
+            </div>
+          </>
+        )}
       </form>
     );
   if (win)
     return (
       <form className="web-form crm-form" onSubmit={submitWin}>
-        {failure && <Alert variant="destructive"><AlertDescription>{failure}</AlertDescription></Alert>}
+        {failure && (
+          <Alert variant="destructive">
+            <AlertDescription>{failure}</AlertDescription>
+          </Alert>
+        )}
         {!opportunityId ? (
           <Notice>Pilih peluang dari tab Peluang &amp; Pipeline untuk mencatat Win.</Notice>
         ) : !preview && opportunityQuery.isLoading ? (
@@ -1049,34 +1164,147 @@ export function OpportunityForm({
           <>
             <FormSection title="Bukti pesanan pelanggan">
               <FieldGroup className="web-form-grid">
-                <TextField label="Pelanggan" value={prospect?.customer.name ?? ""} onChange={() => undefined} disabled />
-                <Choice label="PO/SP pelanggan terverifikasi *" value={orderKind} onChange={(value) => setOrderKind(value as "PO" | "SP")} options={{ PO: referenceNo ? `${referenceNo} · Terverifikasi` : "PO pelanggan", SP: referenceNo ? `${referenceNo} · Terverifikasi` : "SP pelanggan" }} />
-                <TextField label="Nomor PO/SP *" value={referenceNo} onChange={setReferenceNo} required />
-                <TextField label="Tanggal diterima *" value={receivedDate} onChange={setReceivedDate} type="date" required />
-                <TextField label="Bukti PO/SP *" value={evidenceName || "Unggah bukti PO/SP"} onChange={setEvidenceName} placeholder="PO-RBS-0928.pdf" />
+                <TextField
+                  label="Pelanggan"
+                  value={prospect?.customer.name ?? ""}
+                  onChange={() => undefined}
+                  disabled
+                />
+                <Choice
+                  label="PO/SP pelanggan terverifikasi *"
+                  value={orderKind}
+                  onChange={(value) => setOrderKind(value as "PO" | "SP")}
+                  options={{
+                    PO: referenceNo ? `${referenceNo} · Terverifikasi` : "PO pelanggan",
+                    SP: referenceNo ? `${referenceNo} · Terverifikasi` : "SP pelanggan",
+                  }}
+                />
+                <TextField
+                  label="Nomor PO/SP *"
+                  value={referenceNo}
+                  onChange={setReferenceNo}
+                  required
+                />
+                <TextField
+                  label="Tanggal diterima *"
+                  value={receivedDate}
+                  onChange={setReceivedDate}
+                  type="date"
+                  required
+                />
+                <TextField
+                  label="Bukti PO/SP *"
+                  value={evidenceName || "Unggah bukti PO/SP"}
+                  onChange={setEvidenceName}
+                  placeholder="PO-RBS-0928.pdf"
+                />
               </FieldGroup>
             </FormSection>
             <FormSection title="Jumlah yang menjadi Win">
-              <DataTable<CrmOpportunity["lines"][number]> data={opportunityData.lines} total={opportunityData.lines.length} label="baris peluang" showColumns={false} formTable columns={[
-                { id: "product", header: "Produk / baris sumber", cell: ({ row }) => `${row.original.product?.name ?? row.original.description ?? "Kebutuhan"}` },
-                { id: "opportunity", header: "Jumlah peluang", cell: ({ row }) => `${row.original.estimated_qty ?? "Belum diketahui"} ${row.original.uom?.name ?? ""}` },
-                { id: "won", header: "Sudah Win", cell: () => "0" },
-                { id: "quantity", header: "Jumlah Win baru *", cell: ({ row }) => <Input aria-label={`Jumlah Win ${row.original.product?.name ?? "kebutuhan"}`} value={winQuantities[row.original.id] ?? row.original.estimated_qty ?? "1"} onChange={(event) => setWinQuantities((current) => ({ ...current, [row.original.id]: event.target.value }))} inputMode="decimal" /> },
-                { id: "remaining", header: "Sisa", cell: ({ row }) => `${row.original.estimated_qty ?? "Belum diketahui"} ${row.original.uom?.name ?? ""}` },
-              ]} />
+              <DataTable<CrmOpportunity["lines"][number]>
+                data={opportunityData.lines}
+                total={opportunityData.lines.length}
+                label="baris peluang"
+                showColumns={false}
+                formTable
+                columns={[
+                  {
+                    id: "product",
+                    header: "Produk / baris sumber",
+                    cell: ({ row }) =>
+                      `${row.original.product?.name ?? row.original.description ?? "Kebutuhan"}`,
+                  },
+                  {
+                    id: "opportunity",
+                    header: "Jumlah peluang",
+                    cell: ({ row }) =>
+                      `${row.original.estimated_qty ?? "Belum diketahui"} ${row.original.uom?.name ?? ""}`,
+                  },
+                  { id: "won", header: "Sudah Win", cell: () => "0" },
+                  {
+                    id: "quantity",
+                    header: "Jumlah Win baru *",
+                    cell: ({ row }) => (
+                      <Input
+                        aria-label={`Jumlah Win ${row.original.product?.name ?? "kebutuhan"}`}
+                        value={winQuantities[row.original.id] ?? row.original.estimated_qty ?? "1"}
+                        onChange={(event) =>
+                          setWinQuantities((current) => ({
+                            ...current,
+                            [row.original.id]: event.target.value,
+                          }))
+                        }
+                        inputMode="decimal"
+                      />
+                    ),
+                  },
+                  {
+                    id: "remaining",
+                    header: "Sisa",
+                    cell: ({ row }) =>
+                      `${row.original.estimated_qty ?? "Belum diketahui"} ${row.original.uom?.name ?? ""}`,
+                  },
+                ]}
+              />
             </FormSection>
             <FormSection title="Alasan & rencana maintain">
               <FieldGroup className="web-form-grid">
-                <Choice label="Alasan Win *" value={winReason || "fit"} onChange={setWinReason} options={{ fit: "Spesifikasi sesuai kebutuhan", price: "Harga disepakati", timing: "Waktu pengiriman sesuai" }} />
-                <TextField label="Catatan keputusan *" value={decisionNote} onChange={setDecisionNote} area required fullWidth />
-                <TextField label="Tindakan maintain *" value={maintainStrategy} onChange={setMaintainStrategy} area required fullWidth />
-                <TextField label="Penanggung jawab *" value={responsible} onChange={setResponsible} required />
-                <TextField label="Jadwal pertama *" value={firstSchedule} onChange={setFirstSchedule} type="date" required />
-                <TextField label="Kontak tujuan" value={targetContact} onChange={setTargetContact} placeholder="Pilih kontak" />
+                <Choice
+                  label="Alasan Win *"
+                  value={winReason || "fit"}
+                  onChange={setWinReason}
+                  options={{
+                    fit: "Spesifikasi sesuai kebutuhan",
+                    price: "Harga disepakati",
+                    timing: "Waktu pengiriman sesuai",
+                  }}
+                />
+                <TextField
+                  label="Catatan keputusan *"
+                  value={decisionNote}
+                  onChange={setDecisionNote}
+                  area
+                  required
+                  fullWidth
+                />
+                <TextField
+                  label="Tindakan maintain *"
+                  value={maintainStrategy}
+                  onChange={setMaintainStrategy}
+                  area
+                  required
+                  fullWidth
+                />
+                <TextField
+                  label="Penanggung jawab *"
+                  value={responsible}
+                  onChange={setResponsible}
+                  required
+                />
+                <TextField
+                  label="Jadwal pertama *"
+                  value={firstSchedule}
+                  onChange={setFirstSchedule}
+                  type="date"
+                  required
+                />
+                <TextField
+                  label="Kontak tujuan"
+                  value={targetContact}
+                  onChange={setTargetContact}
+                  placeholder="Pilih kontak"
+                />
               </FieldGroup>
             </FormSection>
-            <p className="crm-form-note">Sisa peluang tetap ditangani terpisah. Win tidak menambah aktual penjualan.</p>
-            <div className="web-form-footer"><Button type="button" variant="outline" asChild><Link href={back}>Batal</Link></Button><Button type="submit">Simpan Win</Button></div>
+            <p className="crm-form-note">
+              Sisa peluang tetap ditangani terpisah. Win tidak menambah aktual penjualan.
+            </p>
+            <div className="web-form-footer">
+              <Button type="button" variant="outline" asChild>
+                <Link href={back}>Batal</Link>
+              </Button>
+              <Button type="submit">Simpan Win</Button>
+            </div>
           </>
         )}
       </form>
@@ -1243,4 +1471,3 @@ export function OpportunityForm({
     </form>
   );
 }
-

@@ -1,5 +1,20 @@
 # User Flow — lintas peran dan pengecualian
 
+## Submenu Akun dan migrasi master — 16 Oktober 2026
+
+Finance → Akuntansi → Akun → cari/filter (awal Aktif) → Detail atau Edit; Buat Akun membuka form tanpa saldo. Simpan memvalidasi kode, hierarki dan izin; edit akun terpakai perlu alasan dan hanya field aman/status sesuai referensi. Riwayat muncul pada detail. Impor 156 master sudah disetujui tanpa saldo awal. Konfigurasi operasional dialihkan ke akun impor, akun uji bersejarah tetap dapat ditemukan lewat filter Nonaktif. Impor/ekspor massal UI dan reklasifikasi khusus tetap di luar tahap ini.
+
+### Penyempurnaan master pajak — 16 Oktober 2026
+
+Buat/edit master: isi nama, jenis, penggunaan, perlakuan, akun dan tarif; pilihan jenis tidak menimpa perlakuan. Form menampilkan kelompok akun COA dan menerima pemisah desimal titik/koma. Setelah simpan, detail menunjukkan penggunaan dan rincian riwayat versi.
+
+## Pembaruan pajak operasional — 16 Oktober 2026
+
+Finance → Pajak → Daftar & Aturan Pajak → Buat/Edit → pilih jenis, tambah/potong, akun aktif, nilai persen dan pembulatan → Simpan → versi langsung berlaku tanpa antrean approval. Transaksi memilih master; submit menyimpan snapshot untuk perhitungan/posting. Faktur Keluaran/Masukan → pilih invoice sumber → isi nomor/tanggal dan lampiran resmi → Simpan metadata. Invoice belum posted tidak dapat menerima metadata. Perubahan tarif tidak menghitung ulang transaksi posted.
+
+
+Alur izin Dashboard terbaru: Admin Sistem membuka Peran → Matriks Hak Akses, mencentang Lihat pada tiap tampilan Dashboard yang diinginkan untuk peran biasa, meninjau lalu menyimpan. Sesi anggota terdampak dicabut. Saat masuk kembali, navigasi memuat tampilan yang diizinkan; API menolak tampilan tanpa izin dan tetap menyaring data menurut izin/scope sumber. Menu belum operasional tetap terlihat sebagai informasi tanpa checkbox.
+
 ## Koreksi 7 Oktober 2026 — proforma manual
 
 Submit SO → validasi/alokasi otomatis → pilih tahap pemenuhan pada detail SO →
@@ -25,6 +40,10 @@ Untuk Periode & Closing, urutannya adalah **Buka → Closing → Review/Rekonsil
 Keputusan pengguna: satu orang boleh menjalankan beberapa peran jika diberikan hak akses. Sebutan sales, admin, finance, picker atau checker pada alur adalah fungsi pekerjaan. Sebutan tersebut tidak mengharuskan akun/orang berbeda dan tidak mengunci proses berdasarkan jabatan.
 
 Alur pengaturan: admin yang berizin membuka **Setting → Peran** untuk membuat kelompok izin → mengatur **Matriks Hak Akses** per modul/tindakan/cakupan → membuka **Pengguna** untuk memasang satu atau beberapa peran → meninjau hak akses efektif → mengaktifkan pengguna. Perubahan hak akses tercatat dan berlaku pada web kantor maupun PWA.
+
+Peran baru biasa dibuat dengan semua izin katalog saat itu sudah tersimpan. Admin dapat membuka matriks untuk membatasi peran tersebut. Peran lama mempertahankan izin yang sudah tersimpan; bila ingin penuh, admin membuka perannya, memilih **Pilih semua izin**, meninjau jumlah perubahan/anggota dan menyimpan. Peran lain tidak berubah dan sesi anggota peran yang diubah dicabut.
+
+Admin Sistem dapat memilih **Hapus** pada baris Pengguna atau Peran dan meninjau dialog dampaknya. Server menolak akun sendiri/Admin Sistem terakhir. Untuk pengguna, server menghapus akun yang belum dipakai atau mengarsipkan akun dengan riwayat; daftar aktif diperbarui setelah berhasil. Sesi terdampak dicabut dan audit dicatat. Peran biasa yang dihapus dilepas dari seluruh anggotanya.
 
 Profil Perusahaan: pengguna berizin membuka **Setting → Profil Perusahaan** → mengubah nama/alamat/kontak/logo sesuai kebutuhan → Simpan. Tidak ada tanggal berlaku, alasan perubahan atau approval. Nilai baru langsung dipakai pada layar dan dokumen baru; dokumen yang sudah diterbitkan tetap memakai snapshot identitas saat penerbitan.
 
@@ -612,3 +631,12 @@ Rujukan implementasi dan batas verifikasi: [laporan remediasi backend O2C](../de
 ## Pengelolaan akses — keputusan 7 Oktober 2026
 
 IAM-01/04/11: pengguna dapat memiliki beberapa peran; izin efektif adalah gabungan izin peran aktif sesuai scope. Pengelolaan akun dan peran hanya untuk pemegang peran aktif Admin Sistem (`ADMIN_SYSTEM`) dalam perusahaan sesi, dengan permission aksi yang sesuai. Nama jabatan atau nama tampilan peran bukan bukti administrator. Pengguna → pilih akun → tetapkan beberapa peran; Peran → Atur Hak Akses → ubah checkbox matriks peran → simpan. Menu Pengguna/Peran/Matriks disembunyikan bagi nonadministrator; deep link dan seluruh endpoint `/users`, `/roles`, `/permissions` beserta mutasinya ditolak 403 walaupun permission IAM terlanjur diberikan. Pengaturan bisnis lain tetap mengikuti permission domain. Tidak ada bypass izin transaksi untuk Admin Sistem. Perubahan akses diaudit dan sesi terdampak dicabut. Tidak ada perubahan model database atau migration; implementasi dan batas validasi dicatat pada [catatan pengelolaan akses](../development/iam-admin-only-2026-10-07.md).
+# Keputusan IAM terbaru — 16 Oktober 2026
+
+Admin Sistem membuat/mengubah/menghapus peran, memilih izin fitur dan tindakan tanpa pembagian domain pada layar, lalu memasang beberapa peran ke pengguna. Admin Sistem memiliki kewenangan penuh di perusahaan sesi walau grant perannya kosong, termasuk transaksi dan keputusan approval sendiri/tanpa penunjukan. Penghapusan peran mencabut penugasan dan sesi anggota, serta diaudit. Keputusan ini menggantikan ketentuan IAM lama tentang permission tambahan dan larangan bypass Admin Sistem; pemeriksaan validitas transaksi tetap dilakukan server.
+
+## Mengatur izin submenu — 16 Oktober 2026
+
+Admin Sistem → Peran → pilih peran → Matriks Hak Akses. Buka kelompok menu, pilih tindakan pada submenu, atau pilih semua anak melalui checkbox kelompok. Status sebagian menunjukkan sebagian grant anak dipilih. Tinjau perubahan → simpan → backend memeriksa snapshot grant, mengaudit diff dan mengelola sesi terdampak. Induk pengelompokan tidak menyimpan grant. Prospek, Kontak, Pelanggan CRM, Master Pelanggan dan tahapan barang keluar dapat diatur terpisah.
+
+Navigasi CRM 16 Oktober 2026: pengguna membuka CRM > Peluang untuk daftar/pencarian peluang; akses sumber Prospek dan Master Pelanggan mengikuti izin terpisah. URL Pelanggan CRM lama menuju Master Data > Pelanggan. Proses create/win/lost yang sudah tersedia tetap melalui Prospek. Lihat catatan navigasi pada Design dan kontrak daftar pada API.

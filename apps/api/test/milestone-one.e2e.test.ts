@@ -32,10 +32,17 @@ describe("Milestone 1 identity and setting", () => {
     "role.delete",
     "role.permission.update",
     "permission.read",
-    "crm.read",
+    "crm_prospect.read",
     "warehouse.read",
     "finance.read",
     "hr.read",
+    "dashboard_executive.read",
+    "dashboard_sales.read",
+    "dashboard_warehouse.read",
+    "dashboard_finance.read",
+    "dashboard_hris.read",
+    "dashboard_actions.read",
+    "dashboard_reports.read",
   ];
   const password = "Fictitious-Test-Password-2026!";
   let app: INestApplication;
@@ -133,6 +140,20 @@ describe("Milestone 1 identity and setting", () => {
             ]
           : []),
       ]),
+    });
+    await prisma.rolePermission.createMany({
+      data: permissions
+        .filter((permission) =>
+          ["dashboard_executive.read", "dashboard_actions.read", "dashboard_reports.read"].includes(
+            permission.code,
+          ),
+        )
+        .map((permission) => ({
+          companyId,
+          roleId: scopedRoleId,
+          permissionId: permission.id,
+          scopeType: "company",
+        })),
     });
 
     const policy = await prisma.systemPolicy.create({
@@ -291,7 +312,7 @@ describe("Milestone 1 identity and setting", () => {
       .set("x-csrf-token", csrf)
       .send({ name: "Peran Kedua", description: "Data sintetis pengujian" })
       .expect(200);
-    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: "crm.read" } });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: "crm_prospect.read" } });
     await agent
       .patch(`/api/v1/roles/${secondaryRoleId}/permissions`)
       .set("x-csrf-token", csrf)

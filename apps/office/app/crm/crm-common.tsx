@@ -198,7 +198,8 @@ export function DataTable<T>({
           ))}
         </TableBody>
       </Table>
-      {!data.length && (
+      {busy && !data.length && <p role="status" className="p-6 text-sm">Memuat {label}…</p>}
+      {!busy && !data.length && (
         <Empty>
           <EmptyHeader>
             <EmptyTitle>Belum ada {label}</EmptyTitle>

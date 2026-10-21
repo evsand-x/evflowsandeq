@@ -1,5 +1,18 @@
 # Domain Finance
 
+## Submenu Akun dan migrasi master — 16 Oktober 2026
+
+Keputusan aktif: submenu bernama **Finance → Akuntansi → Akun**. Master impor pengguna (156 akun) menggantikan template enam digit sebagai daftar aktif; kode tetap teks persis sumber dan nama boleh berulang. Kelompok lima jenis dengan kategori rinci sumber, tipe Header/Detail, saldo normal, induk opsional untuk akar, PSAK 118, keterangan dan status Aktif/Nonaktif. Cakupan saat ini daftar/buat/edit/detail; tidak memakai Draft/approval rutin. Izin aktif account.read/create/update/import; update mencakup field aman dan status dengan constraint. Klasifikasi akun terpakai ditolak pada edit biasa. Saldo awal terpisah. Target lengkap CoA di bagian berikut tetap rancangan lanjutan untuk dimensi, reklasifikasi, import/export UI dan laporan. Migrasi yang disetujui: transit/karantina → 1-10200, WAPU → 1-10500, kas/bank → 1-10001, PPN Penjualan 11% → 2-20500; akun bersejarah nonaktif, jurnal lama tidak ditulis ulang.
+
+### Penyempurnaan master pajak — 16 Oktober 2026
+
+Satu master mewakili satu penggunaan dan satu akun buku besar. Penjualan/pembelian dengan akun berbeda menggunakan master terpisah. Jenis (PPN/PPh), penggunaan (SALES/PURCHASE/BOTH), dan efek (ADD/DEDUCT) independen. Akun diambil dari COA; PPN keluaran lazimnya kewajiban, PPN masukan yang dapat dikreditkan aset. Penggunaan divalidasi saat pemilihan transaksi; master lama tetap BOTH sampai diatur admin. PPN Penjualan 11% adalah konfigurasi eksplisit pengguna.
+
+## Pembaruan pajak operasional — 16 Oktober 2026
+
+Keputusan pengguna 16 Oktober 2026 menggantikan cakupan aktif pada uraian Pajak/Coretax historis di bawah: Finance → Pajak hanya Daftar & Aturan Pajak, Faktur Keluaran, Faktur Masukan. Master berisi nama, jenis PPN/PPh, efek ADD/DEDUCT, akun aktif perusahaan, persentase dan pembulatan editable. Buat/edit langsung berlaku tanpa approval dengan versi, tanggal efektif dan audit. Penjualan/pembelian menyimpan tarif, akun dan efek; perubahan master tidak mengubah snapshot posted. Nilai potongan bertanda negatif, posting debit/kredit dinormalisasi. Dokumen resmi adalah metadata nomor/tanggal/lampiran pada invoice sumber posted, tanpa jurnal kedua. Riwayat dokumen keluaran lama tetap terbaca. Coretax, pelaporan PPh Badan dan workflow kepatuhan lanjutan tidak termasuk cakupan aktif. Rule lama tetap untuk transaksi kompatibilitas; pengguna membuat master baru dengan akun yang benar. Tidak ada tarif legal yang diisi otomatis.
+
+
 Dokumen ini adalah sumber domain kanonis untuk modul ini. Judul ‘Bagian asal’ mempertahankan keterlacakan isi sebelum konsolidasi; prioritas keputusan tetap mengikuti Peta Dokumen.
 
 
@@ -2885,3 +2898,6 @@ Daftar ini bukan keputusan blueprint terbuka. Generate production ditahan sampai
 
 Draft Invoice berbasis POD dapat disimpan dan diperbarui sebelum posting. Endpoint `POST /sales-invoice-drafts` dan `POST /sales-invoice-drafts/:id` menerima `delivery_receipt_id`, `billing_reference`, `notes`, serta `version` wajib cocok pada edit. Keduanya memerlukan `sales_invoice.post` dan Idempotency-Key. Snapshot draft menyimpan versi, rincian sumber dan nilai desimal; tidak membentuk AR/jurnal. Nilai komersial mengikuti POD. Posting `POST /sales-invoices` menggunakan nomor/identitas draft yang sama dan memeriksa ulang nilai sumber. Invoice posted tidak dapat diedit melalui endpoint draft. Lihat [cakupan dan bukti UI Invoice](../development/invoice-ar-ui-2026-10-13.md).
 
+
+### Reversal akun nonaktif setelah migrasi master
+Reversal sumber yang sudah melalui otorisasi/approval boleh menggunakan akun historis nonaktif hanya jika setiap baris tepat membalik akun, ledger kind dan debit/kredit jurnal sumber dalam perusahaan/mata uang yang sama. Posting biasa tetap memerlukan akun Detail aktif. Ini menjaga koreksi historis tanpa mengaktifkan kembali akun uji untuk transaksi baru.

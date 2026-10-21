@@ -24,6 +24,12 @@ import sharp from "../packages/backend/node_modules/sharp";
 async function main() {
   assertDevelopmentSeed();
   const c = "00000000-0000-4000-8000-000000000001";
+  if (
+    await prisma.auditEvent.count({
+      where: { companyId: c, action: "account_migration.completed" },
+    })
+  )
+    throw new Error("TEST_FINANCE_SEED_RETIRED: perusahaan telah memakai master akun impor");
   const company = await prisma.company.findUniqueOrThrow({ where: { id: c } });
   if (!company.name.includes("DATA UJI FIKTIF")) throw new Error("FICTITIOUS_COMPANY_REQUIRED");
   const actor = await prisma.user.findUniqueOrThrow({
@@ -243,7 +249,9 @@ async function main() {
     },
     key("opening-proforma"),
   );
-  const proformaLotState = await prisma.stockLot.findUniqueOrThrow({ where: { id: proformaOpeningLot.id } });
+  const proformaLotState = await prisma.stockLot.findUniqueOrThrow({
+    where: { id: proformaOpeningLot.id },
+  });
   if (proformaLotState.qualityState === "PENDING")
     await ops.quality(
       c,
