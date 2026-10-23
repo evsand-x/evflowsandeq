@@ -463,4 +463,4 @@ IAM-01/04: Prospek memakai `crm_prospect`, Kontak `crm_contact`, Pelanggan CRM `
 
 ## Pintu masuk Peluang dan Pelanggan — 16 Oktober 2026
 
-CRM menampilkan Prospek, Peluang dan Kontak. Daftar Peluang perusahaan dapat dibuka dengan izin crm_opportunity.read tanpa izin Prospek. Pengguna berizin Prospek dapat membuka sumber untuk proses peluang yang sudah tersedia. Pelanggan tetap dikelola di Master Data; tautan dari prospek/kontak memeriksa izin Master Pelanggan. Tidak ada migrasi atau perubahan siklus bisnis peluang.
+CRM menampilkan Prospek, Peluang dan Kontak. Daftar Peluang perusahaan dapat dibuka dengan izin crm_opportunity.read tanpa izin Prospek. Pengguna berizin Prospek dapat membuka sumber untuk proses peluang yang sudah tersedia. Pelanggan tetap dikelola di Master Data; tautan dari prospek/kontak memeriksa izin Master Pelanggan. Sejak 23 Oktober 2026 data kontak yang sama juga tampil pada tab Kontak di Master Data › Pelanggan dengan izin `crm_contact`; kepemilikan aturan dan command kontak tetap di CRM. Tidak ada migrasi atau perubahan siklus bisnis peluang.

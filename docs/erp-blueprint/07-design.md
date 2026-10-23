@@ -260,7 +260,7 @@ Submenu Rekrutmen, Onboarding, Payroll dan Offboarding membuka daftar kerja sesu
    - Harga Beli Acuan dan Harga Jual Standar pada detail Produk
 2. **Pelanggan**
    - **Identitas & Wilayah:** kode pelanggan, nama, alamat utama, alamat pengantaran, channel dan rayon
-   - **Kontak PIC:** PIC pembelian, PIC penerimaan barang, dan PIC pembayaran/keuangan; pengelolaan kontak lengkap berada di **Sales & Marketing → CRM → Kontak**
+   - **Kontak PIC:** PIC pembelian, PIC penerimaan barang, dan PIC pembayaran/keuangan; pengelolaan kontak lengkap berada di **Sales & Marketing → CRM → Kontak** dan tab **Kontak** pada halaman Pelanggan, keduanya data yang sama dengan izin `crm_contact`
    - **Legalitas & Penanggung Jawab:** legalitas/izin operasional, NPWP, apoteker atau penanggung jawab teknis, dan izin penanggung jawab
    - **Pembayaran & Kredit:** termin pembayaran, mode COD/prepay/tempo sesuai policy, limit kredit, metode pembayaran, toleransi hari, dan status WAPU bila relevan
    - **Piutang Awal & Onboarding:** saldo awal per invoice hasil opening, upload berkas NOO, jenis/potensi pelanggan, jadwal tukar faktur, PIC penagihan/gudang, dan status verifikasi onboarding
@@ -291,7 +291,7 @@ Submenu Rekrutmen, Onboarding, Payroll dan Offboarding membuka daftar kerja sesu
    - Status peninjauan dan riwayat perubahan
 Kategori, UOM, channel dan rayon tetap menjadi referensi kanonis yang digunakan pada form terkait. Stok, kredit, saldo dan pajak ditampilkan pada layar yang relevan sesuai izin dan kepemilikan domain; tidak ada submenu Ringkasan Lintas Domain tersendiri.
 
-Keputusan 23 Oktober 2026: setiap submenu Master Data memakai kerangka Daftar/Detail/Form bersama dan URL yang mengikuti menu (`/master-data/<resource>`, `/new`, `/:id`, `/:id/edit`; tab detail pada `?tab=`). Lokator adalah sub-submenu Gudang di `/master-data/warehouses/locators`. Kategori Produk dan Satuan menjadi tab pada halaman Produk, Channel dan Rayon menjadi tab pada halaman Pelanggan; masing-masing dengan izin sendiri. Acuan normatif: [standar desain global web](../mockup/web-design-standard.md).
+Keputusan 23 Oktober 2026: setiap submenu Master Data memakai kerangka Daftar/Detail/Form bersama dan URL yang mengikuti menu (`/master-data/<resource>`, `/new`, `/:id`, `/:id/edit`; tab detail pada `?tab=`). Lokator adalah sub-submenu Gudang di `/master-data/warehouses/locators`. Kategori Produk dan Satuan menjadi tab pada halaman Produk; Channel, Rayon dan Kontak menjadi tab pada halaman Pelanggan; masing-masing dengan izin sendiri. Tab Kontak (keputusan 23 Oktober 2026) menampilkan data kontak CRM yang sama dengan izin `crm_contact`, bukan izin Master Pelanggan. Acuan normatif: [standar desain global web](../mockup/web-design-standard.md).
 
 Butir di bawah setiap nomor adalah kelompok isi layar/detail, bukan izin untuk mengubah semua datanya melalui update master. Pada Pelanggan, termin/mode pembayaran, limit kredit, status WAPU dan piutang awal hanya ditampilkan atau dibuka sebagai tindakan berizin ke pemilik aturan: Setting/Finance/Pajak atau proses opening Finance. Saldo awal berasal dari rincian invoice yang diverifikasi dan diposting, bukan angka bebas pada master.
 
@@ -462,7 +462,7 @@ Daftar atribut berasal dari pengguna. Rancangan isian: Nama Panggilan, Email dan
 
 Kelompok ringkas: **Identitas** (kode, nama lengkap, panggilan, tanggal lahir); **Pelanggan & Peran PIC** (pelanggan, jabatan, unit/bagian, fungsi); **Komunikasi & Status** (HP/WA, email, status, catatan). Tidak perlu deskripsi panjang pada halaman.
 
-Menu **Sales & Marketing → CRM → Kontak** menampilkan database kontak tersendiri. Satu pelanggan dapat memiliki banyak kontak. PIC pada form pelanggan serta kontak tujuan kunjungan menggunakan data kontak yang sama; satu orang dengan beberapa fungsi PIC tidak perlu dibuat ulang. Data kontak bukan akun pengguna ERP dan tidak memberikan hak akses aplikasi.
+Menu **Sales & Marketing → CRM → Kontak** menampilkan database kontak tersendiri. Database yang sama juga dibuka dari tab Kontak di Master Data › Pelanggan dengan izin `crm_contact` yang sama. Satu pelanggan dapat memiliki banyak kontak. PIC pada form pelanggan serta kontak tujuan kunjungan menggunakan data kontak yang sama; satu orang dengan beberapa fungsi PIC tidak perlu dibuat ulang. Data kontak bukan akun pengguna ERP dan tidak memberikan hak akses aplikasi.
 
 Hubungan ke pelanggan tidak mensyaratkan PO atau invoice dan tidak berarti pelanggan sudah bertransaksi. Institusi/prospek sudah tercatat sekali di Master Pelanggan dengan tahap hubungan Prospek, sehingga pemilih Nama Pelanggan dapat digunakan sebelum transaksi. Saat data dilengkapi menjadi pelanggan terdaftar, pertahankan referensi pelanggan dan kontak yang sama. Status aktif kontak terpisah dari tahap hubungan pelanggan.
 

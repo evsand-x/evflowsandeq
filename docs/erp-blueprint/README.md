@@ -1,5 +1,9 @@
 # evflow — ERP PT Sandeq Sarana Medika
 
+## Keputusan pengguna — 23 Oktober 2026: tab Kontak di Master Data › Pelanggan
+
+Halaman Master Data › Pelanggan memiliki tab Pelanggan, Channel, Rayon dan Kontak. Tab Kontak menampilkan data kontak CRM yang sama dengan Sales & Marketing › CRM › Kontak, tanpa salinan kedua, dan memakai izin `crm_contact.*` sendiri. Izin `master_customer.*` tidak membuka tab Kontak, dan izin `crm_contact.*` tidak membuka data Pelanggan; tab yang tidak diizinkan tidak tampil dan API tetap menolak. Tindakan tambah/ubah kontak dari tab ini memakai command dan izin kontak CRM yang sama. Menu CRM › Kontak tetap ada. Tab Channel dan Rayon memakai `master_customer_channel` dan `master_rayon`. Acuan: IAM-01/04, CRM-05, [Design](07-design.md), [Master Data](14-master-data.md).
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Keputusan pengguna: Finance → Akuntansi → Akun menyediakan daftar, buat, edit dan detail. Impor 156 master dari file pengguna tanpa saldo awal. Kode teks sumber dipertahankan; nama boleh sama. Lanjutan: konfigurasi jurnal/pajak/kas dipindahkan ke akun impor, transit/karantina digabung ke Persediaan Barang, WAPU ke PPN Masukan, kas/bank ke 1-10001 Kas Op Mandiri. Jurnal uji lama tidak diubah; akun uji bersejarah dinonaktifkan, yang tanpa rujukan dihapus. Cakupan dan hasil: [catatan implementasi](../development/accounts-workspace-2026-10-16.md).
