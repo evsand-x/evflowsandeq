@@ -245,13 +245,14 @@ async function main() {
     { code: "PAID", name: "RS Simulasi Sejahtera", qty: "10", stage: "paid" },
     { code: "PARTIAL", name: "Klinik Simulasi Sentosa", qty: "8", stage: "partial" },
     { code: "TRANSIT", name: "Laboratorium Simulasi Prima", qty: "6", stage: "transit" },
-    { code: "BACKORDER", name: "RS Simulasi Nusantara", qty: "150", stage: "allocated" },
+    // Before BACKORDER: the 150-unit backorder would otherwise consume the proforma lot.
     {
       code: "PROFORMA_DRAFT",
       name: "Klinik Simulasi Proforma Draft",
       qty: "10",
       stage: "allocated",
     },
+    { code: "BACKORDER", name: "RS Simulasi Nusantara", qty: "150", stage: "allocated" },
     { code: "DRAFT", name: "Klinik Simulasi Harapan", qty: "5", stage: "draft" },
   ];
   const results = [];
@@ -371,8 +372,10 @@ async function main() {
     if (scenario.stage !== "draft") {
       if (order.state === "DRAFT")
         await service.submitSalesOrder(c, a, order.id, key(`submit-${scenario.code}`));
+      // Re-read: submit changes the state captured before it.
+      const submitted = await prisma.salesOrder.findUniqueOrThrow({ where: { id: order.id } });
       if (
-        order.state === "OPEN" &&
+        submitted.state === "OPEN" &&
         !(await prisma.fulfillmentBatch.count({ where: { companyId: c, salesOrderId: order.id } }))
       ) {
         const currentOrder = await prisma.salesOrder.findUniqueOrThrow({ where: { id: order.id } });
@@ -384,6 +387,16 @@ async function main() {
           currentOrder.version,
         );
       }
+      const settled = await prisma.salesOrder.findUniqueOrThrow({
+        where: { id: order.id },
+        include: { lines: true },
+      });
+      if (
+        !(await prisma.fulfillmentBatch.count({ where: { companyId: c, salesOrderId: order.id } }))
+      )
+        throw new Error(
+          `ORDER_NOT_ALLOCATED:${scenario.code}:${settled.state}:${settled.lines.map((l) => `${l.allocatedQuantity}/${l.orderedQuantity}`)}`,
+        );
       const batch = await prisma.fulfillmentBatch.findFirstOrThrow({
         where: { companyId: c, salesOrderId: order.id },
         include: {
@@ -394,7 +407,12 @@ async function main() {
       });
       if (scenario.stage !== "allocated") {
         if (batch.state === "ALLOCATED") {
-          const pick = batch.pickList!;
+          if (!batch.pickList)
+            await service.createPickingSlip(c, a, batch.id, key(`pick-${scenario.code}`));
+          const pick = await prisma.pickList.findFirstOrThrow({
+            where: { fulfillmentBatchId: batch.id },
+            include: { lines: true },
+          });
           if (pick.state === "OPEN")
             await service.confirmPick(
               c,
@@ -547,7 +565,13 @@ async function main() {
 }
 main()
   .catch((error) => {
-    console.error(error instanceof Error ? error.message : "Seed failed");
+    console.error(
+      error instanceof Error
+        ? process.env.SEED_DEBUG
+          ? error.stack
+          : error.message
+        : "Seed failed",
+    );
     process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());
