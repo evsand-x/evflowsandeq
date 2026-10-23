@@ -136,7 +136,7 @@ export class OtcPtpController {
       .then((data) => ({ data }));
   }
   @Get("receivables/invoice-candidates")
-  @RequirePermissions("sales_invoice.post")
+  @RequirePermissions("sales_invoice.issue")
   invoiceCandidates(@Req() req: AuthenticatedRequest) {
     return this.service.invoiceCandidates(req.auth.company_id).then((data) => ({ data }));
   }

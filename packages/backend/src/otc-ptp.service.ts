@@ -1078,89 +1078,41 @@ export class OtcPtpService {
   }
   async issueInvoice(c: string, a: string, id: string, key: string) {
     return transactionCommand(c, a, `fulfillments/${id}/issue-invoice`, key, { id }, async (tx) => {
-      const ref = await tx.fulfillmentBatch.findFirst({
+      const batch = await tx.fulfillmentBatch.findFirst({
         where: { id, companyId: c },
-        include: { salesOrder: true },
-      });
-      if (!ref) throw new NotFoundException();
-      await lockCustomer(tx, c, ref.salesOrder.customerId);
-      await tx.$queryRaw`SELECT id FROM fulfillment_batches WHERE id=${id}::uuid FOR UPDATE`;
-      const batch = await tx.fulfillmentBatch.findUniqueOrThrow({
-        where: { id },
         include: {
           salesOrder: true,
-          pickList: true,
-          allocations: { include: { salesOrderLine: true } },
+          pickList: { include: { lines: { include: { allocation: { include: { salesOrderLine: true } } } } } },
         },
       });
-      if (batch.state !== "ALLOCATED" || batch.pickList?.state !== "CHECKED")
-        throw new ConflictException("CHECKED_SHIPMENT_REQUIRED");
+      if (!batch) throw new NotFoundException();
+      await lockCustomer(tx, c, batch.salesOrder.customerId);
+      await tx.$queryRaw`SELECT id FROM fulfillment_batches WHERE id=${id}::uuid FOR UPDATE`;
+      if (!batch.pickList || batch.pickList.state !== "CHECKED" || batch.state !== "ALLOCATED")
+        throw new ConflictException("CHECKED_PACKING_LIST_REQUIRED");
       const existing = await tx.salesInvoice.findFirst({
-        where: { companyId: c, fulfillmentBatchId: id, state: "ISSUED_WAITING_POD" },
+        where: { companyId: c, fulfillmentBatchId: id, state: { in: ["POSTED", "ISSUED_WAITING_POD"] } },
       });
-      if (existing) return existing;
-      const lines = batch.allocations.map((l) => ({
-        allocation_id: l.id,
-        quantity: l.quantity,
-        amounts: lineAmounts(l.salesOrderLine, l.quantity),
-      }));
-      const subtotal = lines.reduce((s, l) => s.add(l.amounts.net), d("0")),
-        tax = lines.reduce((s, l) => s.add(l.amounts.tax), d("0"));
-      const freight = batch.freightAmount;
-      const freightTax = batch.freightTaxAmount;
-      if (subtotal.add(tax).add(freight).add(freightTax).lte(0))
-        throw new ConflictException("INVOICE_QUANTITY_REQUIRED");
-      const snapshot = JSON.parse(
-        JSON.stringify({
-          lines,
-          payment: batch.salesOrder.paymentSnapshot,
-          freight: {
-            amount: freight.toString(),
-            tax: freightTax.toString(),
-            tax_snapshot: batch.freightTaxSnapshot,
-          },
-          issued_at: new Date(),
-          status: "ISSUED_WAITING_POD",
-          order: batch.salesOrder.number,
-          address: batch.salesOrder.deliveryAddress,
-        }),
-      );
-      const invoice = await tx.salesInvoice.create({
-        data: {
-          companyId: c,
-          customerId: batch.salesOrder.customerId,
-          salesOrderId: batch.salesOrderId,
-          fulfillmentBatchId: id,
-          number: await this.num(tx, c, "sales_invoice", "INV"),
-          state: "ISSUED_WAITING_POD",
-          currency: batch.salesOrder.currency,
-          subtotal,
-          taxAmount: tax.add(freightTax),
-          total: subtotal.add(tax).add(freight).add(freightTax),
-          freightAmount: freight,
-          freightTaxAmount: freightTax,
-          freightSnapshot: {
-            amount: freight.toString(),
-            tax: freightTax.toString(),
-            tax_snapshot: batch.freightTaxSnapshot,
-          },
-          outstandingAmount: 0,
-          issuedSnapshot: snapshot,
-        },
-      });
-      await issueDocument(tx, c, a, id, `INVOICE_ISSUED:${invoice.id}`, {
-        ...snapshot,
-        number: invoice.number,
-        due_date: null,
-      });
-      await this.audit.recordWith(tx, {
-        companyId: c,
-        actorId: a,
-        action: "sales_invoice.issued_waiting_pod",
-        resourceType: "sales_invoice",
-        resourceId: invoice.id,
-        after: invoice,
-      });
+      if (existing?.state === "POSTED") return existing;
+      const lines = batch.pickList.lines
+        .filter((l) => l.checkedQuantity.gt(0))
+        .map((l) => ({ allocation_id: l.allocation.id, quantity: l.checkedQuantity, amounts: lineAmounts(l.allocation.salesOrderLine, l.checkedQuantity) }));
+      const subtotal = lines.reduce((s, l) => s.add(l.amounts.net), d("0"));
+      const tax = lines.reduce((s, l) => s.add(l.amounts.tax), d("0")).add(batch.freightTaxAmount);
+      const total = subtotal.add(tax).add(batch.freightAmount);
+      if (total.lte(0)) throw new ConflictException("INVOICE_QUANTITY_REQUIRED");
+      const policy = batch.salesOrder.paymentSnapshot as { mode?: string; top_days?: number | null } | null;
+      if (!policy?.mode || (policy.mode === "TEMPO" && policy.top_days == null)) throw new ConflictException("PAYMENT_SNAPSHOT_REQUIRED");
+      const company = await tx.company.findUniqueOrThrow({ where: { id: c } });
+      const dueDate = new Date(new Intl.DateTimeFormat("en-CA", { timeZone: company.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
+      dueDate.setUTCDate(dueDate.getUTCDate() + (policy.top_days ?? 0));
+      const snapshot = JSON.parse(JSON.stringify({ status: "POSTED", source: "PACKING_LIST", packing_list: batch.pickList.id, order: batch.salesOrder.number, lines, payment: policy, issued_at: new Date(), due_date: dueDate }));
+      const invoice = existing
+        ? await tx.salesInvoice.update({ where: { id: existing.id }, data: { state: "POSTED", subtotal, taxAmount: tax, total, freightAmount: batch.freightAmount, freightTaxAmount: batch.freightTaxAmount, outstandingAmount: total, dueDate, postedAt: new Date(), issuedSnapshot: snapshot } })
+        : await tx.salesInvoice.create({ data: { companyId: c, customerId: batch.salesOrder.customerId, salesOrderId: batch.salesOrderId, fulfillmentBatchId: id, number: await this.num(tx, c, "sales_invoice", "INV"), state: "POSTED", currency: batch.salesOrder.currency, subtotal, taxAmount: tax, total, freightAmount: batch.freightAmount, freightTaxAmount: batch.freightTaxAmount, freightSnapshot: { amount: batch.freightAmount.toString(), tax: batch.freightTaxAmount.toString(), tax_snapshot: batch.freightTaxSnapshot }, outstandingAmount: total, dueDate, postedAt: new Date(), issuedSnapshot: snapshot } });
+      await issueDocument(tx, c, a, id, `INVOICE:${invoice.id}`, { ...snapshot, number: invoice.number, company: company.name, customer: (await tx.customer.findUniqueOrThrow({ where: { id: batch.salesOrder.customerId } })).name, currency: invoice.currency, subtotal, tax, total, lines });
+      await postLedger(tx, a, { data: [{ companyId: c, kind: "AR", sourceType: "SALES_INVOICE", sourceId: invoice.id, currency: invoice.currency, debit: total, credit: d("0") }, { companyId: c, kind: "UNBILLED_AR", sourceType: "SALES_INVOICE", sourceId: invoice.id, currency: invoice.currency, debit: d("0"), credit: total }] });
+      await this.audit.recordWith(tx, { companyId: c, actorId: a, action: "sales_invoice.posted", resourceType: "sales_invoice", resourceId: invoice.id, after: invoice });
       return invoice;
     });
   }
@@ -1988,92 +1940,21 @@ export class OtcPtpService {
   }
 
   async invoiceCandidates(c: string) {
-    const rows = await prisma.deliveryReceipt.findMany({
-      where: {
-        companyId: c,
-        acceptedQuantity: { gt: 0 },
-        invoices: { none: { state: "POSTED" } },
-      },
-      select: {
-        id: true,
-        acceptedAt: true,
-        acceptedQuantity: true,
-        receiverName: true,
-        salesOrder: {
-          select: {
-            id: true,
-            number: true,
-            currency: true,
-            deliveryAddress: true,
-            customerReference: true,
-            paymentSnapshot: true,
-            customer: { select: { id: true, name: true } },
-          },
-        },
-        fulfillmentBatch: {
-          select: { id: true, number: true, freightAmount: true, freightTaxAmount: true },
-        },
-        lines: {
-          select: {
-            acceptedQuantity: true,
-            allocation: {
-              select: {
-                salesOrderLine: {
-                  select: {
-                    unitPrice: true,
-                    taxSnapshot: true,
-                    product: {
-                      select: { code: true, name: true, baseUom: { select: { name: true } } },
-                    },
-                    Uom: { select: { name: true } },
-                  },
-                },
-              },
-            },
-          },
-        },
-        invoices: { select: { id: true, number: true, state: true } },
-      },
-      orderBy: [{ acceptedAt: "asc" }, { id: "asc" }],
-      take: 100,
+    const batches = await prisma.fulfillmentBatch.findMany({
+      where: { companyId: c, state: "ALLOCATED", pickList: { state: "CHECKED" } },
+      include: { salesOrder: { include: { customer: true } }, pickList: { include: { lines: { include: { allocation: { include: { salesOrderLine: { include: { product: { include: { baseUom: true } }, Uom: true } } } } } } } } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100,
     });
+    const ids = batches.map((b) => b.id);
+    const invoices = await prisma.salesInvoice.findMany({ where: { companyId: c, fulfillmentBatchId: { in: ids }, state: { in: ["POSTED", "ISSUED_WAITING_POD"] } }, select: { id: true, number: true, state: true, fulfillmentBatchId: true } });
+    const used = new Set(invoices.map((i) => i.fulfillmentBatchId));
     const company = await prisma.company.findUniqueOrThrow({ where: { id: c } });
-    return rows.map(({ lines, ...row }) => {
-      const allocations = lines.map((l) => ({
-        product_code: l.allocation.salesOrderLine.product.code,
-        product: l.allocation.salesOrderLine.product.name,
-        unit:
-          l.allocation.salesOrderLine.Uom?.name ?? l.allocation.salesOrderLine.product.baseUom.name,
-        quantity: l.acceptedQuantity,
-        unit_price: l.allocation.salesOrderLine.unitPrice,
-        tax_snapshot: l.allocation.salesOrderLine.taxSnapshot,
-        amounts: lineAmounts(l.allocation.salesOrderLine, l.acceptedQuantity),
-      }));
+    return batches.filter((b) => !used.has(b.id)).map((b) => {
+      const lines = b.pickList!.lines.filter((l) => l.checkedQuantity.gt(0));
+      const allocations = lines.map((l) => ({ product_code: l.allocation.salesOrderLine.product.code, product: l.allocation.salesOrderLine.product.name, unit: l.allocation.salesOrderLine.Uom?.name ?? l.allocation.salesOrderLine.product.baseUom.name, quantity: l.checkedQuantity, unit_price: l.allocation.salesOrderLine.unitPrice, tax_snapshot: l.allocation.salesOrderLine.taxSnapshot, amounts: lineAmounts(l.allocation.salesOrderLine, l.checkedQuantity) }));
       const subtotal = allocations.reduce((s, l) => s.add(l.amounts.net), d("0"));
-      const tax = allocations.reduce(
-        (s, l) => s.add(l.amounts.tax),
-        row.fulfillmentBatch.freightTaxAmount,
-      );
-      return {
-        ...row,
-        receiptLines: lines,
-        snapshot: {
-          company: company.name,
-          customer: row.salesOrder.customer.name,
-          currency: row.salesOrder.currency,
-          address: row.salesOrder.deliveryAddress,
-          reference: row.salesOrder.customerReference,
-          payment: row.salesOrder.paymentSnapshot,
-          allocations,
-          subtotal,
-          tax,
-          total: subtotal.add(tax).add(row.fulfillmentBatch.freightAmount),
-          freight: {
-            amount: row.fulfillmentBatch.freightAmount,
-            tax: row.fulfillmentBatch.freightTaxAmount,
-          },
-        },
-      };
+      const tax = allocations.reduce((s, l) => s.add(l.amounts.tax), d("0")).add(b.freightTaxAmount);
+      return { id: b.id, sourceType: "PACKING_LIST", packingListId: b.pickList!.id, checkedAt: b.pickList!.checkedAt, fulfillmentBatch: { id: b.id, number: b.number, freightAmount: b.freightAmount, freightTaxAmount: b.freightTaxAmount }, salesOrder: b.salesOrder, snapshot: { company: company.name, customer: b.salesOrder.customer.name, currency: b.salesOrder.currency, address: b.salesOrder.deliveryAddress, reference: b.salesOrder.customerReference, payment: b.salesOrder.paymentSnapshot, allocations, subtotal, tax, total: subtotal.add(tax).add(b.freightAmount), freight: { amount: b.freightAmount, tax: b.freightTaxAmount } } };
     });
   }
 

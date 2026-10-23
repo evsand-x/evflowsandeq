@@ -460,7 +460,7 @@ export function DashboardSidebar({
                                           }
                                           onClick={closeNavigation}
                                         >
-                                          Tagihan
+                                          Invoice
                                         </Link>
                                       ) : null}
                                     </SidebarMenuSubItem>

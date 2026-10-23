@@ -35,7 +35,7 @@ const navigation: Entry[] = [
   entry("Warehouse & Logistik › Barang Keluar › Retur", "customer_return"),
   entry("Warehouse & Logistik › Persediaan", "warehouse"),
   entry("Warehouse & Logistik › Persediaan › Kelayakan Stok", "inventory.quality"),
-  entry("Finance › Piutang (AR) › Tagihan", "sales_invoice"),
+  entry("Finance › Piutang (AR) › Invoice", "sales_invoice"),
   entry("Finance › Piutang (AR) › Penerimaan Pembayaran", "customer_receipt"),
   entry("Finance › Piutang (AR) › Pengembalian Dana", "customer_refund"),
   entry("Finance › Kredit & TOP Pelanggan"),

@@ -986,7 +986,7 @@ function BatchDetail({
             </dl>
           </Panel>
           {stage === "pod" && (
-            <Panel title="Tagihan">
+            <Panel title="Invoice">
               {!receipts.length ? (
                 <p>POD belum dikonfirmasi.</p>
               ) : (
@@ -1010,18 +1010,6 @@ function BatchDetail({
                           Invoice belum dibuat. Jatuh tempo mengikuti ketentuan pembayaran
                           pelanggan.
                         </p>
-                        {can("sales_invoice.post") && (
-                          <Button
-                            disabled={pending}
-                            onClick={() =>
-                              void command("/sales-invoice-drafts", {
-                                delivery_receipt_id: p.id,
-                              }).catch(() => undefined)
-                            }
-                          >
-                            Buat draft Invoice dari POD
-                          </Button>
-                        )}
                       </>
                     )}
                   </div>
@@ -1263,8 +1251,8 @@ function BatchForm({
     await command(`/fulfillment-batches/${row.id}/dispatch`);
     onDone();
   };
-  const pod = async (invoice = false) => {
-    const result = await command(`/fulfillment-batches/${row.id}/pod`, {
+  const pod = async () => {
+    await command(`/fulfillment-batches/${row.id}/pod`, {
       receiver_name: receiver,
       accepted_at: new Date(when).toISOString(),
       evidence_id: proof,
@@ -1275,16 +1263,6 @@ function BatchForm({
           accepted_quantity: accepted[l.id] ?? "0",
         })),
     });
-    if (invoice) {
-      try {
-        await command("/sales-invoice-drafts", { delivery_receipt_id: result.data.id });
-      } catch {
-        onDone();
-        throw new Error(
-          "POD sudah tersimpan. Draft Invoice belum berhasil dibuat; lanjutkan dari detail POD.",
-        );
-      }
-    }
     onDone();
   };
   const difference = (a: string, b: string) => {
@@ -1703,16 +1681,6 @@ function BatchForm({
             onClick={() => run(() => savePick(true))}
           >
             Simpan Draft
-          </Button>
-        )}
-        {stage === "pod" && can("sales_invoice.post") && (
-          <Button
-            disabled={pending || !proof || !receiver.trim()}
-            variant="outline"
-            type="button"
-            onClick={() => run(() => pod(true))}
-          >
-            Konfirmasi POD & buat draft Invoice
           </Button>
         )}
         <Button type="submit" disabled={pending || (stage === "pod" && !proof)}>

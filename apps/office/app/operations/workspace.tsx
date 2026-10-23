@@ -149,7 +149,7 @@ const titles: Record<string, string> = {
   "pick-slips": "Pick Slip",
   warehouse: "Pemenuhan & POD",
   returns: "Retur Pelanggan",
-  invoices: "Tagihan",
+  invoices: "Invoice",
   "invoice-create": "Buat Invoice",
   documents: "Dokumen Transaksi",
 };
@@ -434,7 +434,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
       warehouse: "outbound_checking.read",
       returns: "customer_return.receive",
       invoices: "sales_invoice.read",
-      "invoice-create": "sales_invoice.post",
+      "invoice-create": "sales_invoice.issue",
       documents: "outbound_checking.read",
     }[kind] ?? "";
   const enabled =
@@ -494,7 +494,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     queryKey: ["operations", principal?.user_id, principal?.company_id, "invoice-candidates"],
     queryFn: () => apiRequest<{ data: Row[] }>("/receivables/invoice-candidates"),
     enabled:
-      enabled && (invoiceCreation || (kind === "invoices" && !id && can("sales_invoice.post"))),
+      enabled && (invoiceCreation || (kind === "invoices" && !id && can("sales_invoice.issue"))),
   });
   const command: Command = async (url, body = {}) => {
     const fingerprint = `${url}:${JSON.stringify(body)}`;
@@ -860,7 +860,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                 <p>
                   {id
                     ? `Jatuh tempo ${formatDate(row?.dueDate)} · sesuai POD dan termin`
-                    : "Tagihan dan piutang: pantau penagihan dan penyerahan dokumen."}
+                    : "Invoice dan piutang pelanggan."}
                 </p>
               )}
               {outboundView && (
@@ -925,7 +925,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
             !can("sales_invoice.post") && (
               <Alert className="mb-4">
                 <AlertDescription>
-                  Anda dapat melihat Tagihan, tetapi belum memiliki izin posting Invoice. Hubungi
+                  Anda dapat melihat Invoice, tetapi belum memiliki izin membuat Invoice. Hubungi
                   Administrator atau Finance Supervisor untuk mengaktifkan tindakan ini.
                 </AlertDescription>
               </Alert>
@@ -933,9 +933,6 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
           {kind === "invoices" && !id && enabled && (
             <>
               <div className="sales-list-tabs" aria-label="Antrean Invoice">
-                {can("sales_invoice.post") && (
-                  <Link href="/operations/invoice-create">Siap ditagih (POD)</Link>
-                )}
                 {[
                   ["ALL", "Semua"],
                   ["HANDOFF", "Perlu tukar faktur"],
@@ -958,7 +955,6 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
               </div>
               <div className="so-kpis">
                 {[
-                  ["READY", "Siap ditagih (POD)"],
                   ["HANDOFF", "Perlu tukar faktur"],
                   ["OVERDUE", "Jatuh tempo"],
                   ["PAID", "Lunas"],
@@ -1105,27 +1101,14 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                           />
                         )}
                         {kind === "invoices" && <SalesPeriod />}
-                        {!id &&
-                          kind === "invoices" &&
-                          (can("sales_invoice.post") ? (
-                            <Button asChild>
-                              <Link href="/operations/invoice-create">
-                                <Plus />
-                                Buat Invoice
-                              </Link>
-                            </Button>
-                          ) : can("sales_invoice.read") ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              disabled
-                              title="Memerlukan izin posting Invoice"
-                              aria-label="Buat Invoice — memerlukan izin posting Invoice"
-                            >
+                        {!id && kind === "invoices" && can("sales_invoice.issue") && (
+                          <Button asChild>
+                            <Link href="/operations/invoice-create">
                               <Plus />
                               Buat Invoice
-                            </Button>
-                          ) : null)}
+                            </Link>
+                          </Button>
+                        )}
                         <Button
                           type="button"
                           variant="outline"
@@ -1407,6 +1390,8 @@ function Warehouse({
   const isPicking = stage === "picking";
   const isShipping = stage === "shipping";
   const isPod = stage === "pod";
+  const canManualInvoice =
+    row.state === "ALLOCATED" && can("sales_invoice.issue");
   const [driver, setDriver] = useState(""),
     [vehicle, setVehicle] = useState(""),
     [receiver, setReceiver] = useState(""),
@@ -1754,6 +1739,18 @@ function Warehouse({
           </Panel>
         </form>
       )}
+      {canManualInvoice && (
+          <Panel title="Invoice">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() => run(`/fulfillment-batches/${row.id}/issue-invoice`)}
+            >
+              Buat Invoice manual
+            </Button>
+          </Panel>
+        )}
       {isPod &&
         ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
         can("delivery_receipt.confirm") && (
@@ -1819,14 +1816,7 @@ function Warehouse({
                       </Link>
                     </p>
                   ))
-                : can("sales_invoice.post") && (
-                    <Button
-                      disabled={pending}
-                      onClick={() => run("/sales-invoices", { delivery_receipt_id: pod.id })}
-                    >
-                      Terbitkan invoice dari POD
-                    </Button>
-                  )}
+                : <p className="sales-notice">Belum ada invoice.</p>}
             </div>
           ))}
         </Panel>
@@ -1834,157 +1824,20 @@ function Warehouse({
     </>
   );
 }
-function InvoiceCreation({
-  rows,
-  pending,
-  command,
-}: {
-  rows: Row[];
-  pending: boolean;
-  command: Command;
-  onCreated: () => void;
-}) {
+function InvoiceCreation({ rows, pending, command }: { rows: Row[]; pending: boolean; command: Command; onCreated: () => void }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState("");
-  const [reference, setReference] = useState("");
-  const [notes, setNotes] = useState("");
   const selected = rows.find((row) => row.id === selectedId);
-  const existing = selected?.invoices?.find((invoice) => invoice.state !== "VOID");
-  const save = async (post = false) => {
-    if (!selected || existing) return;
-    const result = await command("/sales-invoice-drafts", {
-      delivery_receipt_id: selected.id,
-      billing_reference: reference,
-      notes,
-    });
-    if (post) await command("/sales-invoices", { delivery_receipt_id: selected.id });
-    router.push(`/operations/invoices/${result.data.id}`);
-  };
-  return (
-    <div className="web-form sales-compose">
-      <Button className="sales-back" variant="outline" asChild>
-        <Link href="/operations/invoices">← Kembali ke daftar</Link>
-      </Button>
-      <ProformaContents
-        review
-        documentType="Invoice"
-        snapshot={selected?.snapshot ?? { allocations: [] }}
-        beforeContent={
-          <Panel title="1 · Pilih POD">
-            <SelectionField
-              label="Pilih POD"
-              options={rows.map((r) => ({
-                id: r.id,
-                name: `${r.salesOrder?.number} · ${r.salesOrder?.customer?.name} · ${r.fulfillmentBatch?.number} · ${formatDate(r.acceptedAt)}`,
-              }))}
-              value={selectedId ? [selectedId] : []}
-              onChange={(values) => setSelectedId(values[0] ?? "")}
-            />
-            <p className="sales-notice">
-              Pilih satu POD terkonfirmasi. Penggabungan beberapa POD belum didukung; tanggal POD
-              berbeda tetap menjadi Invoice terpisah.
-            </p>
-            <DataTable
-              data={rows}
-              total={rows.length}
-              showColumns={false}
-              columns={[
-                {
-                  id: "select",
-                  header: "Pilih",
-                  cell: ({ row: r }) => (
-                    <input
-                      type="radio"
-                      name="invoice-pod"
-                      aria-label={`Pilih POD ${r.original.salesOrder?.number}`}
-                      checked={selectedId === r.original.id}
-                      onChange={() => setSelectedId(r.original.id)}
-                    />
-                  ),
-                },
-                {
-                  id: "so",
-                  header: "Sales Order",
-                  cell: ({ row: r }) => r.original.salesOrder?.number ?? "—",
-                },
-                {
-                  id: "stage",
-                  header: "Tahap pemenuhan",
-                  cell: ({ row: r }) => r.original.fulfillmentBatch?.number ?? "—",
-                },
-                {
-                  id: "customer",
-                  header: "Pelanggan",
-                  cell: ({ row: r }) => r.original.salesOrder?.customer?.name ?? "—",
-                },
-                {
-                  id: "date",
-                  header: "Tanggal POD",
-                  cell: ({ row: r }) => formatDate(r.original.acceptedAt),
-                },
-              ]}
-            />
-            {!rows.length && <p>Belum ada POD yang siap ditagihkan.</p>}
-          </Panel>
-        }
-        notes={
-          <div className="grid gap-4">
-            <label>
-              Referensi tagihan
-              <Input
-                value={reference}
-                maxLength={200}
-                onChange={(e) => setReference(e.target.value)}
-              />
-            </label>
-            <label>
-              Catatan
-              <Textarea value={notes} maxLength={2000} onChange={(e) => setNotes(e.target.value)} />
-            </label>
-            <p className="sales-notice">
-              Jatuh tempo dihitung dari tanggal POD + termin. Tanggal input, cetak dan tukar faktur
-              tidak mengubah jatuh tempo.
-            </p>
-            <p className="so-help">
-              Produk, jumlah, harga, pajak, dan ongkir mengikuti dokumen sumber. Draft dapat
-              diperbarui sebelum posting.
-            </p>
-          </div>
-        }
-        asideContent={
-          <p className="sales-notice sales-warning">
-            Setelah diposting, Invoice terkunci. Gunakan Simpan draft untuk memeriksa lebih dulu.
-          </p>
-        }
-      />
-      <footer className="so-footer so-detail-actions">
-        <Button variant="outline" asChild>
-          <Link href="/operations/invoices">Batal</Link>
-        </Button>
-        {existing ? (
-          <Button asChild>
-            <Link href={`/operations/invoices/${existing.id}`}>Buka Invoice {existing.number}</Link>
-          </Button>
-        ) : (
-          <>
-            <Button
-              variant="outline"
-              disabled={pending || !selected}
-              onClick={() => void save().catch(() => undefined)}
-            >
-              Simpan draft
-            </Button>
-            <Button
-              disabled={pending || !selected}
-              onClick={() => void save(true).catch(() => undefined)}
-            >
-              Posting Invoice
-            </Button>
-          </>
-        )}
-      </footer>
-    </div>
-  );
+  const create = async () => { if (!selected) return; const result = await command(`/fulfillment-batches/${selected.id}/issue-invoice`, {}); router.push(`/operations/invoices/${result.data.id}`); };
+  return <div className="web-form sales-compose">
+    <Button className="sales-back" variant="outline" asChild><Link href="/operations/invoices">← Kembali ke daftar</Link></Button>
+    <ProformaContents review documentType="Invoice" snapshot={selected?.snapshot ?? { allocations: [] }} beforeContent={<Panel title="Pilih Packing List">
+      <SelectionField label="Pilih Packing List" options={rows.map((r) => ({ id: r.id, name: `${r.salesOrder?.number} · ${r.salesOrder?.customer?.name} · ${r.fulfillmentBatch?.number}` }))} value={selectedId ? [selectedId] : []} onChange={(v) => setSelectedId(v[0] ?? "")} />
+      <DataTable data={rows} total={rows.length} showColumns={false} columns={[{ id: "select", header: "Pilih", cell: ({ row: r }) => <input type="radio" name="invoice-packing" aria-label={`Pilih Packing List ${r.original.salesOrder?.number}`} checked={selectedId === r.original.id} onChange={() => setSelectedId(r.original.id)} /> }, { id: "so", header: "Sales Order", cell: ({ row: r }) => r.original.salesOrder?.number ?? "—" }, { id: "packing", header: "Packing List", cell: ({ row: r }) => r.original.fulfillmentBatch?.number ?? "—" }, { id: "customer", header: "Pelanggan", cell: ({ row: r }) => r.original.salesOrder?.customer?.name ?? "—" }]} />
+      {!rows.length && <p>Belum ada Packing List yang siap dibuatkan Invoice.</p>}
+    </Panel>} notes={<p className="sales-notice">Kuantitas, harga, pajak, dan ongkir mengikuti hasil checking Packing List. Jatuh tempo dihitung dari tanggal Invoice + termin.</p>} asideContent={<p className="sales-notice">Invoice diposting setelah dikonfirmasi dan langsung membentuk AR.</p>} />
+    <footer className="so-footer so-detail-actions"><Button variant="outline" asChild><Link href="/operations/invoices">Batal</Link></Button><Button disabled={pending || !selected} onClick={() => void create().catch(() => undefined)}>Buat Invoice</Button></footer>
+  </div>;
 }
 
 function CustomerReturnForm({ command, pending }: { command: Command; pending: boolean }) {
@@ -2302,8 +2155,7 @@ function Invoice({
                   />
                 </label>
                 <p className="so-help">
-                  Simpan draft sebelum posting. Harga, jumlah, pajak dan ongkir mengikuti sumber
-                  POD.
+                  Simpan draft sebelum posting. Harga, jumlah, pajak dan ongkir mengikuti Packing List.
                 </p>
               </div>
             ) : (
