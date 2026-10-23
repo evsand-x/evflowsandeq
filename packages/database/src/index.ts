@@ -19,3 +19,10 @@ export {
   activateDuePolicyVersions,
   PolicyVersionConflictError,
 } from "./policy-version";
+
+export {
+  chartOfAccounts,
+  operationalPolicyCatalog,
+  type ChartAccountData,
+  type PolicyCatalogEntry,
+} from "./defaults";

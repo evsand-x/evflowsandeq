@@ -42,7 +42,7 @@ async function main() {
   );
   if (missingParent.length)
     throw new Error(`PARENT_NOT_EXPORTED:${missingParent.map((a) => a.code)}`);
-  const file = resolve(__dirname, "../packages/database/prisma/data/chart-of-accounts.json");
+  const file = resolve(__dirname, "../packages/database/src/data/chart-of-accounts.json");
   writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
   console.log(`accounts=${data.accounts.length} posting=${Object.keys(posting_accounts).length}`);
 }

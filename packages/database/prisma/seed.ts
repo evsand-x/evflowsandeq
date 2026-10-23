@@ -2,7 +2,7 @@ import { assertDevelopmentSeed } from "./dev-seed-guard";
 import { PrismaClient } from "@prisma/client";
 import { randomBytes, scrypt as scryptCallback } from "node:crypto";
 import { promisify } from "node:util";
-import policyCatalog from "./data/operational-policies.json";
+import policyCatalog from "../src/data/operational-policies.json";
 
 const prisma = new PrismaClient();
 const scrypt = promisify(scryptCallback);

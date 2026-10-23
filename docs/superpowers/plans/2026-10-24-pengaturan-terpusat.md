@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Nilai bawaan adalah data konfigurasi, bukan konstanta kode (CFG-08, AGENTS.md). Kode boleh membaca file data `packages/database/prisma/data/*.json`, tidak boleh menyalin nilainya ke kode.
+- Nilai bawaan adalah data konfigurasi, bukan konstanta kode (CFG-08, AGENTS.md). Kode boleh membaca file data `packages/database/src/data/*.json`, tidak boleh menyalin nilainya ke kode.
 - Provisioning tidak pernah menimpa kebijakan atau aturan penomoran yang sudah ada; hanya membuat yang hilang.
 - Perubahan pengaturan hanya berlaku untuk dokumen baru; dokumen terbit tetap memakai snapshot.
 - Counter penomoran tidak di-reset saat format diubah; nomor terpakai tidak didaur ulang (IAM-06).
@@ -37,11 +37,11 @@
 
 | File | Tanggung jawab |
 |---|---|
-| `packages/database/prisma/data/operational-policies.json` (modify) | Tambah 8 kebijakan `OPS-FLX-01..08` |
-| `packages/database/prisma/data/numbering-defaults.json` (create) | Daftar jenis dokumen + label + prefix + digit bawaan |
+| `packages/database/src/data/operational-policies.json` (modify) | Tambah 8 kebijakan `OPS-FLX-01..08` |
+| `packages/database/src/data/numbering-defaults.json` (create) | Daftar jenis dokumen + label + prefix + digit bawaan |
 | `packages/backend/src/administration/company-defaults.ts` (create) | `provisionCompanyDefaults` idempotent |
 | `packages/database/prisma/seed.ts` (modify) | Loop kebijakan diganti pemanggilan provisioning |
-| `packages/database/prisma/data/chart-of-accounts.json` (create, Task 0) | Ekspor 156 akun impor + pemetaan akun posting |
+| `packages/database/src/data/chart-of-accounts.json` (create, Task 0) | Ekspor 156 akun impor + pemetaan akun posting |
 | `tools/export-chart-of-accounts.ts` (create, Task 0) | Ekspor sekali sebelum reset |
 | `packages/backend/src/finance/chart-of-accounts-import.ts` (create, Task 0) | `importChartOfAccounts` idempotent dari file data |
 | `tools/seed-development.ts` (modify, Task 0) | Perusahaan dummy baru + akun dari file data + nilai bawaan |
@@ -66,7 +66,7 @@
 Keputusan pengguna 24 Oktober 2026: seluruh transaksi dan nama perusahaan di database development tidak perlu disimpan; database di-reset dan diisi data dummy baru. **156 akun impor dipertahankan** sebagai fondasi Finance. Sumber akun hanya ada di database, jadi ekspor wajib selesai dan diverifikasi sebelum reset.
 
 **Files:**
-- Create: `tools/export-chart-of-accounts.ts`, `packages/database/prisma/data/chart-of-accounts.json`
+- Create: `tools/export-chart-of-accounts.ts`, `packages/database/src/data/chart-of-accounts.json`
 - Create: `packages/backend/src/finance/chart-of-accounts-import.ts`
 - Modify: `tools/seed-development.ts`, `tools/seed-full-development.ts` (hapus ketergantungan pada audit `account_migration.completed`; akun berasal dari file data), `tools/migrate-imported-accounts.ts` (dihapus setelah pemetaannya pindah ke file data)
 - Test: `tests/integration/chart-of-accounts-import.test.ts`
@@ -89,8 +89,8 @@ Catatan urutan: Step 1–5 dikerjakan pertama; Step 6–8 dikerjakan setelah Tas
 ### Task 1: Data nilai bawaan dan provisioning idempotent
 
 **Files:**
-- Modify: `packages/database/prisma/data/operational-policies.json`
-- Create: `packages/database/prisma/data/numbering-defaults.json`
+- Modify: `packages/database/src/data/operational-policies.json`
+- Create: `packages/database/src/data/numbering-defaults.json`
 - Create: `packages/backend/src/administration/company-defaults.ts`
 - Modify: `packages/database/prisma/seed.ts` (loop `for (const definition of policyCatalog)` ±baris 222–258)
 - Test: `tests/integration/company-defaults.test.ts`
