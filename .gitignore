@@ -39,3 +39,6 @@ uploads/
 
 # generated Prisma client
 packages/database/generated/
+
+# agent plan workspaces
+.superpowers/
