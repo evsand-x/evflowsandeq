@@ -116,6 +116,26 @@ export const moduleNavigation = [
   },
 ] as const;
 
+// Izin baca per submenu Master Data; tidak ada grant induk bersama (IAM-01/04).
+export const masterDataPermissions: Record<string, string> = {
+  Produk: "master_product",
+  Pelanggan: "master_customer",
+  Supplier: "master_supplier",
+  Vendor: "master_vendor",
+  Gudang: "master_warehouse",
+  "Item Operasional": "master_operational_item",
+};
+
+// Route hanya untuk submenu yang layarnya sudah tersedia; sisanya tetap label "Layar belum tersedia".
+export const masterDataRoutes: Record<string, string> = {
+  Produk: "/master-data/products",
+  Pelanggan: "/master-data/customers",
+  Supplier: "/master-data/suppliers",
+  Vendor: "/master-data/vendors",
+  Gudang: "/master-data/warehouses",
+  "Item Operasional": "/master-data/operational-items",
+};
+
 export function hasCompanyPermission(principal: AuthPrincipal, code: string) {
   if (isAccessAdministrator(principal)) return true;
   if (/^(user|role|permission)\./.test(code) && !isAccessAdministrator(principal)) return false;

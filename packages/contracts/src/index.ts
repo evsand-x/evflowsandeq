@@ -406,6 +406,26 @@ export const createOperationalItemSchema = z
   })
   .strict();
 
+const versioned = { version: z.number().int().positive() };
+export const updateVendorSchema = createVendorSchema.extend(versioned).strict();
+export const updateWarehouseSchema = createWarehouseSchema.extend(versioned).strict();
+// Gudang induk dan satuan dasar tidak diubah lewat update master; pemindahan memakai proses Warehouse.
+export const updateLocatorSchema = createLocatorSchema
+  .omit({ warehouse_id: true })
+  .extend(versioned)
+  .strict();
+export const updateOperationalItemSchema = createOperationalItemSchema
+  .omit({ base_uom_id: true })
+  .extend(versioned)
+  .strict();
+
+// Kode referensi menjadi identitas yang dirujuk transaksi sehingga tidak diubah lewat update.
+export const updateReferenceMasterSchema = createReferenceMasterSchema
+  .omit({ code: true })
+  .extend(versioned)
+  .strict();
+export const updateRayonSchema = createRayonSchema.omit({ code: true }).extend(versioned).strict();
+
 export const crmResourceSchema = z.enum(["contacts", "prospects"]);
 
 export const contactFunctionsSchema = z

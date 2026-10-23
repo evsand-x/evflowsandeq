@@ -1,6 +1,14 @@
 import { RequireResourcePermission } from "../identity/resource-permissions";
 import { customerPage, customerDetail, customerHistory, customerSales } from "./customer-workspace";
 import {
+  listResourceSchema,
+  masterDetail,
+  masterDuplicates,
+  masterHistory,
+  masterPage,
+  workspaceResourceSchema,
+} from "./master-workspace";
+import {
   activateMasterSchema,
   createCustomerSchema,
   updateCustomerSchema,
@@ -18,6 +26,12 @@ import {
   updateSupplierSchema,
   createVendorSchema,
   createWarehouseSchema,
+  updateLocatorSchema,
+  updateOperationalItemSchema,
+  updateRayonSchema,
+  updateReferenceMasterSchema,
+  updateVendorSchema,
+  updateWarehouseSchema,
   masterResourceSchema,
 } from "@evflow/contracts";
 import { Prisma, prisma } from "@evflow/database";
@@ -127,6 +141,70 @@ export class MasterController {
     return { data: serialize(created) };
   }
 
+  @Get("master-data/workspace/:resource")
+  @RequireResourcePermission("master", "read")
+  async workspaceList(
+    @Param("resource") resource: string,
+    @Query() query: Record<string, string>,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return serialize(
+      await masterPage(req.auth.company_id, listResourceSchema.parse(resource), query),
+    );
+  }
+
+  @Get("master-data/workspace/:resource/:id")
+  @RequireResourcePermission("master", "read")
+  async workspaceDetail(
+    @Param("resource") resource: string,
+    @Param("id") id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return {
+      data: serialize(
+        await masterDetail(
+          req.auth.company_id,
+          workspaceResourceSchema.parse(resource),
+          z.string().uuid().parse(id),
+        ),
+      ),
+    };
+  }
+
+  @Post("master-data/workspace/:resource/duplicate-check")
+  @RequireResourcePermission("master", "read")
+  async workspaceDuplicates(
+    @Param("resource") resource: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return {
+      data: await masterDuplicates(
+        req.auth.company_id,
+        workspaceResourceSchema.parse(resource),
+        body,
+      ),
+    };
+  }
+
+  @Get("master-data/workspace/:resource/:id/history")
+  @RequireResourcePermission("master", "read")
+  async workspaceHistory(
+    @Param("resource") resource: string,
+    @Param("id") id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return {
+      data: serialize(
+        await masterHistory(
+          req.auth.company_id,
+          workspaceResourceSchema.parse(resource),
+          z.string().uuid().parse(id),
+        ),
+      ),
+    };
+  }
+
   @Get("master-data/customer-workspace/list")
   @RequirePermissions("master_customer.read")
   async customerList(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
@@ -214,6 +292,42 @@ export class MasterController {
     return {
       data: serialize(
         await this.master.updateSupplier(req.auth.company_id, req.auth.user_id, id, input.data),
+      ),
+    };
+  }
+
+  @Patch("master-data/:resource/:id")
+  @RequireResourcePermission("master", "update")
+  async updateSimple(
+    @Param("resource") resource: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const schemas = {
+      vendors: updateVendorSchema,
+      warehouses: updateWarehouseSchema,
+      locators: updateLocatorSchema,
+      "operational-items": updateOperationalItemSchema,
+      "product-categories": updateReferenceMasterSchema,
+      uoms: updateReferenceMasterSchema,
+      "customer-channels": updateReferenceMasterSchema,
+      rayons: updateRayonSchema,
+    } as const;
+    if (!Object.hasOwn(schemas, resource))
+      throw new BadRequestException("Jenis master tidak dapat diubah melalui endpoint ini.");
+    const kind = resource as keyof typeof schemas;
+    const input = schemas[kind].safeParse(body);
+    if (!input.success) throw new BadRequestException(input.error.flatten());
+    return {
+      data: serialize(
+        await this.master.updateSimpleMaster(
+          req.auth.company_id,
+          req.auth.user_id,
+          kind,
+          z.string().uuid().parse(id),
+          input.data,
+        ),
       ),
     };
   }

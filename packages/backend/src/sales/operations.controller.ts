@@ -40,6 +40,7 @@ const key = (v?: string) => {
 };
 const readPermission: Record<string, string> = {
   PROFORMA_HANDOFF: "proforma.issue",
+  PRODUCT_MASTER: "master_product.read",
   INVOICE_HANDOFF: "sales_invoice.read",
   WAREHOUSE_CONTROL: "outbound_checking.read",
   SALES_ORDER: "sales_order.read",
@@ -51,6 +52,7 @@ const readPermission: Record<string, string> = {
 };
 const writePermission: Record<string, string> = {
   PROFORMA_HANDOFF: "proforma.issue",
+  PRODUCT_MASTER: "master_product.update",
   INVOICE_HANDOFF: "sales_invoice.post",
   WAREHOUSE_CONTROL: "fulfillment.check",
   SALES_ORDER: "sales_order.create",
@@ -325,6 +327,7 @@ export class OperationsController {
       .object({
         purpose: z.enum([
           "CUSTOMER_MASTER",
+          "PRODUCT_MASTER",
           "SALES_ORDER",
           "POD",
           "PAYMENT",
@@ -365,8 +368,19 @@ export class OperationsController {
     if (!metadata) throw new NotFoundException();
     if (metadata.purpose === "CUSTOMER_MASTER") allowed(req, "master_customer.read");
     else if (metadata.purpose === "PROFORMA_HANDOFF") allowed(req, "proforma.read");
-    else if (metadata.purpose === "TAX" && hasPermission(req, "tax_output.read") && await prisma.officialTaxDocument.findFirst({ where: { companyId: req.auth.company_id, evidenceId: metadata.id, sourceType: "SALES_INVOICE" } })) { /* Legacy output attachment remains scoped to its document. */ }
-    else allowed(req, readPermission[metadata.purpose]!);
+    else if (
+      metadata.purpose === "TAX" &&
+      hasPermission(req, "tax_output.read") &&
+      (await prisma.officialTaxDocument.findFirst({
+        where: {
+          companyId: req.auth.company_id,
+          evidenceId: metadata.id,
+          sourceType: "SALES_INVOICE",
+        },
+      }))
+    ) {
+      /* Legacy output attachment remains scoped to its document. */
+    } else allowed(req, readPermission[metadata.purpose]!);
     return { data: await this.service.evidence(req.auth.company_id, id) };
   }
   @Get("commercial-handoffs/:kind/:id")

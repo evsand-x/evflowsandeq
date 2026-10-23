@@ -116,6 +116,20 @@ Form: panel padding 24px, radius 6px, gap antarseksi 20px, gap kolom 16px, label
 5. Pertahankan fungsi, izin dan data backend. Review dilakukan pada route operasional; kekurangan integrasi tidak diatasi dengan transaksi palsu atau perubahan struktur desain diam-diam.
 
 
+## Struktur halaman dan URL (23 Oktober 2026)
+
+Disetujui pengguna. Berlaku untuk layar Office baru dan layar yang direstrukturisasi; Master Data adalah modul pertama. Komponen sumber: `apps/office/components/web/page-frame.tsx` dan `page-frame.css`.
+
+**URL mengikuti menu.** `/<modul>/<submenu>` daftar, `/new` buat, `/:id` detail, `/:id/edit` ubah, `/<submenu>/<sub-submenu>` daftar anak. Query hanya untuk state yang dapat dibagikan: `q`, filter, `page`, `tab`. Tidak ada `?view=form` atau `?stage=`; tahap proses menjadi submenu/segmen path. Route lama dialihkan dengan pemeriksaan izin tujuan.
+
+| Kerangka | Urutan isi | Komponen |
+|---|---|---|
+| Daftar | Breadcrumb → judul + deskripsi satu baris → aksi utama kanan → sub-submenu bila ada → toolbar cari/filter/kolom → tabel server-paginated → empty/error/loading/tanpa izin | `OfficePage`, `SubNav`, `DataTable` |
+| Detail | Breadcrumb Modul › Submenu › Kode → judul nama + badge status → Aktifkan/Nonaktifkan dan Ubah di kanan → ringkasan 4 atribut kunci → tab sesuai kelompok 07-design, Riwayat terakhir | `RecordBadge`, `SummaryStrip`, `DetailTabs`, `ValueItem`, `HistoryList` |
+| Form | Breadcrumb … › Baru/Ubah → judul → navigasi seksi kiri (mengikuti scroll) + panel seksi → footer tetap Batal/Simpan | `FormFrame` dengan kelas `.web-form` |
+
+Aturan bersama: label tombol Tambah, Ubah, Simpan, Batal, Aktifkan, Nonaktifkan; master tidak memiliki tombol Hapus. Nilai kosong tampil "Belum tersedia", bukan 0. Data milik domain lain ditampilkan sebagai keterangan/tautan, tidak diisi bebas. Cek kandidat duplikat saat nama selesai diisi; ubah memakai versi; peringatan perubahan belum tersimpan saat meninggalkan halaman. Toast hanya setelah konfirmasi server; error penting tetap terlihat di halaman. Field 44px/12px dan tombol form 42px mengikuti `.web-form`.
+
 ## Pengalaman sidebar (7 Oktober 2026)
 
 Perbaikan sidebar yang disetujui mempertahankan biru/Inter, posisi kiri, hierarki, dan izin menu. Pada kunjungan awal hanya cabang aktif yang terbuka. Preferensi kelompok dan posisi scroll disimpan dalam memori per pengguna/perusahaan selama navigasi; masuk cabang baru membuka leluhurnya dan menutup cabang lain. Mode ciut dipulihkan dari cookie preferensi browser yang sudah ada.

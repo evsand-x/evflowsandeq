@@ -235,7 +235,8 @@ export class MasterService {
                     expiresOn: input.permit_expires_on
                       ? new Date(String(input.permit_expires_on))
                       : null,
-                    status: String(input.permit_status ?? "PENDING") as never,
+                    // Izin edar baru selalu menunggu verifikasi berwenang; status dari input diabaikan.
+                    status: "PENDING",
                     createdById: actorId,
                   },
                 },
@@ -329,6 +330,29 @@ export class MasterService {
     return prisma.$transaction(async (tx) => {
       const current = await tx.product.findFirst({ where: { id, companyId, version } });
       if (!current) throw new PreconditionFailedException("Produk berubah atau tidak ditemukan.");
+      // Satuan dasar menjadi dasar qty transaksi; hanya boleh diganti saat draf dan belum dipakai.
+      if (baseUomId !== current.baseUomId) {
+        const [lots, orders, purchases] = await Promise.all([
+          tx.stockLot.count({ where: { companyId, productId: id } }),
+          tx.salesOrderLine.count({ where: { companyId, productId: id } }),
+          tx.purchaseOrderLine.count({ where: { productId: id, purchaseOrder: { companyId } } }),
+        ]);
+        if (current.state !== "DRAFT" || lots + orders + purchases > 0)
+          throw new ConflictException("PRODUCT_BASE_UOM_LOCKED");
+        await tx.productUom.updateMany({
+          where: { productId: id, uomId: { in: [current.baseUomId, baseUomId] }, active: true },
+          data: { active: false, effectiveTo: new Date() },
+        });
+        await tx.productUom.create({
+          data: {
+            companyId,
+            productId: id,
+            uomId: baseUomId,
+            factorToBase: new Prisma.Decimal("1"),
+            createdById: actorId,
+          },
+        });
+      }
       const [category, uom] = await Promise.all([
         tx.productCategory.findFirst({ where: { id: categoryId, companyId, state: "ACTIVE" } }),
         tx.uom.findFirst({ where: { id: baseUomId, companyId, state: "ACTIVE" } }),
@@ -376,6 +400,16 @@ export class MasterService {
     return this.createWithAudit("product_registration", companyId, actorId, async (tx) => {
       const product = await tx.product.findFirst({ where: { id: productId, companyId } });
       if (!product) throw new NotFoundException("Produk tidak ditemukan.");
+      const evidence = nullable(input.evidence_object_key);
+      // Bukti harus berkas privat milik perusahaan yang sama dengan purpose master produk.
+      if (
+        evidence &&
+        !(await tx.transactionEvidence.findFirst({
+          where: { id: evidence, companyId, purpose: "PRODUCT_MASTER" },
+          select: { id: true },
+        }))
+      )
+        throw new ConflictException("BUKTI_IZIN_EDAR_TIDAK_VALID");
       const created = await tx.productRegistration.create({
         data: {
           companyId,
@@ -688,45 +722,188 @@ export class MasterService {
     input: Record<string, unknown>,
   ) {
     const expectedVersion = Number(input.version);
-    return prisma.$transaction(async (tx) => {
-      const current = await tx.supplier.findFirst({
-        where: { id, companyId, version: expectedVersion },
+    return prisma
+      .$transaction(async (tx) => {
+        const current = await tx.supplier.findFirst({
+          where: { id, companyId, version: expectedVersion },
+        });
+        if (!current)
+          throw new PreconditionFailedException("Data supplier berubah atau tidak ditemukan.");
+        const updated = await tx.supplier.update({
+          where: { id },
+          data: {
+            name: String(input.name).trim(),
+            normalizedName: normalize(String(input.name)),
+            categories: (input.categories ?? []) as Prisma.InputJsonValue,
+            primaryAddress: nullable(input.primary_address),
+            phone: nullable(input.phone),
+            salesContact: jsonOrNull(input.sales_contact),
+            financeContact: jsonOrNull(input.finance_contact),
+            shippingContact: jsonOrNull(input.shipping_contact),
+            taxIdentity: nullable(input.tax_identity),
+            technicalResponsibleName: nullable(input.technical_responsible_name),
+            agreementNumber: nullable(input.agreement_number),
+            legalDocuments: jsonOrNull(input.legal_documents),
+            technicalResponsibleLicense: jsonOrNull(input.technical_responsible_license),
+            agreementDetails: jsonOrNull(input.agreement_details),
+            version: { increment: 1 },
+            updatedById: actorId,
+          },
+        });
+        await this.audit.recordWith(tx, {
+          companyId,
+          actorId,
+          action: "master.supplier.updated",
+          resourceType: "supplier",
+          resourceId: id,
+          before: current,
+          after: updated,
+          metadata: { expected_version: expectedVersion },
+        });
+        return updated;
+      })
+      .catch((error: unknown) => {
+        if (isUniqueViolation(error))
+          throw new ConflictException("Kode atau nama data sudah digunakan.");
+        throw error;
       });
-      if (!current)
-        throw new PreconditionFailedException("Data supplier berubah atau tidak ditemukan.");
-      const updated = await tx.supplier.update({
-        where: { id },
-        data: {
-          name: String(input.name).trim(),
-          normalizedName: normalize(String(input.name)),
-          categories: (input.categories ?? []) as Prisma.InputJsonValue,
-          primaryAddress: nullable(input.primary_address),
-          phone: nullable(input.phone),
-          salesContact: jsonOrNull(input.sales_contact),
-          financeContact: jsonOrNull(input.finance_contact),
-          shippingContact: jsonOrNull(input.shipping_contact),
-          taxIdentity: nullable(input.tax_identity),
-          technicalResponsibleName: nullable(input.technical_responsible_name),
-          agreementNumber: nullable(input.agreement_number),
-          legalDocuments: jsonOrNull(input.legal_documents),
-          technicalResponsibleLicense: jsonOrNull(input.technical_responsible_license),
-          agreementDetails: jsonOrNull(input.agreement_details),
-          version: { increment: 1 },
-          updatedById: actorId,
-        },
+  }
+
+  // Update berversi untuk Vendor, Gudang, Lokator dan Item Operasional; field sensitif tidak termasuk.
+  async updateSimpleMaster(
+    companyId: string,
+    actorId: string,
+    resource:
+      | "vendors"
+      | "warehouses"
+      | "locators"
+      | "operational-items"
+      | "product-categories"
+      | "uoms"
+      | "customer-channels"
+      | "rayons",
+    id: string,
+    input: Record<string, unknown>,
+  ) {
+    const expectedVersion = Number(input.version);
+    const name = String(input.name).trim();
+    const common = {
+      name,
+      normalizedName: normalize(name),
+      version: { increment: 1 },
+      updatedById: actorId,
+    };
+    const where = { id, companyId, version: expectedVersion };
+    const auditType = {
+      vendors: "vendor",
+      warehouses: "warehouse",
+      locators: "locator",
+      "operational-items": "operational_item",
+      "product-categories": "product-categories",
+      uoms: "uoms",
+      "customer-channels": "customer-channels",
+      rayons: "rayons",
+    }[resource];
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const stale = () =>
+          new PreconditionFailedException("Data berubah atau tidak ditemukan. Muat ulang data.");
+        let before: unknown, updated: unknown;
+        if (resource === "vendors") {
+          before = await tx.vendor.findFirst({ where });
+          if (!before) throw stale();
+          updated = await tx.vendor.update({
+            where: { id },
+            data: {
+              ...common,
+              vendorType: String(input.vendor_type) as never,
+              categories: (input.categories ?? []) as Prisma.InputJsonValue,
+              primaryAddress: nullable(input.primary_address),
+              phone: nullable(input.phone),
+              email: nullable(input.email),
+              orderContact: jsonOrNull(input.order_contact),
+              financeContact: jsonOrNull(input.finance_contact),
+              serviceContact: jsonOrNull(input.service_contact),
+              taxIdentity: nullable(input.tax_identity),
+              taxStatus: nullable(input.tax_status),
+              agreementNumber: nullable(input.agreement_number),
+            },
+          });
+        } else if (resource === "warehouses") {
+          before = await tx.warehouse.findFirst({ where });
+          if (!before) throw stale();
+          updated = await tx.warehouse.update({
+            where: { id },
+            data: {
+              ...common,
+              address: nullable(input.address),
+              timezone: String(input.timezone ?? "Asia/Makassar"),
+            },
+          });
+        } else if (resource === "locators") {
+          before = await tx.locator.findFirst({ where });
+          if (!before) throw stale();
+          updated = await tx.locator.update({
+            where: { id },
+            data: {
+              ...common,
+              locatorType: String(input.locator_type) as never,
+              pickSequence: input.pick_sequence == null ? null : Number(input.pick_sequence),
+            },
+          });
+        } else if (resource === "product-categories") {
+          before = await tx.productCategory.findFirst({ where });
+          if (!before) throw stale();
+          updated = await tx.productCategory.update({ where: { id }, data: common });
+        } else if (resource === "uoms") {
+          before = await tx.uom.findFirst({ where });
+          if (!before) throw stale();
+          updated = await tx.uom.update({ where: { id }, data: common });
+        } else if (resource === "customer-channels") {
+          before = await tx.customerChannel.findFirst({ where });
+          if (!before) throw stale();
+          updated = await tx.customerChannel.update({ where: { id }, data: common });
+        } else if (resource === "rayons") {
+          before = await tx.rayon.findFirst({ where });
+          if (!before) throw stale();
+          updated = await tx.rayon.update({
+            where: { id },
+            data: { ...common, coverageNotes: nullable(input.coverage_notes) },
+          });
+        } else {
+          before = await tx.operationalItem.findFirst({ where });
+          if (!before) throw stale();
+          updated = await tx.operationalItem.update({
+            where: { id },
+            data: {
+              ...common,
+              kind: String(input.kind) as never,
+              category: String(input.category),
+              specification: nullable(input.specification),
+              referencePurchasePrice: decimalOrNull(input.reference_purchase_price),
+              currency: nullable(input.currency),
+              minimumStock: decimalOrNull(input.minimum_stock),
+              stockControlled: Boolean(input.stock_controlled),
+            },
+          });
+        }
+        await this.audit.recordWith(tx, {
+          companyId,
+          actorId,
+          action: `master.${auditType}.updated`,
+          resourceType: auditType,
+          resourceId: id,
+          before,
+          after: updated,
+          metadata: { expected_version: expectedVersion },
+        });
+        return updated;
       });
-      await this.audit.recordWith(tx, {
-        companyId,
-        actorId,
-        action: "master.supplier.updated",
-        resourceType: "supplier",
-        resourceId: id,
-        before: current,
-        after: updated,
-        metadata: { expected_version: expectedVersion },
-      });
-      return updated;
-    });
+    } catch (error) {
+      if (isUniqueViolation(error))
+        throw new ConflictException("Kode atau nama data sudah digunakan.");
+      throw error;
+    }
   }
 
   async createVendor(companyId: string, actorId: string, input: Record<string, unknown>) {

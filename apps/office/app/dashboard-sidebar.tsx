@@ -48,7 +48,13 @@ import { useLayoutEffect, useRef, useState, type ComponentType, type ReactNode }
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { toggleSidebarBranch } from "../lib/sidebar-state";
 import type { DashboardView } from "../lib/navigation";
-import { hasCompanyPermission, visibleDashboardViews, visibleModules } from "../lib/navigation";
+import {
+  hasCompanyPermission,
+  masterDataPermissions,
+  masterDataRoutes,
+  visibleDashboardViews,
+  visibleModules,
+} from "../lib/navigation";
 
 const moduleIcons: Record<
   string,
@@ -596,10 +602,12 @@ export function DashboardSidebar({
                             </SidebarMenuSubItem>
                           );
                         }
+                        const master =
+                          module.label === "Master Data" ? masterDataRoutes[item] : undefined;
                         if (
                           module.label === "Master Data" &&
-                          item === "Pelanggan" &&
-                          !hasCompanyPermission(principal, "master_customer.read")
+                          masterDataPermissions[item] &&
+                          !hasCompanyPermission(principal, `${masterDataPermissions[item]}.read`)
                         )
                           return null;
                         const controlPermission = (
@@ -616,11 +624,11 @@ export function DashboardSidebar({
                         const settingHref =
                           controlAllowed && !preview
                             ? "/operations/controls"
-                            : module.label === "Master Data" && item === "Pelanggan"
-                              ? preview
-                                ? "/preview/crm/customers"
-                                : "/master-data/customers"
-                              : module.label === "Setting"
+                            : module.label === "Master Data" && item === "Pelanggan" && preview
+                              ? "/preview/crm/customers"
+                              : master
+                                ? master
+                                : module.label === "Setting"
                                 ? (
                                     {
                                       Pengguna: "/setting/users",
@@ -644,9 +652,8 @@ export function DashboardSidebar({
                                       ? "page"
                                       : undefined
                                     : pathname === settingHref ||
-                                        (["/setting/users", "/master-data/customers"].includes(
-                                          settingHref,
-                                        ) &&
+                                        ((settingHref === "/setting/users" ||
+                                          settingHref.startsWith("/master-data/")) &&
                                           pathname?.startsWith(`${settingHref}/`))
                                       ? "page"
                                       : undefined

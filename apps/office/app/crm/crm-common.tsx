@@ -74,9 +74,9 @@ function tableColumnKind(header: unknown) {
 function tableStatusTone(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return undefined;
   const text = String(value ?? "").toLocaleLowerCase("id-ID");
-  if (/selesai|lunas|terverifikasi|aktif|cocok|diterima|siap/.test(text)) return "success";
   if (/ditolak|gagal|dibatalkan|nonaktif|terlambat|ditahan|belum dibayar/.test(text)) return "danger";
-  if (/menunggu|proses|sebagian|backorder|belum|draft|pending|terjadwal/.test(text)) return "warning";
+  if (/selesai|lunas|terverifikasi|aktif|cocok|diterima|siap/.test(text)) return "success";
+  if (/menunggu|proses|sebagian|backorder|belum|draf|pending|terjadwal/.test(text)) return "warning";
   return "info";
 }
 export function DataTable<T>({
