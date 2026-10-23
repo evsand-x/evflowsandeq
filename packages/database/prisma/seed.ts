@@ -20,7 +20,7 @@ async function main() {
     update: {},
     create: {
       id: "00000000-0000-4000-8000-000000000001",
-      name: "PT Sandeq Sarana Medika â€” DATA UJI FIKTIF",
+      name: "PT LIVIANA DWI BERKAT",
     },
   });
 
@@ -43,6 +43,23 @@ async function main() {
       passwordHash,
     },
   });
+
+  // Fictitious marker: dev tools refuse companies without it, independent of the editable name.
+  if (
+    !(await prisma.auditEvent.count({
+      where: { companyId: company.id, action: "development_seed.company_created" },
+    }))
+  )
+    await prisma.auditEvent.create({
+      data: {
+        companyId: company.id,
+        actorId: user.id,
+        action: "development_seed.company_created",
+        resourceType: "company",
+        resourceId: company.id,
+        reason: "DATA UJI FIKTIF — perusahaan dummy database development lokal",
+      },
+    });
 
   const membership = await prisma.companyMembership.upsert({
     where: { companyId_userId: { companyId: company.id, userId: user.id } },

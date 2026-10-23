@@ -1,7 +1,8 @@
 /** Local, additive fixtures. Transactions go through domain commands; no access/password changes. */
 import "../packages/backend/node_modules/reflect-metadata";
-import { prisma, Prisma, LedgerEntryKind } from "../packages/database/src";
+import { prisma, Prisma } from "../packages/database/src";
 import { assertDevelopmentSeed } from "../packages/database/prisma/dev-seed-guard";
+import { assertFictitiousCompany } from "./dev-company";
 import { AuditService } from "../packages/backend/src/common/audit.service";
 import { OtcPtpService } from "../packages/backend/src/otc-ptp.service";
 import { OperationsService } from "../packages/backend/src/sales/operations.service";
@@ -18,20 +19,13 @@ import {
   matchStatement,
   reconcileGl,
 } from "../packages/backend/src/finance/controls.service";
-import { configureNumbering } from "../packages/backend/src/common/document-number";
 import sharp from "../packages/backend/node_modules/sharp";
 
 async function main() {
   assertDevelopmentSeed();
   const c = "00000000-0000-4000-8000-000000000001";
-  if (
-    await prisma.auditEvent.count({
-      where: { companyId: c, action: "account_migration.completed" },
-    })
-  )
-    throw new Error("TEST_FINANCE_SEED_RETIRED: perusahaan telah memakai master akun impor");
   const company = await prisma.company.findUniqueOrThrow({ where: { id: c } });
-  if (!company.name.includes("DATA UJI FIKTIF")) throw new Error("FICTITIOUS_COMPANY_REQUIRED");
+  await assertFictitiousCompany(company.id);
   const actor = await prisma.user.findUniqueOrThrow({
     where: { email: "demo.admin@evflow.local" },
   });
@@ -51,32 +45,16 @@ async function main() {
   const from = "2026-01-01",
     to = "2027-01-01",
     fixtureDate = "2026-10-07";
-  // Explicit test configuration, kept separate from existing account codes.
-  const mappings: Record<string, string> = {};
-  for (const kind of Object.values(LedgerEntryKind)) {
-    const category = ["SALES_TAX", "GRNI", "AP", "CUSTOMER_ADVANCE"].includes(kind)
-      ? "LIABILITY"
-      : kind === "OPENING_STOCK"
-        ? "EQUITY"
-        : ["SALE_REVENUE", "SALES_RETURN"].includes(kind)
-          ? "REVENUE"
-          : ["SALE_COGS", "BANK_ADJUSTMENT"].includes(kind)
-            ? "EXPENSE"
-            : "ASSET";
-    const row = await financeConfigure(
-      c,
-      a,
-      "account",
-      {
-        code: `DEV-E2E-${kind}`,
-        name: `DATA UJI - ${kind}`,
-        category,
-        control_kind: ["CASH_RECEIPT", "CASH_REFUND"].includes(kind) ? "BANK" : kind,
-      },
-      key(`account-${kind}`),
-    );
-    mappings[kind] = row.id;
-  }
+  // Accounts and posting profile come from the imported chart (db:seed:dev).
+  const activeProfile = await prisma.financePostingProfile.findFirst({
+    where: {
+      companyId: c,
+      effectiveFrom: { lte: new Date(fixtureDate) },
+      effectiveTo: { gt: new Date(fixtureDate) },
+    },
+  });
+  if (!activeProfile) throw new Error("POSTING_PROFILE_REQUIRED: run db:seed:dev first");
+  const mappings = activeProfile.mappings as Record<string, string>;
   const period = await prisma.financePeriod.findFirst({
     where: {
       companyId: c,
@@ -92,21 +70,6 @@ async function main() {
       { starts_on: from, ends_on: "2026-12-31" },
       key("period"),
     );
-  const profile = await prisma.financePostingProfile.findFirst({
-    where: {
-      companyId: c,
-      effectiveFrom: { lte: new Date(fixtureDate) },
-      effectiveTo: { gt: new Date(fixtureDate) },
-    },
-  });
-  if (!profile)
-    await financeConfigure(
-      c,
-      a,
-      "profile",
-      { effective_from: from, effective_to: to, mappings },
-      key("profile"),
-    );
   const bank = await financeConfigure(
     c,
     a,
@@ -121,39 +84,7 @@ async function main() {
     },
     key("bank"),
   );
-  for (const [kind, prefix] of Object.entries({
-    sales_order: "SO",
-    fulfillment: "FUL",
-    sales_invoice: "INV",
-    document_PROFORMA: "PRO",
-    document_PICKING: "PICK",
-    document_PACKING: "PACK",
-    document_SURAT_JALAN: "SJ",
-  })) {
-    if (
-      !(await prisma.documentNumberRule.findFirst({
-        where: {
-          companyId: c,
-          documentKind: kind,
-          effectiveFrom: { lte: new Date(fixtureDate) },
-          effectiveTo: { gt: new Date(fixtureDate) },
-        },
-      }))
-    )
-      await configureNumbering(
-        c,
-        a,
-        {
-          document_kind: kind,
-          prefix: `DEV-${prefix}-`,
-          digits: 6,
-          reset_yearly: true,
-          effective_from: from,
-          effective_to: "2099-01-01",
-        },
-        key(`number-${kind}`),
-      );
-  }
+  // Document numbering comes from the provisioned defaults (Setting › Penomoran Dokumen).
   const base = (code: string, name: string) => ({
     companyId: c,
     code,

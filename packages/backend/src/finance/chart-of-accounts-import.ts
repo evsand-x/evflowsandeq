@@ -53,7 +53,10 @@ export async function importChartOfAccounts(
     const profile = await tx.financePostingProfile.create({
       data: {
         companyId,
-        effectiveFrom: await financeDate(tx, companyId),
+        // Start of the current year so documents dated earlier this year can still post.
+        effectiveFrom: new Date(
+          `${(await financeDate(tx, companyId)).toISOString().slice(0, 4)}-01-01`,
+        ),
         effectiveTo: new Date("2999-12-31"),
         mappings,
         createdById: actorId,

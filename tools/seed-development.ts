@@ -1,6 +1,46 @@
 import "../packages/backend/node_modules/reflect-metadata";
 import { prisma } from "../packages/database/src";
 import { assertDevelopmentSeed } from "../packages/database/prisma/dev-seed-guard";
+import { assertFictitiousCompany } from "./dev-company";
+import { hashPassword } from "../packages/backend/src/identity/password";
+import { importChartOfAccounts } from "../packages/backend/src/finance/chart-of-accounts-import";
+import { provisionCompanyDefaults } from "../packages/backend/src/administration/company-defaults";
+
+/** Demo admin, imported chart and editable defaults for the fictitious company; idempotent. */
+async function bootstrapDemoAdmin(companyId: string) {
+  const password = process.env.DEV_SEED_ADMIN_PASSWORD;
+  if (!password) throw new Error("DEV_SEED_ADMIN_PASSWORD_REQUIRED");
+  const existing = await prisma.user.findUnique({ where: { email: "demo.admin@evflow.local" } });
+  const user =
+    existing ??
+    (await prisma.user.create({
+      data: {
+        email: "demo.admin@evflow.local",
+        displayName: "Admin Demo",
+        passwordHash: await hashPassword(password),
+      },
+    }));
+  const membership = await prisma.companyMembership.upsert({
+    where: { companyId_userId: { companyId, userId: user.id } },
+    update: {},
+    create: { companyId, userId: user.id },
+  });
+  const admin = await prisma.role.findUniqueOrThrow({
+    where: { companyId_code: { companyId, code: "ADMIN_SYSTEM" } },
+  });
+  await prisma.userRole.upsert({
+    where: { membershipId_roleId: { membershipId: membership.id, roleId: admin.id } },
+    update: {},
+    create: { companyId, membershipId: membership.id, roleId: admin.id },
+  });
+  await prisma.$transaction(
+    async (tx) => {
+      await importChartOfAccounts(tx, companyId, user.id);
+      await provisionCompanyDefaults(tx, companyId, user.id);
+    },
+    { timeout: 60_000 },
+  );
+}
 import { AuditService } from "../packages/backend/src/common/audit.service";
 import { AccessService } from "../packages/backend/src/identity/access.service";
 import { OtcPtpService } from "../packages/backend/src/otc-ptp.service";
@@ -12,7 +52,8 @@ async function main() {
   assertDevelopmentSeed();
   const c = "00000000-0000-4000-8000-000000000001";
   const company = await prisma.company.findUniqueOrThrow({ where: { id: c } });
-  if (!company.name.includes("DATA UJI FIKTIF")) throw new Error("FICTITIOUS_COMPANY_REQUIRED");
+  await assertFictitiousCompany(company.id);
+  await bootstrapDemoAdmin(c);
   const user = await prisma.user.findUniqueOrThrow({ where: { email: "demo.admin@evflow.local" } });
   const a = user.id;
   const membership = await prisma.companyMembership.findUniqueOrThrow({

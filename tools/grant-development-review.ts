@@ -2,6 +2,7 @@
 import "../packages/backend/node_modules/reflect-metadata";
 import { prisma } from "../packages/database/src";
 import { assertDevelopmentSeed } from "../packages/database/prisma/dev-seed-guard";
+import { assertFictitiousCompany } from "./dev-company";
 import { AuditService } from "../packages/backend/src/common/audit.service";
 import { AccessService } from "../packages/backend/src/identity/access.service";
 
@@ -9,7 +10,7 @@ async function main() {
   assertDevelopmentSeed();
   const companyId = "00000000-0000-4000-8000-000000000001";
   const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
-  if (!company.name.includes("DATA UJI FIKTIF")) throw new Error("FICTITIOUS_COMPANY_REQUIRED");
+  await assertFictitiousCompany(company.id);
   const user = await prisma.user.findUniqueOrThrow({
     where: { email: "demo.admin@evflow.local" },
     select: { id: true, active: true },
