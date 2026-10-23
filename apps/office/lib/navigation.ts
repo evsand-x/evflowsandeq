@@ -126,7 +126,7 @@ export const masterDataPermissions: Record<string, string> = {
   "Item Operasional": "master_operational_item",
 };
 
-// Route hanya untuk submenu yang layarnya sudah tersedia; sisanya tetap label "Layar belum tersedia".
+// Route hanya untuk submenu yang layarnya sudah tersedia; submenu lain tidak tampil (CFG-10).
 export const masterDataRoutes: Record<string, string> = {
   Produk: "/master-data/products",
   Pelanggan: "/master-data/customers",
@@ -135,6 +135,64 @@ export const masterDataRoutes: Record<string, string> = {
   Gudang: "/master-data/warehouses",
   "Item Operasional": "/master-data/operational-items",
 };
+
+// CFG-10: satu sumber menu yang berfungsi. Submenu tanpa route tidak tampil di navigasi.
+export const menuRoutes: Record<string, Record<string, string>> = {
+  "Sales & Marketing": { CRM: "/crm/prospects", "Pesanan Pelanggan": "/operations/orders" },
+  "Warehouse & Logistik": {
+    "Barang Keluar": "/operations/pick-slips",
+    Persediaan: "/operations/controls",
+  },
+  Finance: {
+    "Piutang (AR)": "/operations/invoices",
+    "Kredit & TOP Pelanggan": "/operations/controls",
+    "Kas & Bank": "/operations/reconciliation",
+    Akuntansi: "/operations/accounts",
+    Pajak: "/operations/tax-rules",
+  },
+  "Master Data": masterDataRoutes,
+  Setting: {
+    "Profil Perusahaan": "/setting/company",
+    Pengguna: "/setting/users",
+    Peran: "/setting/roles",
+    "Kebijakan Operasional": "/setting/policies",
+    "Kebijakan Pelanggan Baru": "/setting/sales",
+    "Kredit & Exposure": "/setting/sales",
+    "Pengaturan Persetujuan": "/operations/controls",
+    "Penomoran Dokumen": "/setting/numbering",
+  },
+};
+
+// Izin baca per submenu Setting; Pengguna/Peran tetap khusus Admin Sistem (IAM-04).
+export const settingPermissions: Record<string, string> = {
+  "Profil Perusahaan": "company_profile.read",
+  Pengguna: "user.read",
+  Peran: "role.read",
+  "Kebijakan Operasional": "operational_policy.read",
+  "Kebijakan Pelanggan Baru": "operational_policy.read",
+  "Kredit & Exposure": "operational_policy.read",
+  "Pengaturan Persetujuan": "transaction_approval.manage",
+  "Penomoran Dokumen": "numbering_rule.read",
+};
+
+export function isMenuAvailable(module: string, item: string) {
+  return Boolean(menuRoutes[module]?.[item]);
+}
+
+/** Submenus that work and that this principal may open, in navigation order. */
+export function visibleMenuItems(principal: AuthPrincipal, module: string) {
+  const items: readonly string[] = moduleNavigation.find((m) => m.label === module)?.items ?? [];
+  return items
+    .filter((item) => isMenuAvailable(module, item))
+    .filter((item) =>
+      module === "Setting"
+        ? hasCompanyPermission(principal, settingPermissions[item]!)
+        : module === "Master Data"
+          ? hasCompanyPermission(principal, `${masterDataPermissions[item]}.read`)
+          : true,
+    )
+    .map((label) => ({ label, href: menuRoutes[module]![label]! }));
+}
 
 export function hasCompanyPermission(principal: AuthPrincipal, code: string) {
   if (isAccessAdministrator(principal)) return true;
@@ -167,22 +225,16 @@ export function hasWarehouseDashboardPermission(principal: AuthPrincipal) {
 }
 
 export function visibleModules(principal: AuthPrincipal) {
-  return moduleNavigation.filter((module) =>
+  const working = moduleNavigation.filter((module) =>
+    module.items.some((item) => isMenuAvailable(module.label, item)),
+  );
+  return working.filter((module) =>
     module.label === "Setting"
-      ? [
-          "company_profile.read",
-          "user.read",
-          "role.read",
-          "operational_policy.read",
-          "transaction_approval.manage",
-          "customer.payment_policy.manage",
-        ].some((code) => hasCompanyPermission(principal, code))
+      ? visibleMenuItems(principal, "Setting").length > 0
       : (module.label === "Sales & Marketing" &&
-          [
-            "crm_contact.read",
-            "crm_opportunity.read",
-            "crm_activity.read",
-          ].some((code) => hasCompanyPermission(principal, code))) ||
+          ["crm_contact.read", "crm_opportunity.read", "crm_activity.read"].some((code) =>
+            hasCompanyPermission(principal, code),
+          )) ||
         (module.label === "Master Data" &&
           [
             "master_product",
@@ -205,6 +257,13 @@ export function visibleModules(principal: AuthPrincipal) {
             "delivery_receipt.read",
             "warehouse_allocation.read",
           ].some((code) => hasCompanyPermission(principal, code))) ||
-        (module.label === "Finance" && ["account.read", "sales_invoice.read", "tax_master.read", "tax_output.read", "tax_input.read"].some(code => hasCompanyPermission(principal, code))),
+        (module.label === "Finance" &&
+          [
+            "account.read",
+            "sales_invoice.read",
+            "tax_master.read",
+            "tax_output.read",
+            "tax_input.read",
+          ].some((code) => hasCompanyPermission(principal, code))),
   );
 }

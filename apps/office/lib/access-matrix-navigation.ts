@@ -219,11 +219,14 @@ export function navigationMatrixRows(permissions: Permission[]): NavigationMatri
     byResource.set(permission.resource, items);
   }
   const mapped = new Set(navigation.flatMap(({ resource }) => (resource ? [resource] : [])));
-  const rows = navigation.map(({ path, resource }) => ({
-    path,
-    resource: resource ?? path,
-    items: resource ? (byResource.get(resource) ?? []) : [],
-  }));
+  // CFG-10: menus without a backend capability are not built yet and get no matrix row.
+  const rows = navigation
+    .filter(({ resource }) => resource)
+    .map(({ path, resource }) => ({
+      path,
+      resource: resource ?? path,
+      items: resource ? (byResource.get(resource) ?? []) : [],
+    }));
   for (const [resource, items] of byResource)
     if (!mapped.has(resource))
       rows.push({ path: `Fitur lain › ${resource.replaceAll("_", " ")}`, resource, items });

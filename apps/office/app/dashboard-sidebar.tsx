@@ -41,6 +41,8 @@ import {
   hasCompanyPermission,
   masterDataPermissions,
   masterDataRoutes,
+  menuRoutes,
+  settingPermissions,
   visibleDashboardViews,
   visibleModules,
 } from "../lib/navigation";
@@ -333,8 +335,7 @@ export function DashboardSidebar({
                       {module.items.map((item) => {
                         if (
                           module.label === "Setting" &&
-                          ((item === "Pengguna" && !hasCompanyPermission(principal, "user.read")) ||
-                            (item === "Peran" && !hasCompanyPermission(principal, "role.read")))
+                          !hasCompanyPermission(principal, settingPermissions[item] ?? "")
                         )
                           return null;
                         const operational =
@@ -425,22 +426,6 @@ export function DashboardSidebar({
                                         </Link>
                                       ) : null}
                                     </SidebarMenuSubItem>
-                                    {[
-                                      "Kartu Piutang",
-                                      "Aging",
-                                      "A/T Tagihan",
-                                      "Estimasi Penagihan",
-                                    ].map((label) => (
-                                      <SidebarMenuSubItem key={label}>
-                                        <span
-                                          className="ev-sidebar-sub-link cursor-not-allowed opacity-60"
-                                          aria-disabled="true"
-                                          title="Layar belum tersedia"
-                                        >
-                                          {label} · Belum tersedia
-                                        </span>
-                                      </SidebarMenuSubItem>
-                                    ))}
                                   </SidebarMenuSub>
                                 </CollapsibleContent>
                               </Collapsible>
@@ -577,26 +562,21 @@ export function DashboardSidebar({
                         const controlAllowed =
                           controlPermission && hasCompanyPermission(principal, controlPermission);
                         const settingHref =
-                          controlAllowed && !preview
-                            ? "/operations/controls"
-                            : module.label === "Master Data" && item === "Pelanggan" && preview
-                              ? "/preview/crm/customers"
-                              : master
-                                ? master
-                                : module.label === "Setting"
-                                ? (
-                                    {
-                                      Pengguna: "/setting/users",
-                                      Peran: "/setting/roles",
-                                    } as Record<string, string>
-                                  )[item]
-                                : undefined;
+                          module.label === "Setting"
+                            ? menuRoutes.Setting![item]
+                            : controlAllowed && !preview
+                              ? "/operations/controls"
+                              : module.label === "Master Data" && item === "Pelanggan" && preview
+                                ? "/preview/crm/customers"
+                                : master;
+                        // CFG-10: a submenu without a working screen is not shown at all.
+                        if (!settingHref) return null;
                         return (
                           <SidebarMenuSubItem
                             key={item}
                             className="text-muted-foreground px-2 py-1.5 text-xs"
                           >
-                            {settingHref ? (
+                            {
                               <Link
                                 href={settingHref}
                                 onClick={closeNavigation}
@@ -617,9 +597,7 @@ export function DashboardSidebar({
                               >
                                 {item}
                               </Link>
-                            ) : (
-                              <span title="Layar belum tersedia">{item}</span>
-                            )}
+                            }
                           </SidebarMenuSubItem>
                         );
                       })}
