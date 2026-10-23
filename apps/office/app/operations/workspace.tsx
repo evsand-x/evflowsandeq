@@ -24,6 +24,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import Decimal from "decimal.js";
+import { formatMoney } from "@/lib/format";
 import { SelectionField } from "@/components/web/selection-field";
 import { Switch } from "@/components/ui/switch";
 import { apiRequest } from "@/lib/api";
@@ -156,11 +157,9 @@ const titles: Record<string, string> = {
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleDateString("id-ID") : "—";
 }
-function money(value?: string | null, currency = "IDR") {
-  if (value == null) return "—";
-  const [integer = "0", fraction = "00"] = new Decimal(value).toFixed(2).split(".");
-  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return `${currency} ${grouped},${fraction}`;
+// Currency stays Rupiah (CFG-09); the argument is kept for existing call sites.
+function money(value?: string | null, _currency = "IDR") {
+  return value == null ? "—" : formatMoney(value);
 }
 export function ErrorBox({ message }: { message: string }) {
   const messages: Record<string, string> = {
@@ -1390,8 +1389,7 @@ function Warehouse({
   const isPicking = stage === "picking";
   const isShipping = stage === "shipping";
   const isPod = stage === "pod";
-  const canManualInvoice =
-    row.state === "ALLOCATED" && can("sales_invoice.issue");
+  const canManualInvoice = row.state === "ALLOCATED" && can("sales_invoice.issue");
   const [driver, setDriver] = useState(""),
     [vehicle, setVehicle] = useState(""),
     [receiver, setReceiver] = useState(""),
@@ -1740,17 +1738,17 @@ function Warehouse({
         </form>
       )}
       {canManualInvoice && (
-          <Panel title="Invoice">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={() => run(`/fulfillment-batches/${row.id}/issue-invoice`)}
-            >
-              Buat Invoice manual
-            </Button>
-          </Panel>
-        )}
+        <Panel title="Invoice">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending}
+            onClick={() => run(`/fulfillment-batches/${row.id}/issue-invoice`)}
+          >
+            Buat Invoice manual
+          </Button>
+        </Panel>
+      )}
       {isPod &&
         ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
         can("delivery_receipt.confirm") && (
@@ -1805,18 +1803,17 @@ function Warehouse({
             <div key={pod.id}>
               <p>Penerima: {pod.receiverName}</p>
               {can("delivery_receipt.read") && <Evidence id={pod.evidenceId} />}
-              {pod.invoices.length
-                ? pod.invoices.map((i) => (
-                    <p key={i.id}>
-                      <Link
-                        href={`/operations/invoices/${i.id}`}
-                        className="text-primary underline"
-                      >
-                        {i.number}
-                      </Link>
-                    </p>
-                  ))
-                : <p className="sales-notice">Belum ada invoice.</p>}
+              {pod.invoices.length ? (
+                pod.invoices.map((i) => (
+                  <p key={i.id}>
+                    <Link href={`/operations/invoices/${i.id}`} className="text-primary underline">
+                      {i.number}
+                    </Link>
+                  </p>
+                ))
+              ) : (
+                <p className="sales-notice">Belum ada invoice.</p>
+              )}
             </div>
           ))}
         </Panel>
@@ -1824,20 +1821,107 @@ function Warehouse({
     </>
   );
 }
-function InvoiceCreation({ rows, pending, command }: { rows: Row[]; pending: boolean; command: Command; onCreated: () => void }) {
+function InvoiceCreation({
+  rows,
+  pending,
+  command,
+}: {
+  rows: Row[];
+  pending: boolean;
+  command: Command;
+  onCreated: () => void;
+}) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState("");
   const selected = rows.find((row) => row.id === selectedId);
-  const create = async () => { if (!selected) return; const result = await command(`/fulfillment-batches/${selected.id}/issue-invoice`, {}); router.push(`/operations/invoices/${result.data.id}`); };
-  return <div className="web-form sales-compose">
-    <Button className="sales-back" variant="outline" asChild><Link href="/operations/invoices">← Kembali ke daftar</Link></Button>
-    <ProformaContents review documentType="Invoice" snapshot={selected?.snapshot ?? { allocations: [] }} beforeContent={<Panel title="Pilih Packing List">
-      <SelectionField label="Pilih Packing List" options={rows.map((r) => ({ id: r.id, name: `${r.salesOrder?.number} · ${r.salesOrder?.customer?.name} · ${r.fulfillmentBatch?.number}` }))} value={selectedId ? [selectedId] : []} onChange={(v) => setSelectedId(v[0] ?? "")} />
-      <DataTable data={rows} total={rows.length} showColumns={false} columns={[{ id: "select", header: "Pilih", cell: ({ row: r }) => <input type="radio" name="invoice-packing" aria-label={`Pilih Packing List ${r.original.salesOrder?.number}`} checked={selectedId === r.original.id} onChange={() => setSelectedId(r.original.id)} /> }, { id: "so", header: "Sales Order", cell: ({ row: r }) => r.original.salesOrder?.number ?? "—" }, { id: "packing", header: "Packing List", cell: ({ row: r }) => r.original.fulfillmentBatch?.number ?? "—" }, { id: "customer", header: "Pelanggan", cell: ({ row: r }) => r.original.salesOrder?.customer?.name ?? "—" }]} />
-      {!rows.length && <p>Belum ada Packing List yang siap dibuatkan Invoice.</p>}
-    </Panel>} notes={<p className="sales-notice">Kuantitas, harga, pajak, dan ongkir mengikuti hasil checking Packing List. Jatuh tempo dihitung dari tanggal Invoice + termin.</p>} asideContent={<p className="sales-notice">Invoice diposting setelah dikonfirmasi dan langsung membentuk AR.</p>} />
-    <footer className="so-footer so-detail-actions"><Button variant="outline" asChild><Link href="/operations/invoices">Batal</Link></Button><Button disabled={pending || !selected} onClick={() => void create().catch(() => undefined)}>Buat Invoice</Button></footer>
-  </div>;
+  const create = async () => {
+    if (!selected) return;
+    const result = await command(`/fulfillment-batches/${selected.id}/issue-invoice`, {});
+    router.push(`/operations/invoices/${result.data.id}`);
+  };
+  return (
+    <div className="web-form sales-compose">
+      <Button className="sales-back" variant="outline" asChild>
+        <Link href="/operations/invoices">← Kembali ke daftar</Link>
+      </Button>
+      <ProformaContents
+        review
+        documentType="Invoice"
+        snapshot={selected?.snapshot ?? { allocations: [] }}
+        beforeContent={
+          <Panel title="Pilih Packing List">
+            <SelectionField
+              label="Pilih Packing List"
+              options={rows.map((r) => ({
+                id: r.id,
+                name: `${r.salesOrder?.number} · ${r.salesOrder?.customer?.name} · ${r.fulfillmentBatch?.number}`,
+              }))}
+              value={selectedId ? [selectedId] : []}
+              onChange={(v) => setSelectedId(v[0] ?? "")}
+            />
+            <DataTable
+              data={rows}
+              total={rows.length}
+              showColumns={false}
+              columns={[
+                {
+                  id: "select",
+                  header: "Pilih",
+                  cell: ({ row: r }) => (
+                    <input
+                      type="radio"
+                      name="invoice-packing"
+                      aria-label={`Pilih Packing List ${r.original.salesOrder?.number}`}
+                      checked={selectedId === r.original.id}
+                      onChange={() => setSelectedId(r.original.id)}
+                    />
+                  ),
+                },
+                {
+                  id: "so",
+                  header: "Sales Order",
+                  cell: ({ row: r }) => r.original.salesOrder?.number ?? "—",
+                },
+                {
+                  id: "packing",
+                  header: "Packing List",
+                  cell: ({ row: r }) => r.original.fulfillmentBatch?.number ?? "—",
+                },
+                {
+                  id: "customer",
+                  header: "Pelanggan",
+                  cell: ({ row: r }) => r.original.salesOrder?.customer?.name ?? "—",
+                },
+              ]}
+            />
+            {!rows.length && <p>Belum ada Packing List yang siap dibuatkan Invoice.</p>}
+          </Panel>
+        }
+        notes={
+          <p className="sales-notice">
+            Kuantitas, harga, pajak, dan ongkir mengikuti hasil checking Packing List. Jatuh tempo
+            dihitung dari tanggal Invoice + termin.
+          </p>
+        }
+        asideContent={
+          <p className="sales-notice">
+            Invoice diposting setelah dikonfirmasi dan langsung membentuk AR.
+          </p>
+        }
+      />
+      <footer className="so-footer so-detail-actions">
+        <Button variant="outline" asChild>
+          <Link href="/operations/invoices">Batal</Link>
+        </Button>
+        <Button
+          disabled={pending || !selected}
+          onClick={() => void create().catch(() => undefined)}
+        >
+          Buat Invoice
+        </Button>
+      </footer>
+    </div>
+  );
 }
 
 function CustomerReturnForm({ command, pending }: { command: Command; pending: boolean }) {
@@ -2155,7 +2239,8 @@ function Invoice({
                   />
                 </label>
                 <p className="so-help">
-                  Simpan draft sebelum posting. Harga, jumlah, pajak dan ongkir mengikuti Packing List.
+                  Simpan draft sebelum posting. Harga, jumlah, pajak dan ongkir mengikuti Packing
+                  List.
                 </p>
               </div>
             ) : (

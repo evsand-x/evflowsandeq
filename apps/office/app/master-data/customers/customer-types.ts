@@ -1,3 +1,4 @@
+import { formatMoney } from "@/lib/format";
 export type Ref = { id: string; name: string; state?: string };
 export type Pic = {
   id?: string;
@@ -78,7 +79,5 @@ export const roles: Record<string, string> = {
   OTHER: "Lainnya",
 };
 export function money(value?: string | null) {
-  if (value == null) return "Belum tersedia";
-  const [whole, decimal] = value.split(".");
-  return `Rp ${whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}${decimal?.replace(/0+$/, " ").trim() ? "," + decimal.replace(/0+$/, "") : ""}`;
+  return formatMoney(value);
 }
