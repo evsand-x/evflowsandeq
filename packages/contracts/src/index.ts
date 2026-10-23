@@ -660,3 +660,18 @@ export * from "./crm-workspace";
 export * from "./otc-ptp";
 export * from "./bank-statement-csv";
 export * from "./proforma";
+
+/** Display number format from Setting (OPS-FLX-06); Rupiah only for now (CFG-09). */
+export type NumberFormat = {
+  currency: "IDR";
+  thousand_separator: string;
+  decimal_separator: string;
+  money_decimals: number;
+  quantity_decimals: number;
+};
+
+export type CompanyPreferences = {
+  company_name: string;
+  logo_object_key: string | null;
+  number_format: NumberFormat | null;
+};

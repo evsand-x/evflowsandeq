@@ -73,10 +73,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const problem = (await response.json().catch(() => undefined)) as
       | { detail?: string; message?: string }
       | undefined;
+    const translated = translateProblem(problem);
     throw new ApiError(
       response.status,
-      problem?.detail ?? problem?.message ?? `Request gagal (${response.status}).`,
-      problem,
+      translated.message || `Request gagal (${response.status}).`,
+      translated.settings_href ? { ...problem, settings_href: translated.settings_href } : problem,
     );
   }
   if (response.status === 204) return undefined as T;
@@ -85,4 +86,19 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
 export function resetCsrf() {
   csrfToken = undefined;
+}
+
+/** Turns configuration error codes into guidance that points at the Setting page to fix them. */
+export function translateProblem(problem: { detail?: string; message?: string } | undefined): {
+  message: string;
+  settings_href?: string;
+} {
+  const detail = problem?.detail ?? problem?.message ?? "";
+  if (/^NUMBERING_RULE_REQUIRED_OR_CONFLICTING:\w+$/.test(detail))
+    return {
+      message:
+        "Penomoran dokumen belum diatur. Buka Setting › Penomoran Dokumen untuk mengaktifkannya.",
+      settings_href: "/setting/numbering",
+    };
+  return { message: detail };
 }
