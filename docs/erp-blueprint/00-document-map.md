@@ -3,6 +3,8 @@
 Prioritas sumber: keputusan terbaru pengguna → register keputusan pada README →
 Requirements → dokumen domain pemilik aturan → User Flow/Design/Features → model teknis.
 
+Keputusan 24 Oktober 2026 ([desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md) dan register README) menggantikan ketentuan lama yang lebih kaku tentang persetujuan SO, termin/kredit, nilai bawaan konfigurasi, ongkir, peran dan menu yang belum berfungsi.
+
 ## Acuan visual web terbaru
 
 Keputusan 7 Oktober 2026 mencabut kewajiban mengikuti file desain lama dan skill desain tambahan. Gunakan panduan implementasi web, standar global yang masih berlaku, serta blueprint untuk fungsi dan invariant. Fokus Office operasional; Field ditunda.
@@ -37,7 +39,7 @@ Dokumen utama 00–08 dan README tetap berlaku. Dokumen pendukung lintas modul a
 
 ## Batas lintas modul
 
-- SO normal berjalan tanpa approval manual rutin; approval hanya untuk exception seperti unlock.
+- SO berjalan otomatis bila tidak ada aturan persetujuan aktif; persetujuan SO, pengecualian kredit dan dokumen lain dikonfigurasi pada mesin persetujuan umum (keputusan 24 Oktober 2026).
 - PR dan PO milik Warehouse & Logistik; invoice, AP dan pembayaran milik Finance.
 - Dashboard menyajikan projection sesuai scope; transaksi tetap di modul asal.
 - Master Data menyimpan identitas reusable; Setting mengatur policy, izin dan konfigurasi. Kontak digunakan pada menu Sales & Marketing dengan identitas pelanggan yang sama. Layar Master Data dapat menampilkan harga, kredit, saldo, stok atau pajak sesuai izin, sedangkan mutasi dan aturan tetap dimiliki Sales, Warehouse, Finance atau Setting.

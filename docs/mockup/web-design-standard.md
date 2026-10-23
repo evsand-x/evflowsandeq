@@ -40,10 +40,25 @@ Keputusan terbaru pengguna → standar ini untuk pola global yang telah direview
 
 Gunakan komponen/token bersama yang sudah tersedia. Perbaikan pola bersama dilakukan pada sumbernya agar tidak muncul variasi per halaman. Perubahan arah visual global perlu keputusan pengguna; penerapan standar ini tidak perlu persetujuan ulang.
 
+## Kemudahan pakai (24 Oktober 2026)
+
+Keputusan pengguna: Office harus mudah dipakai seperti ERP SaaS pada umumnya. Aturan visual di dokumen ini melayani kemudahan, bukan sebaliknya. Setiap layar baru atau yang direstrukturisasi wajib:
+
+- membatasi isian wajib pada yang benar-benar diperlukan transaksi, ditandai jelas; isian lain terisi nilai bawaan dari Setting;
+- memakai label bahasa bisnis sesuai kamus label, tanpa kode atau istilah teknis di layar utama; rincian teknis disembunyikan di bagian lanjutan;
+- menyediakan buat cepat dari dropdown (misalnya pelanggan atau produk baru) bagi pengguna berizin;
+- memberi bantuan singkat pada isian yang jarang dipahami;
+- menjaga draft agar tidak hilang saat berpindah halaman;
+- menampilkan error yang menjelaskan cara memperbaiki dan menautkan ke halaman Setting terkait bila penyebabnya konfigurasi;
+- menampilkan peringatan yang tidak menahan pekerjaan sebagai banner, bukan dialog pemblokir;
+- tidak menampilkan menu, tab atau tombol untuk fitur yang belum berfungsi.
+
+QA visual menambah satu pertanyaan: apakah pengguna baru dapat menyelesaikan tugas utama layar tanpa membaca panduan.
+
 ## Shell dan navigasi
 
 - Sidebar kiri, topbar perusahaan, dan area konten mengikuti struktur web yang telah direview. Acuan desktop Dashboard: sidebar 248 px, topbar 72 px; tata letak menyesuaikan viewport, tanpa lebar halaman paksa.
-- Logo evflow, hierarki modul/submenu, status aktif, dan kontrol akses tetap konsisten. Navigasi mengikuti izin backend dan blueprint.
+- Logo evflow, hierarki modul/submenu, status aktif, dan kontrol akses tetap konsisten. Navigasi mengikuti izin backend dan blueprint; menu dan submenu yang belum berfungsi tidak tampil (CFG-10).
 - Tombol collapse memakai chevron kiri `<`; expand memakai chevron kanan `>`. Pertahankan nama aksesibel “Ciutkan sidebar” dan “Perluas sidebar”. Pada drawer web sempit, kontrol penutup berlabel “Tutup menu”.
 - Sidebar panjang menggulir pada area menu; footer akun tetap mudah dijangkau. Scrollbar tipis, track transparan, thumb membulat memakai muted opacity 22%, menguat menjadi 40% saat hover/focus. Fallback WebKit memakai lebar 6 px.
 - Web sempit memakai drawer; bukan implementasi aplikasi mobile. Tabel lebar menggulir dalam areanya sendiri.

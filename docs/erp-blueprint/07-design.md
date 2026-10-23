@@ -1,5 +1,21 @@
 # Design — web kantor dan aplikasi mobile sales/gudang
 
+## Keputusan 24 Oktober 2026 — kemudahan pakai
+
+Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Prinsip layar Office:
+
+- isian wajib minimal dan bertanda jelas; isian lain terisi nilai bawaan;
+- label bahasa bisnis, bukan kode atau istilah teknis;
+- buat cepat pelanggan/produk dari dropdown bagi pengguna berizin;
+- bantuan singkat pada isian yang jarang dipahami;
+- draft tidak hilang saat berpindah halaman;
+- pesan error menjelaskan cara memperbaiki dan menautkan ke halaman Setting terkait;
+- menu dan submenu yang belum berfungsi tidak tampil.
+
+Form SO: pelanggan, tanggal, barang, jumlah dan harga wajib; termin terisi dari pelanggan bila ada dan dapat diganti. Bagian total memuat Subtotal, Diskon, Ongkos kirim (Ditanggung perusahaan atau Dibebankan ke pelanggan dengan Sebelum PPN/Sesudah PPN), PPN dan Total. Mode kredit Peringatan tampil sebagai banner tanpa menahan simpan/ajukan; mode Blokir menampilkan tombol Ajukan Pengecualian.
+
+Setting dibuka sebagai satu halaman Pengaturan terpusat dengan kelompok Perusahaan, Pengguna & Akses, Struktur Organisasi, Penjualan (termin, ongkir, kredit), Dokumen (penomoran, template) dan Persetujuan. Halaman Peran memakai matriks menu × tindakan dengan cakupan data, Pilih Semua per modul/kolom dan Salin dari peran lain.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Label submenu operasional adalah **Akun**, route /operations/accounts, /new, /:id dan /:id/edit. Sidebar membuka Akuntansi pada seluruh route tersebut. Tabel: Kode Akun, Nama Akun, Kategori, Tipe, Saldo Normal, Status, Tindakan; pencarian, kelompok dan status, pagination 25. Form Identitas serta Klasifikasi dan struktur memakai standar desain global web. Field terkunci menampilkan alasan pemakaian. Detail memuat atribut, referensi dan audit; tidak ada saldo nominal pada master.
@@ -430,7 +446,7 @@ Daftar atribut berikut berasal dari pengguna. Pengelompokan dan perilaku input m
 | 11 | NPWP | Teks untuk menjaga nol di depan, nama/alamat terdaftar dan berkas bila diperlukan; simpan NPWP/NIK, status PKP/Non-PKP dan alamat sesuai pajak |
 | 12 | Apoteker Penanggung Jawab/Penanggung Jawab Teknis | Nama, jenis penanggung jawab, kontak dan masa penugasan bila tersedia; berlaku sesuai jenis pelanggan |
 | 13 | Izin Penanggung Jawab | Tertaut ke penanggung jawab: jenis/nomor izin, penerbit, masa berlaku dan berkas; dukung riwayat penggantian |
-| 14 | Termin Pembayaran | Mode COD saat barang diterima atau Bayar sebelum pengiriman untuk pelanggan baru; pilihan Net 15/30/45/60/90 setelah evaluasi Finance. COD memiliki TOP 0 dan jatuh tempo dari POD |
+| 14 | Termin Pembayaran | Opsional: termin bawaan pelanggan dari daftar termin Setting (Tunai/COD, Bayar sebelum kirim, Tempo N hari) yang hanya mengisi otomatis SO. COD memiliki TOP 0 dan jatuh tempo dari POD |
 | 15 | Limit Kredit | Nilai uang dan tanggal efektif; hanya pengguna berwenang. Pelanggan baru tidak otomatis mendapat limit/Tempo; limit untuk prepay/COD dapat tetap kosong sesuai policy |
 | 16 | Saldo Awal Piutang | Ringkasan hasil proses opening per invoice dan tanggal cut-over; tombol Isi/Impor Rincian Piutang Awal mengikuti hak finance. Bukan angka bebas yang langsung mengubah kartu piutang |
 | 17 | Upload Berkas NOO | Unggah berkas dengan nama, tanggal, versi dan catatan; akses privat. Istilah NOO dipertahankan sesuai pengguna; template/kewajiban mengikuti channel |
@@ -689,7 +705,7 @@ Grid SO selalu menampilkan semua item pesanan, termasuk stok kosong. Kolom utama
 
 Saat memilih produk pada Draft, sales berizin melihat stok tersedia untuk pesanan baru, jumlah dipesan dan perkiraan kekurangan, disertai waktu pembaruan. Angka ini informatif dan belum dicadangkan. Credit hold membatasi alokasi, bukan menyembunyikan informasi stok yang berhak dibaca. Bedakan indikator pemeriksaan stok SO belum dilakukan dari informasi availability umum; stok kosong tetap bisa dimasukkan ke SO.
 
-Pelanggan baru menampilkan pilihan **COD saat barang diterima** dan **Bayar sebelum pengiriman**. COD berlaku sebagai mode awal selama tiga bulan berturut-turut dengan TOP 0. Pengguna berhak mengatur kredit dapat menetapkan Tempo, TOP dan limit setelah evaluasi Finance; pengguna lain tidak mendapat field kredit yang dapat disimpan. Form pelanggan juga memuat status PKP/Non-PKP, metode pembayaran, jadwal tukar faktur, PIC penagihan/gudang, toleransi hari pembayaran dan status verifikasi onboarding. Pada tahap prepay, tampilkan nilai Proforma, dana diterima/terverifikasi yang ditautkan, dan kekurangan pembayaran; tombol Kirim tertahan sampai dana cukup dan syarat gudang selesai. Pada COD, invoice diposting setelah POD dengan due date tanggal POD. Unggah bukti tidak menghasilkan label pembayaran terverifikasi. Status Pesanan tetap memakai lima label pilihan pengguna; menunggu pembayaran adalah informasi pada dimensi pembayaran.
+Form pelanggan menyediakan termin bawaan dan limit kredit sebagai isian opsional; pengguna tanpa izin kredit tidak mendapat field limit yang dapat disimpan. Kebijakan COD awal pelanggan baru hanya berlaku bila dinyalakan di Setting. Form pelanggan juga memuat status PKP/Non-PKP, metode pembayaran, jadwal tukar faktur, PIC penagihan/gudang, toleransi hari pembayaran dan status verifikasi onboarding. Pada tahap prepay, tampilkan nilai Proforma, dana diterima/terverifikasi yang ditautkan, dan kekurangan pembayaran; tombol Kirim tertahan sampai dana cukup dan syarat gudang selesai. Pada COD, invoice diposting setelah POD dengan due date tanggal POD. Unggah bukti tidak menghasilkan label pembayaran terverifikasi. Status Pesanan tetap memakai lima label pilihan pengguna; menunggu pembayaran adalah informasi pada dimensi pembayaran.
 
 Tab **Pemenuhan** mengelompokkan dokumen per tahap. Pratinjau Proforma/Picking Slip hanya berisi alokasi tahap tersebut; Packing List memuat aktual lolos checking. Item backorder tetap terlihat pada tab SO/Sisa Pesanan, tidak masuk baris cetak dokumen pemenuhan. Jika tidak ada alokasi, tombol penerbitan menjelaskan “Belum ada stok yang dapat dipenuhi”. Selisih aktual menampilkan tindakan revisi dengan tautan versi dokumen sebelumnya.
 

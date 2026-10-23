@@ -81,11 +81,12 @@ Build a vertical slice through the required layers. Do not mark a feature comple
 
 - Keep business authority in backend domain/application services.
 - Use database transactions, explicit decimal types, idempotency, consistent locking, immutable posted records, auditable correction, and outbox-driven side effects where relevant.
-- Never directly edit balances or invent hidden defaults for financial, stock, payroll, tax, product-quality, approval, or privacy data.
+- Never directly edit balances or invent hidden defaults for financial, stock, payroll, tax, product-quality, approval, or privacy data. Defaults must exist as visible, editable configuration data seeded per company (CFG-08), not code constants.
 - Never hardcode an `OPS-*` value from document 40 or the Setting domain. Load the active operational policy and preserve the relevant version/snapshot.
 - Keep policy values effective-dated and versioned. Missing mandatory policy must produce a clear blocker with an action owner.
 - Enforce multi-role RBAC, scope, approval assignment/limit, and separation of duties on the server.
-- Keep normal SO processing automatic; use approval for configured exceptions such as unlock.
+- Route every approval through the general configurable approval engine (IAM-02/07) and the employee-based org structure (IAM-12). SO runs automatically unless the user activates an SO approval rule; credit exceptions use the same engine. Never auto-approve.
+- Favour ease of use (decision 24 October 2026): minimal required fields, editable defaults, term chosen on the SO, optional credit limit with Off/Warn/Block mode, free-form roles, hidden unfinished menus.
 - Keep Procurement under Warehouse/Logistics and invoice/AP/payment under Finance.
 - Keep React and Vue UI packages separate while sharing public contracts and design tokens. Never expose Prisma or backend packages to browser bundles.
 

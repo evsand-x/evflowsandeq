@@ -2,6 +2,21 @@
 
 Status: keputusan final. Dokumen ini menjadi sumber utama parameter bisnis lintas modul yang dapat diubah melalui **Setting → Kebijakan Operasional**. Nilai pada dokumen 39 dan dokumen domain menjadi nilai awal, bukan angka yang ditanam permanen dalam kode.
 
+## Nilai bawaan baru — keputusan 24 Oktober 2026
+
+Nilai berikut dibuat otomatis saat perusahaan disiapkan (CFG-08) dan dapat diedit melalui Setting. Nilai disimpan sebagai data konfigurasi, bukan konstanta kode.
+
+| Kode | Parameter | Nilai awal | Pilihan |
+|---|---|---|---|
+| OPS-FLX-01 | Mode pemeriksaan limit kredit | Peringatan | Nonaktif, Peringatan, Blokir |
+| OPS-FLX-02 | Kebijakan COD awal pelanggan baru | Nonaktif (durasi 3 bulan bila dinyalakan) | Aktif/nonaktif, durasi, mode COD atau Bayar sebelum kirim |
+| OPS-FLX-03 | Daftar termin | Tunai/COD, Bayar sebelum kirim, Tempo 7/14/30/45/60 hari | Tambah, ubah, nonaktifkan; termin bebas boleh diketik pada SO |
+| OPS-FLX-04 | Ongkos kirim bawaan pada SO | Dibebankan ke pelanggan, Sebelum PPN | Ditanggung perusahaan; Dibebankan ke pelanggan Sebelum/Sesudah PPN; akun per pilihan |
+| OPS-FLX-05 | Penomoran dokumen | Satu aturan aktif per jenis dokumen, prefix jenis + tahun + urutan | Pola prefix/tahun/bulan/urutan dan reset periode (IAM-06) |
+| OPS-FLX-06 | Format angka | Rupiah, pemisah ribuan titik, desimal koma | Jumlah desimal tampilan dan pembulatan |
+| OPS-FLX-07 | Persetujuan SO | Tidak ada aturan aktif | Aturan per kondisi pada Pengaturan Persetujuan |
+| OPS-FLX-08 | Persetujuan dokumen sendiri | Nonaktif | Izinkan eksplisit per jenis dokumen |
+
 ## 1. Prinsip penggunaan
 
 1. Pengguna memerlukan permission sesuai kelompok kebijakan untuk melihat atau mengubah nilai.
@@ -116,7 +131,7 @@ RPO/RTO, region hosting, versi runtime, minimum OS, backup encryption dan secret
 - batch recall, expired, blocked atau karantina tidak dapat dikirim;
 - izin dan scope selalu diperiksa backend;
 - transaksi antar-company tidak tercampur;
-- SO normal tidak memakai approval manual rutin;
+- persetujuan tidak pernah lolos otomatis; pengajuan tanpa pemberi persetujuan dialihkan ke Admin Sistem;
 - PR/PO tetap dimiliki Warehouse & Logistik, sedangkan invoice/AP/pembayaran dimiliki Finance;
 - dokumen issued mempertahankan snapshot identitas, nilai, template dan policy yang relevan.
 

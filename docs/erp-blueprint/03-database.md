@@ -1,5 +1,14 @@
 # Database — model relasional
 
+## Dampak keputusan 24 Oktober 2026 — rancangan
+
+Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Bentuk final tabel ditetapkan pada rencana implementasi dan mengikuti pola policy bertanggal efektif, audit dan outbox:
+
+- **Struktur organisasi:** departemen, jabatan dan karyawan dengan `manager_employee_id`; `user_id` pada karyawan opsional dan unik. Siklus atasan ditolak constraint/validasi.
+- **Mesin persetujuan umum:** registri jenis dokumen, aturan berversi per jenis (kondisi, tahap berurutan, sumber pemberi persetujuan: atasan langsung/atasan N tingkat/kepala departemen/orang/peran, cukup satu/semua), instance pengajuan yang menautkan dokumen sumber dan versinya, serta keputusan per tahap dengan pelaksana sebenarnya. Data unlock/exception SO lama dimigrasikan ke struktur ini.
+- **Penjualan:** daftar termin; termin snapshot pada SO dan invoice; mode kredit perusahaan; pilihan ongkir pada SO/proforma/invoice (ditanggung perusahaan atau dibebankan ke pelanggan, posisi sebelum/sesudah PPN) beserta akun konfigurasi. TOP/limit pada kebijakan pelanggan menjadi nullable.
+- **Nilai bawaan:** baris konfigurasi bawaan (penomoran per jenis, termin, mode kredit, ongkir, format angka) dibuat idempotent saat perusahaan disiapkan.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Migrasi 20261017030000_account_workspace menambah finance_accounts.category_label, description, parent_id (FK), account_type (HEADER/DETAIL), normal_balance (DEBIT/CREDIT), psak118_category dan version. Kelompok tetap ASSET/LIABILITY/EQUITY/REVENUE/EXPENSE; kategori sumber disimpan terpisah. Nama tidak unik, kode unik per perusahaan. Induk opsional (akun akar); parent harus Header sekelompok dan bebas siklus. Tidak ada kolom nominal saldo. Migrasi data lokal membuat versi posting profile/revisi pajak dan audit; jurnal/snapshot lama utuh.
@@ -159,7 +168,7 @@ Boundary Sales/Warehouse serta quantity lifecycle mengikuti [Sales Order-to-Cash
 
 | Tabel | Kolom penting / relasi |
 |---|---|
-| sales_orders / sales_order_lines | customer_id, payment_policy_id/version, payment_mode_snapshot, term_snapshot, lifecycle_state, business_revision, validation_status, credit_status, allocation_status, fulfillment_status; product, ordered_qty, ordered_base_qty, unit_price, discount, tax_snapshot, factor_snapshot; semua item termasuk stok kosong, tanpa status approval manual rutin |
+| sales_orders / sales_order_lines | customer_id, payment_policy_id/version, payment_mode_snapshot, term_snapshot, lifecycle_state, business_revision, validation_status, credit_status, allocation_status, fulfillment_status; product, ordered_qty, ordered_base_qty, unit_price, discount, tax_snapshot, factor_snapshot; semua item termasuk stok kosong, dengan status persetujuan hanya bila aturan persetujuan SO aktif (24 Oktober 2026) |
 | sales_order_revisions / sales_order_line_revisions | sales_order_id, business_revision, reason, actor, recorded_at; order_line_id, ordered_qty/base_qty dan snapshot bisnis per revisi; permintaan asli serta perubahan sah dapat ditelusuri, penutupan tidak menulis ulang qty pesanan |
 | fulfillment_batches / fulfillment_lines | sales_order_id, sequence, business_revision, state, revision; fulfillment_batch_id, order_line_id, allocated_base_qty; satu SO memiliki banyak tahap, baris menghubungkan alokasi dengan dokumen pemenuhan |
 | customer_order_confirmations | sales_order_id, customer_contact_id nullable, contact_name_snapshot, confirmed_at, channel, content_or_reference, evidence_attachment_id nullable, recorded_by; catatan konfirmasi pembatalan pelanggan |
@@ -216,7 +225,7 @@ Setiap tahap pemenuhan mengikat jumlah yang belum dipakai tahap lain; proforma/p
 
 `order_remainder_actions` mencatat alasan, konfirmasi pelanggan untuk pembatalan, dan jumlah per baris. Pending membekukan jumlah sasaran; completed memindahkan jumlah ke closed/cancelled, melepas reservasi/komitmen yang belum terpakai, serta menonaktifkan dokumen pemenuhan terkait secara atomik. Barang sudah picking dikembalikan melalui warehouse movement yang sesuai sebelum finalisasi; tidak menambah stok gudang total karena sekadar membatalkan SO. Histori pengiriman/invoice/settlement tidak dihapus. Uang muka yang sudah diterima tetap kewajiban sampai dialokasikan atau direfund. Backorder belum dialokasikan tidak memakai limit; alokasi dan pelepasan komitmen mengikuti keputusan D05 dan dokumen 25.
 
-`unlock_requests` menggunakan registri `documents` dengan kind `sales_order_unlock` dan approval engine yang sudah ada. SO normal tidak memiliki approval instance. `business_revision` berubah ketika input bisnis relevan berubah, terpisah dari optimistic concurrency `version` yang juga berubah saat hasil pemeriksaan/status diperbarui. Grant mengacu revisi bisnis dan lingkup alasan, sehingga bukan otomatis stale hanya karena penambahan riwayat evaluasi. Konsumsi grant/alokasi/release memakai lock dan transaksi yang sama; retry tidak menggandakan konsumsi atau release. Keputusan penolakan/approval tersimpan di approval_actions dan audit tetap menyimpan pemohon serta pengambil keputusan sebenarnya.
+`unlock_requests` menggunakan registri `documents` dengan kind `sales_order_unlock` dan approval engine yang sudah ada. SO tanpa aturan persetujuan aktif tidak memiliki approval instance; sejak 24 Oktober 2026 unlock dan persetujuan SO memakai mesin persetujuan umum. `business_revision` berubah ketika input bisnis relevan berubah, terpisah dari optimistic concurrency `version` yang juga berubah saat hasil pemeriksaan/status diperbarui. Grant mengacu revisi bisnis dan lingkup alasan, sehingga bukan otomatis stale hanya karena penambahan riwayat evaluasi. Konsumsi grant/alokasi/release memakai lock dan transaksi yang sama; retry tidak menggandakan konsumsi atau release. Keputusan penolakan/approval tersimpan di approval_actions dan audit tetap menyimpan pemohon serta pengambil keputusan sebenarnya.
 
 ## 5. Pengadaan, akuntansi dan administrasi
 

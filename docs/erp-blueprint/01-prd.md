@@ -78,14 +78,14 @@ Target pengguna adalah uji coba pada awal Oktober 2026. Jendela kerja: 24–26 S
 ## 6. Skenario demonstrasi minimum
 
 1. Masukkan saldo uji fiktif produk beserta batch, nilai awal, lokasi, pelanggan dan limit kredit.
-2. Buat dan ajukan SO; sistem memvalidasi data/aturan, kredit dan stok tanpa approval SO rutin. Simulasikan credit hold, pengajuan unlock, keputusan pihak yang dikonfigurasi, lalu evaluasi ulang yang menghormati pengecualian disetujui. Permintaan ditolak tetap terkunci; permintaan disetujui tetap melewati pemeriksaan stok.
+2. Buat dan ajukan SO; sistem memvalidasi data/aturan, kredit dan stok; tanpa aturan persetujuan aktif SO lanjut otomatis, dengan aturan aktif SO menunggu persetujuan sebelum kredit dan alokasi. Simulasikan mode kredit Peringatan dan Blokir, pengajuan pengecualian melalui mesin persetujuan, lalu evaluasi ulang yang menghormati pengecualian disetujui. Permintaan ditolak tetap tertahan; permintaan disetujui tetap melewati pemeriksaan stok.
 3. Masukkan seluruh item/jumlah pesanan, termasuk stok kosong. Periksa stok setelah kredit lolos; alokasikan jumlah tersedia dengan FEFO; larang batch expired/karantina.
 4. Terbitkan proforma/picking hanya dari alokasi tahap terkait, packing list/surat jalan dari aktual lolos checking; kirim parsial lalu catat POD. Peragakan sisa per item sebagai backorder atau ditutup, pemenuhan backorder berikutnya, dan pembatalan berdasarkan konfirmasi pelanggan tanpa menghapus histori/AR.
 5. Terbitkan invoice untuk kuantitas diterima yang belum ditagih; catat pembayaran parsial; cocokkan AR dengan buku besar.
 6. Buat PR/PO/GR, cocokkan invoice supplier, tahan selisih, lalu bayar invoice yang disetujui.
 7. Periksa costing, jurnal, laba rugi/neraca dan checklist closing; saldo tidak seimbang memblokir close.
 8. Catat kunjungan dan target contoh; realisasi berasal dari metrik yang ditentukan, bukan penjumlahan dokumen ganda.
-9. Buat pelanggan baru dari SO dengan pemeriksaan duplikasi dan mode awal COD saat barang diterima selama tiga bulan berturut-turut; Finance dapat memilih bayar sebelum pengiriman. Sales melihat stok saat input; alokasi/proforma tersedia sebelum pembayaran, tetapi dispatch tertahan sampai dana tahap terkait terverifikasi. Peragakan fasilitas tempo hanya dapat ditetapkan pengguna berwenang dengan TOP dan limit lengkap.
+9. Buat pelanggan baru dari SO dengan pemeriksaan duplikasi tanpa wajib mengisi TOP/limit; termin dipilih pada SO (Tunai/COD, Bayar sebelum kirim, Tempo N hari). Sales melihat stok saat input; alokasi/proforma tersedia sebelum pembayaran, tetapi dispatch tertahan sampai dana tahap terkait terverifikasi. Peragakan termin bawaan pelanggan terisi otomatis dan dapat diganti pada SO, serta kebijakan COD awal yang opsional.
 
 ## 7. Gerbang penggunaan resmi
 

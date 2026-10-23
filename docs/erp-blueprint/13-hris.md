@@ -1,5 +1,9 @@
 # Domain HRIS
 
+## Keputusan 24 Oktober 2026 — struktur organisasi dan persetujuan
+
+Struktur Organisasi (IAM-12) dikelola di Setting dan menjadi sumber tunggal departemen, jabatan dan atasan langsung. Struktur berbasis data karyawan, termasuk karyawan tanpa akun login; akun pengguna ditautkan opsional ke satu karyawan. HRIS memakai data yang sama, bukan salinan. Cuti, perjalanan dinas, permintaan biaya, entertain dan call plan harian memakai mesin persetujuan umum (IAM-02/07). Pemberi keputusan harus mempunyai akun; atasan tanpa akun dilewati ke atasan berakun berikutnya, lalu Admin Sistem.
+
 Dokumen ini adalah sumber domain kanonis untuk modul ini. Judul ‘Bagian asal’ mempertahankan keterlacakan isi sebelum konsolidasi; prioritas keputusan tetap mengikuti Peta Dokumen.
 
 

@@ -1,5 +1,9 @@
 # Domain Finance
 
+## Keputusan 24 Oktober 2026 — termin, kredit dan ongkos kirim
+
+Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Hanya Rupiah. Termin dipilih pada SO dan diwarisi invoice; dapat diubah sebelum invoice diposting (OTC-17). Limit kredit opsional dengan mode Nonaktif/Peringatan/Blokir, default Peringatan; pengecualian mode Blokir diajukan melalui mesin persetujuan umum. Ongkos kirim penjualan: Ditanggung perusahaan (biaya kirim aktual ke akun COGS/biaya pengiriman, tidak ditagih) atau Dibebankan ke pelanggan dengan Sebelum PPN (masuk DPP) atau Sesudah PPN (tidak dikenai pajak); pilihan bawaan dan akun diatur di Setting tanpa akun tertanam di kode. Rekonsiliasi dapat memakai persetujuan bila aturannya aktif.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Keputusan aktif: submenu bernama **Finance → Akuntansi → Akun**. Master impor pengguna (156 akun) menggantikan template enam digit sebagai daftar aktif; kode tetap teks persis sumber dan nama boleh berulang. Kelompok lima jenis dengan kategori rinci sumber, tipe Header/Detail, saldo normal, induk opsional untuk akar, PSAK 118, keterangan dan status Aktif/Nonaktif. Cakupan saat ini daftar/buat/edit/detail; tidak memakai Draft/approval rutin. Izin aktif account.read/create/update/import; update mencakup field aman dan status dengan constraint. Klasifikasi akun terpakai ditolak pada edit biasa. Saldo awal terpisah. Target lengkap CoA di bagian berikut tetap rancangan lanjutan untuk dimensi, reklasifikasi, import/export UI dan laporan. Migrasi yang disetujui: transit/karantina → 1-10200, WAPU → 1-10500, kas/bank → 1-10001, PPN Penjualan 11% → 2-20500; akun bersejarah nonaktif, jurnal lama tidak ditulis ulang.
@@ -1327,7 +1331,7 @@ Invoice hanya masuk kartu piutang setelah status **Posted**. Jatuh tempo disimpa
 
 `tanggal POD aktual + TOP pelanggan`
 
-Untuk pelanggan baru, mode pembayaran default adalah **COD saat barang diterima** selama tiga bulan berturut-turut atau **Bayar sebelum pengiriman** bila Finance menetapkan mode yang lebih ketat. COD berarti TOP 0 hari, sehingga jatuh tempo sama dengan tanggal POD. Fasilitas Tempo baru dapat ditetapkan setelah evaluasi Finance dan tidak muncul otomatis setelah pelanggan dibuat.
+Termin dipilih pada SO (keputusan 24 Oktober 2026); kebijakan COD awal pelanggan baru bersifat opsional, default nonaktif. COD berarti TOP 0 hari, sehingga jatuh tempo sama dengan tanggal POD. Limit kredit opsional dan diperiksa sesuai mode Nonaktif/Peringatan/Blokir.
 
 Jika invoice fisik dibawa saat pengiriman dengan status Menunggu POD, invoice belum masuk Piutang Usaha. Setelah POD diposting dan invoice resmi diposting, saldo masuk kartu dengan jatuh tempo yang sudah dihitung dari POD. Perubahan TOP pelanggan tidak mengubah invoice historis.
 
@@ -1895,9 +1899,9 @@ Sumber yang dicocokkan:
 
 ### Pelanggan dan kredit
 
-1. Pelanggan baru menjalani **COD selama tiga bulan berturut-turut** sebagai kebijakan awal. COD pada ERP berarti pelanggan membayar saat barang diterima. Finance dapat menetapkan pilihan yang lebih ketat, yaitu bayar sebelum pengiriman.
+1. Kebijakan COD awal untuk pelanggan baru bersifat opsional (default nonaktif sejak 24 Oktober 2026). COD pada ERP berarti pelanggan membayar saat barang diterima. Finance dapat menetapkan pilihan yang lebih ketat, yaitu bayar sebelum pengiriman.
 2. Pelanggan baru tidak langsung mendapat fasilitas Tempo. Setelah periode COD selesai, Finance mengevaluasi riwayat pembayaran dan dapat menetapkan TOP serta limit kredit melalui hak berwenang. Penyelesaian tiga bulan tidak otomatis memberi kredit.
-3. Sistem mencatat mode pembayaran pada pelanggan dan SO: **COD saat barang diterima** atau **Bayar sebelum pengiriman**. Mode bayar sebelum pengiriman menahan dispatch sampai dana terverifikasi.
+3. Sistem mencatat termin pada SO (bawaan dari pelanggan bila ada): **COD saat barang diterima** atau **Bayar sebelum pengiriman**. Mode bayar sebelum pengiriman menahan dispatch sampai dana terverifikasi.
 4. Invoice COD diposting setelah POD dan jatuh tempo pada tanggal barang diterima karena TOP = 0 hari. Invoice bayar sebelum pengiriman tetap dapat diterbitkan sesuai alur dokumen, tetapi dispatch menunggu dana yang terverifikasi.
 5. Pelanggan dengan invoice outstanding **H+30 dari tanggal jatuh tempo** dapat dibekukan. H-7, hari H, H+3, H+7 dan H+14 menjadi pengingat/follow-up; H+30 menjadi titik eskalasi/freeze sesuai policy. Freeze tidak menghapus invoice atau saldo dan dapat dikecualikan melalui unlock yang disetujui.
 6. TOP yang digunakan adalah Net 15, Net 30, Net 45, Net 60, Net 90 dan COD. TOP pelanggan pemerintah harus dikoordinasikan/ditetapkan bersama Finance.
@@ -1947,7 +1951,7 @@ Aturan perjalanan dan klaim dirinci pada [Perjalanan Dinas](13-hris.md). Ringkas
 
 | Sumber lama | Penyesuaian ERP |
 |---|---|
-| Tanda tangan supervisor pada nota pesanan/SO | Diganti validasi sistem dan hak akses. SO normal tidak memakai approval manual; approval hanya untuk unlock atau kebijakan lain yang dikonfigurasi |
+| Tanda tangan supervisor pada nota pesanan/SO | Diganti validasi sistem dan hak akses. Persetujuan SO dapat dinyalakan pada mesin persetujuan umum (24 Oktober 2026); tanpa aturan aktif SO berjalan otomatis |
 | PR dan PO diserahkan ke Finance | PR dan PO berada di Warehouse & Logistik → Pengadaan. Finance memverifikasi tagihan, AP dan pembayaran |
 | Picking mengurangi kartu stok manual | Sistem mengalokasikan/reservasi, mencatat picking aktual, lalu dispatch memindahkan stok ke transit. Tidak boleh mengurangi stok dua kali |
 | Invoice dibuat dari surat jalan bertanda tangan | Invoice mengikuti POD. Pilihan invoice asli dibawa saat pengiriman tetap tersedia dengan status Menunggu POD |

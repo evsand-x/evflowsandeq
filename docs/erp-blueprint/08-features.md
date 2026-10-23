@@ -1,5 +1,18 @@
 # Features — backlog dan tahap implementasi
 
+## Urutan kerja keputusan 24 Oktober 2026
+
+Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md), urutan berikut didahulukan:
+
+1. Revisi dokumen panduan (selesai 24 Oktober 2026).
+2. Pengaturan terpusat dan nilai bawaan (CFG-08/09/10, IAM-10).
+3. Alur SO → pengiriman → invoice → pembayaran/retur yang ringan (OTC-01/02/03/17, FIN-12).
+4. Peran & Hak Akses yang lebih mudah (IAM-13), Struktur Organisasi (IAM-12) dan mesin persetujuan umum (IAM-02/07), dipasang ke SO lebih dulu.
+5. Pengajuan karyawan: permintaan biaya, perjalanan dinas, entertain, call plan harian, cuti.
+6. Rekonsiliasi dan jenis dokumen lain.
+
+Setiap tahap 2–6 memerlukan rencana implementasi sendiri dan pengujian pada route operasional dengan sesi dan izin nyata.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Tahap Akun (FIN-01/IAM-04/APP-03): daftar/buat/edit/detail, query/filter/pagination, akun Header/Detail, validasi hierarki, izin independen, audit dan impor master sekali tersedia. Saldo awal, UI impor/ekspor umum, hapus interaktif, reklasifikasi khusus, dimensi dan laporan saldo masih cakupan lanjutan; bukan klaim seluruh modul akuntansi selesai. Migrasi konfigurasi akun uji ke 156 akun impor menjaga jurnal lama.
@@ -64,7 +77,7 @@ Sumber domain: [CRM Operasional](10-sales-marketing.md) dan [Sales Order-to-Cash
 | Pengajuan sampel, approval, issue/serah terima, hasil trial per produk, follow-up dan pengembalian | P2 setelah kontrol stok/biaya siap | CRM-15; batch/serial/ownership, biaya/pajak ditetapkan, return quarantine |
 | Target penjualan sembilan skema, penagihan enam skema dan kunjungan berhasil; katalog disetujui, penerima fleksibel, A/T persen dengan satuan/basis/agregasi per skema | P1 definisi + contoh; P2 realisasi | CRM-03/08, TGT-01–11; katalog serta rincian kebijakan tersisa pada Requirements |
 | Penawaran masa berlaku/versi/revisi, harga/diskon per produk/pelanggan, tanggapan per item dan konversi parsial ke SO | P2; harga dasar P1 | CRM-04/11, FIN-05; approval terikat versi, qty tidak digandakan |
-| Referensi SP/PO pelanggan dan SO otomatis, ketentuan pembayaran/kredit sebelum alokasi, tanpa approval rutin | P1 | OTC-01–03, credit policy, AR opening |
+| Referensi SP/PO pelanggan dan SO otomatis, ketentuan pembayaran/kredit sebelum alokasi, persetujuan hanya bila aturan aktif | P1 | OTC-01–03, credit policy, AR opening |
 | Pelanggan baru dari SO: COD tiga bulan, prepay sesuai policy, lalu tempo setelah evaluasi Finance | P1 | MD-05, OTC-15; penerimaan uang muka, ikatan dana per tahap dan kontrol dispatch |
 | Informasi stok saat input Draft/credit hold dan pemeriksaan ulang saat alokasi | P1 | OTC-13/14, izin availability dan stok atomik |
 | Pengajuan unlock manual, routing pihak peninjau dan keputusan | P1 | OTC-08/09, IAM-02, rule/grant sesuai lingkup |
@@ -158,7 +171,7 @@ Sumber domain: [Master Data](14-master-data.md). Butir di bawah adalah entitas/k
 
 Sumber domain: [Setting](15-setting.md). Setting mengelola policy global/default, IAM, approval dan konfigurasi; fasilitas TOP/limit per pelanggan berada di Finance.
 
-**Setting → Pengaturan Persetujuan** mencakup form aturan/tahapan/delegasi, validasi/simulasi, versi/masa berlaku, batas kewenangan, persetujuan sendiri dan pemicu revisi. Antrean Persetujuan Saya tampil pada Dashboard; keputusan berjalan pada resource modul asal. Tidak menambah approval rutin SO.
+**Setting → Pengaturan Persetujuan** mencakup form aturan/tahapan/delegasi, validasi/simulasi, versi/masa berlaku, batas kewenangan, persetujuan sendiri dan pemicu revisi. Antrean Persetujuan Saya tampil pada Dashboard; keputusan berjalan pada resource modul asal. Persetujuan SO hanya bila aturannya aktif (24 Oktober 2026).
 
 | Fitur | Fase | Requirement / dependensi |
 |---|---|---|
@@ -214,7 +227,7 @@ Requirement ID dan acceptance scenario terhubung ke kode/tes; role/scope diterap
 
 - Master pelanggan menyimpan mode COD/prepay/credit, status verifikasi onboarding, legalitas, PIC dan jadwal tukar faktur.
 - Jadwal follow-up piutang H-7, H, H+3, H+7, H+14; freeze default H+30 setelah jatuh tempo.
-- Pelanggan baru COD selama tiga bulan berturut-turut atau prepay; evaluasi Finance diperlukan sebelum fasilitas tempo.
+- Termin dipilih pada SO; kebijakan COD awal pelanggan baru opsional, default nonaktif (24 Oktober 2026).
 - Cash advance maksimal tujuh hari sebelum perjalanan, settlement maksimal lima hari setelah selesai, dan pembayaran klaim mengikuti cut-off tanggal 10/25.
 - Plafon luar kota mengikuti dokumen 17; plafon dalam kota dan parameter yang masih kosong harus diisi melalui Setting.
 

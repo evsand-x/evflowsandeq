@@ -1,5 +1,9 @@
 # Domain Sales & Marketing
 
+## Keputusan 24 Oktober 2026 — Sales Order fleksibel
+
+Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md): isian SO minimal; termin dipilih pada SO dan diwarisi invoice (OTC-17); TOP/limit master opsional; kredit mengikuti mode Nonaktif/Peringatan/Blokir; ongkos kirim Ditanggung perusahaan atau Dibebankan ke pelanggan Sebelum/Sesudah PPN; persetujuan SO hanya bila aturan aktif, dijalankan sebelum kredit dan alokasi tanpa reservasi stok selama menunggu. Pengecualian kredit memakai mesin persetujuan umum. Ketentuan lama di bawah yang bertentangan diganti keputusan ini.
+
 ## Keputusan 7 Oktober 2026 — penerbitan proforma manual
 
 Setelah submit SO berhasil, alokasi/tahap pemenuhan tetap otomatis. Proforma belum
@@ -101,7 +105,7 @@ Perubahan pelanggan, produk, satuan, nilai harga/diskon atau syarat yang menjadi
 
 Tanggapan pelanggan: Menunggu, Diterima, Diterima Sebagian, Minta Revisi, Ditolak; catat tanggal, kontak pemberi tanggapan, alasan/bukti dan qty/item yang diterima. Persetujuan penawaran saja belum otomatis Win; Win mengikuti PO/SP terverifikasi.
 
-Tindakan Buat SO memilih item/qty sesuai PO/SP dan penawaran yang diterima, mempertahankan harga/syarat versi sumber. Sisa qty yang belum dipindahkan terlihat. Cegah konversi berulang melebihi qty yang diterima; perubahan qty/pesanan harus ditelusuri. Penawaran kedaluwarsa/harga tidak valid memerlukan pembaruan atau keputusan berizin sesuai aturan sebelum dapat dipakai. SO tetap tanpa approval manual rutin dan seluruh item pesanan pelanggan masuk SO, termasuk stok kosong. Penawaran tidak memesan stok atau menciptakan PR.
+Tindakan Buat SO memilih item/qty sesuai PO/SP dan penawaran yang diterima, mempertahankan harga/syarat versi sumber. Sisa qty yang belum dipindahkan terlihat. Cegah konversi berulang melebihi qty yang diterima; perubahan qty/pesanan harus ditelusuri. Penawaran kedaluwarsa/harga tidak valid memerlukan pembaruan atau keputusan berizin sesuai aturan sebelum dapat dipakai. SO memakai persetujuan hanya bila aturannya aktif, dan seluruh item pesanan pelanggan masuk SO, termasuk stok kosong. Penawaran tidak memesan stok atau menciptakan PR.
 
 ## 4. Kunjungan berizin, foto dan perubahan
 
@@ -312,7 +316,7 @@ Backorder yang belum dialokasikan tidak memakai limit. Saat stok tersedia dan ak
 - **Prepay:** dispatch memerlukan dana terverifikasi dan ditautkan; dana tersebut tidak dapat digunakan dua kali.
 - **Credit/Tempo:** memerlukan TOP, limit, tanggal efektif dan pengguna berwenang.
 
-Pelanggan baru mengikuti COD tiga bulan atau prepay sesuai policy. Tempo hanya diberikan setelah evaluasi Finance.
+Termin dipilih pada SO; kebijakan COD awal pelanggan baru opsional (keputusan 24 Oktober 2026).
 
 ## 3. Pemakaian dan pelepasan limit
 
@@ -387,7 +391,7 @@ Sales mencatat referensi SP/PO pelanggan sebagai sumber pesanan, lalu memiliki S
 
 SP/PO pelanggan → validasi pelanggan/harga → SO Draft → input seluruh item → Submit → validasi data dan kebijakan pembayaran → cek past due/limit/exposure → bila hold, unlock request → evaluasi ulang → cek stok dan alokasi atomik → fulfillment batch → proforma/picking → checking/packing/SJ → dispatch → monitoring transit → POD → invoice resmi → AR/follow-up → pembayaran.
 
-SO normal tidak membutuhkan approval manusia. Unlock saja menggunakan approval policy. Semua item pelanggan wajib masuk SO, termasuk stok kosong.
+SO tanpa aturan persetujuan aktif tidak membutuhkan approval manusia. Persetujuan SO dan pengecualian kredit memakai mesin persetujuan umum (24 Oktober 2026). Semua item pelanggan wajib masuk SO, termasuk stok kosong.
 
 ## 3. Status dan aturan kuantitas
 
@@ -405,7 +409,7 @@ Ordered quantity tidak pernah ditulis ulang. Allocated, picked, shipped, deliver
 
 Submit menjalankan validasi server berurutan: pelanggan, alamat/PIC, pricelist/harga, payment policy, past due/freeze, limit/exposure, lalu stok. Exposure mengikuti [Kebijakan Kredit dan Exposure](10-sales-marketing.md). Backorder belum dialokasikan tidak memakai limit. Alokasi baru memeriksa ulang kredit secara atomik.
 
-Pelanggan baru mengikuti COD saat barang diterima selama tiga bulan atau prepay sesuai policy Finance. Tempo memerlukan evaluasi, TOP dan limit. Prepay menahan dispatch sampai dana terverifikasi.
+Termin dipilih pada SO (Tunai/COD, Bayar sebelum kirim, Tempo N hari); TOP/limit master opsional dan kebijakan COD awal opsional. Prepay menahan dispatch sampai dana terverifikasi.
 
 Picking memilih batch/locator yang layak berdasarkan FEFO/FIFO. Expired, karantina, recall dan hold tidak boleh dialokasikan. Sales dapat melihat availability informatif, tetapi alokasi resmi hanya hasil service Warehouse.
 
@@ -440,7 +444,7 @@ Sales/admin sales: create/update draft, submit, lihat availability dan follow-up
 ## 10. Kriteria penerimaan
 
 1. SO memuat seluruh item pesanan termasuk stok kosong.
-2. SO normal tidak membuat approval manusia.
+2. SO tanpa aturan persetujuan aktif tidak membuat approval manusia; dengan aturan aktif, persetujuan berjalan sebelum kredit dan alokasi.
 3. Unlock memiliki approval, batas, masa berlaku dan audit.
 4. Picking/proforma tidak memuat qty tanpa alokasi.
 5. Partial fulfillment tidak menggandakan qty.

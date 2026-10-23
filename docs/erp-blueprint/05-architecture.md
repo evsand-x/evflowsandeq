@@ -1,5 +1,9 @@
 # Architecture evflow — web kantor, aplikasi mobile, satu backend modular
 
+## Dampak keputusan 24 Oktober 2026
+
+Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Mesin persetujuan umum dan Struktur Organisasi berada di modul Identity/Setting. Modul domain (Sales, Finance, HRIS, Warehouse) mendaftarkan jenis dokumen, kondisi yang didukung dan aksi lanjutan setelah keputusan; mesin tidak memuat aturan bisnis domain. Keputusan diteruskan ke domain melalui transaksi atau outbox yang idempotent. Nilai bawaan konfigurasi dibuat oleh proses penyiapan perusahaan yang idempotent, bukan konstanta kode.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Akun tetap di modul Finance backend. transactionCommand, lock perusahaan lalu finance, optimistic version, audit dan isolasi perusahaan berlaku pada mutasi. UI Next.js memakai TanStack Query/Table, SelectionField dan Sonner. Posting/tax/bank/profile hanya menerima akun Detail aktif. Migrasi konfigurasi lokal memakai command atomik terjaga lingkungan dan admin, versi profile/pajak serta audit; tidak mengubah ledger. Seed finance uji diblokir sesudah migrasi.
@@ -80,7 +84,7 @@ Scheduler periode pipeline memakai timezone perusahaan, cut-off durable, event o
 ## 3. Kepemilikan modul
 
 - Identity/Setting memiliki users, scopes, approvals, nomor dan audit. Modul bisnis meminta keputusan izin; tidak menulis role sendiri.
-- Sales memiliki customer interaction, pipeline bulanan/PO-SP terverifikasi, strategi maintain, quote/harga khusus, kunjungan/follow-up, pengajuan sampel/trial, SO/target. Warehouse memiliki reservasi, quality dan pergerakan sampel/penjualan/return aktual. Sampel/trial tidak otomatis menghasilkan penjualan/AR; Finance menentukan posting biaya/kepemilikan/pajak yang sesuai. Identity/Setting melayani approval atasan/harga/sampel; approval ini tidak menambah approval manual rutin pada SO.
+- Sales memiliki customer interaction, pipeline bulanan/PO-SP terverifikasi, strategi maintain, quote/harga khusus, kunjungan/follow-up, pengajuan sampel/trial, SO/target. Warehouse memiliki reservasi, quality dan pergerakan sampel/penjualan/return aktual. Sampel/trial tidak otomatis menghasilkan penjualan/AR; Finance menentukan posting biaya/kepemilikan/pajak yang sesuai. Identity/Setting melayani approval atasan/harga/sampel; persetujuan SO hanya berjalan bila aturannya aktif (24 Oktober 2026).
 - SO normal dijalankan melalui pipeline otomatis pada submit/evaluate: validasi data/ketentuan pembayaran → past due/limit untuk tempo → stok → alokasi/release. Pelanggan baru default COD tiga bulan; Finance dapat memilih prepay. Pada COD invoice menunggu POD, sedangkan prepay mensyaratkan dana terverifikasi sebelum dispatch. Finance memiliki penerimaan dan pengikatan dana ke tahap agar tidak digunakan dua kali. Query stok informatif berizin tersedia saat input tanpa membuat reservasi. Approval engine digunakan untuk dokumen `sales_order_unlock`, bukan setiap SO.
 - SO menyimpan seluruh permintaan; fulfillment_batches menghubungkan alokasi tersedia per tahap dengan proforma/picking serta packing aktual. Backorder/penutupan sisa/pembatalan tidak menulis ulang ordered quantity. Sales dan Warehouse berkoordinasi dalam transaksi PostgreSQL yang sama untuk membekukan/melepas jumlah, komitmen dan dokumen; close/cancel serta dispatch memakai lock konsisten. Pekerjaan pengembalian picking dapat berlangsung beberapa langkah dengan state pending yang durable, lalu finalisasi atomik setelah bukti gudang lengkap.
 - Finance memiliki valuation policy, GL, open items, settlement, budget, tax, close. Posting profile menghubungkan event operasional dengan jurnal.

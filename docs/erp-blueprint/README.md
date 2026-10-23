@@ -1,4 +1,18 @@
-# evflow — ERP PT Sandeq Sarana Medika
+# evflow — Blueprint ERP
+
+## Keputusan pengguna — 24 Oktober 2026: aplikasi fleksibel dan mudah dipakai
+
+Acuan: [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Aplikasi dipakai sendiri oleh seluruh tim perusahaan dan harus terasa seperti ERP SaaS pada umumnya: langsung dapat dipakai, sedikit isian wajib, pengaturan terpusat. Keputusan ini menggantikan ketentuan lama yang bertentangan di seluruh blueprint:
+
+- **Pengaturan terpusat dan nilai bawaan:** profil perusahaan (nama, alamat, kontak, NPWP, logo), format angka, penomoran, pajak, termin, ongkir, kredit, struktur organisasi dan persetujuan diatur di Setting oleh pengguna berizin. Konfigurasi yang dibutuhkan transaksi dibuat otomatis dengan nilai bawaan yang dapat diedit; proses hanya tertahan bila pengguna sendiri mengosongkan atau menonaktifkan konfigurasi wajib, dengan pesan yang menautkan halaman Setting terkait. Nama perusahaan tidak ditulis tetap di kode atau panduan.
+- **Mata uang:** saat ini hanya Rupiah; format angka dan pembulatan dapat diatur. Multi-mata uang belum dalam cakupan.
+- **Sales Order:** isian wajib minimal (pelanggan, tanggal, barang, jumlah, harga). Termin dipilih pada SO (Tunai/COD, Bayar sebelum kirim, Tempo N hari); termin bawaan pelanggan hanya mengisi otomatis, diwarisi invoice dan dapat diubah sebelum invoice diposting. TOP/limit pada master pelanggan opsional. Kebijakan COD awal pelanggan baru menjadi opsi, default nonaktif. Limit kredit memakai mode perusahaan Nonaktif/Peringatan/Blokir, default Peringatan.
+- **Ongkos kirim:** Ditanggung perusahaan (COGS/biaya kirim, tidak ditagih) atau Dibebankan ke pelanggan dengan pilihan Sebelum PPN (masuk DPP) atau Sesudah PPN (tidak dikenai pajak). Default dan akun diatur di Setting.
+- **Persetujuan:** satu mesin persetujuan umum untuk jenis dokumen apa pun, termasuk SO, pengecualian kredit, permintaan biaya, perjalanan dinas, entertain, call plan harian, rekonsiliasi dan cuti. Persetujuan SO boleh dinyalakan dengan kondisi; tanpa aturan aktif SO berjalan otomatis. Urutan SO: validasi → persetujuan (bila cocok) → kredit → alokasi; stok tidak direservasi selama menunggu dan antrean alokasi dihitung sejak disetujui. Unlock kredit digabung ke mesin ini.
+- **Struktur organisasi:** departemen, jabatan dan atasan langsung berbasis data karyawan, termasuk karyawan tanpa akun. Keputusan persetujuan memerlukan akun; atasan tanpa akun dilewati ke atasan berakun berikutnya, lalu Admin Sistem.
+- **Peran:** tidak ada peran preset yang dipaksakan. Peran dibuat bebas; matriks menu × tindakan dengan cakupan data, Pilih Semua dan salin dari peran lain. Pengelolaan Pengguna, Peran dan Hak Akses tetap khusus Admin Sistem.
+- **Navigasi:** menu dan submenu yang belum berfungsi disembunyikan.
+- **Tetap berlaku:** invariant posting, stok, snapshot, nomor, idempotency, izin backend dan isolasi perusahaan. Perubahan pengaturan hanya berlaku untuk dokumen baru.
 
 ## Keputusan pengguna — 23 Oktober 2026: fondasi visual biru logo
 
@@ -90,7 +104,7 @@ Keputusan terbaru 26 September 2026: MFA belum wajib pada tahap implementasi saa
 | Kategori | Non Elektromedik Non Steril; Non Elektromedik Steril; Elektromedik Non Radiasi; Diagnostik In Vitro |
 | Channel | RS Pemerintah; RS Swasta; Dinas Kesehatan; Apotek/Klinik; Laboratorium; Institusi Pemerintah; Lainnya; dapat ditambah |
 | Kredit | SO diinput dahulu; verifikasi ketentuan pembayaran, cek past due/limit untuk tempo, kemudian pemeriksaan dan alokasi stok. Bayar sebelum kirim diperiksa lagi terhadap dana terverifikasi sebelum pengiriman |
-| Pelanggan baru | Dapat ditambahkan dari layar SO oleh pengguna berizin; periksa kemungkinan duplikasi. Mode awal COD saat barang diterima selama tiga bulan berturut-turut atau bayar sebelum pengiriman. Fasilitas Tempo setelah evaluasi Finance dan TOP/limit ditetapkan pengguna berwenang |
+| Pelanggan baru | Dapat ditambahkan dari layar SO oleh pengguna berizin; periksa kemungkinan duplikasi. Termin dipilih pada SO; TOP/limit di master opsional. Kebijakan COD awal pelanggan baru opsional, default nonaktif (keputusan 24 Oktober 2026) |
 | Registrasi sebelum PO | Institusi dicatat sekali di Master Pelanggan dengan tahap hubungan Prospek melalui form ringkas; kontak dan kunjungan dapat dicatat tanpa PO/SO atau kelengkapan pelanggan transaksi. Perubahan tahap mempertahankan data dan riwayat. Registrasi/kunjungan tidak dihitung sebagai pelanggan bertransaksi |
 | Database Kontak CRM | 11 atribut pengguna: kode, nama lengkap/panggilan, pelanggan tertaut master, jabatan, unit/bagian, fungsi PIC, HP/WA, email, tanggal lahir, status dan catatan. Kontak terpisah dari akun ERP; banyak kontak per institusi dan beberapa fungsi per PIC |
 | Manajemen prospek dan peluang | Penanggung jawab, sumber, status pendekatan, tindak lanjut, catatan/lampiran serta riwayat kegiatan. Status awal Baru/Dalam Pendekatan/Potensial/Ditunda/Tidak Dilanjutkan dapat diatur di Setting; penundaan/penghentian beralasan. Satu institusi dapat mempunyai beberapa peluang |
@@ -104,7 +118,7 @@ Keputusan terbaru 26 September 2026: MFA belum wajib pada tahap implementasi saa
 | Kartu piutang pelanggan | Saldo awal, mutasi invoice/pembayaran/koreksi, saldo berjalan/akhir, invoice terbuka, jatuh tempo/aging dan riwayat penagihan per pelanggan, dengan periode dan hak akses |
 | Jatuh tempo dan pembayaran invoice | Dikonfirmasi: jatuh tempo berdasarkan tanggal aktual barang diterima di POD + termin; detail invoice menyediakan tombol Terima Pembayaran sesuai izin, dengan verifikasi dana dan alokasi ke invoice. Untuk WAPU, penyelesaian memisahkan komponen **PPN Dipungut WAPU** dan **PPh Dipotong** sebagai dua baris pajak, bukan satu potongan atau diskon |
 | Informasi stok bagi sales | Pengguna berhak dapat melihat stok tersedia saat input, termasuk stok nol. Ini informasi kondisi saat dilihat; alokasi resmi diperiksa ulang setelah aturan transaksi/ketentuan pembayaran lolos |
-| Pemrosesan SO | Tanpa approval manual rutin. Sistem memvalidasi data/aturan, kredit, lalu stok; jika lolos, lanjut otomatis. SO terkunci dapat diajukan untuk unlock manual dan diputuskan pihak yang diatur dalam sistem |
+| Pemrosesan SO | Tanpa aturan persetujuan aktif, SO lanjut otomatis setelah validasi data/aturan, kredit, lalu stok. Persetujuan SO dapat dinyalakan per kondisi (24 Oktober 2026): validasi → persetujuan → kredit → alokasi. Pengecualian kredit mode Blokir diajukan melalui mesin persetujuan umum |
 | Isi SO dan dokumen pemenuhan | Seluruh item/jumlah pesanan masuk SO, termasuk yang belum tersedia. Proforma dan Picking Slip hanya memuat stok tersedia yang dialokasikan; Packing List mengikuti barang aktual yang diambil dan lolos checking |
 | Sisa pesanan | Kekurangan per item/jumlah dapat menjadi backorder atau ditutup; satu SO dapat dipenuhi bertahap, tanpa menghapus jumlah pesanan asli |
 | Label status SO | Pesanan: Draft, Open, Selesai, Closed, Cancelled. Pemenuhan: Belum Dikirim, Sebagian, Terkirim Semua. Sisa: Backorder, Proses Pemenuhan, Ditutup |
@@ -147,7 +161,7 @@ Sumber S1: jawaban pengguna pada percakapan ini, 24 September 2026. Sumber S2: `
 | Sheet / sel S2 | Proses / catatan |
 |---|---|
 | Sheet1 C8:C15 | Penerimaan SP, validasi pricelist, serah terima ke admin |
-| Sheet2 C8:C20 | Verifikasi dan SO; arahan pengguna mengganti approval SO rutin dengan validasi otomatis dan approval hanya untuk permintaan unlock |
+| Sheet2 C8:C20 | Verifikasi dan SO; arahan pengguna mengganti approval SO rutin dengan validasi otomatis dan approval hanya untuk permintaan unlock. Dicabut 24 Oktober 2026: persetujuan SO dapat dikonfigurasi |
 | Sheet3 C8:C16 | Proforma, POD/surat jalan kembali, invoice resmi, tukar faktur |
 | Lembar1 C7:C16 | Validasi data pajak, Coretax, PDF faktur pajak |
 | Sheet4 C8:C32 | Picking, packing, surat jalan, ekspedisi, bukti terima |
@@ -191,7 +205,7 @@ Status final, mandatory configuration dan release gate register di bawah dirinci
 | D04 | **Final:** freeze H+30; follow-up H-7, H, H+3, H+7 dan H+14; pengecualian memakai unlock beralasan dan bertenggat | Pimpinan finance | Assignment/limit approver diisi pada Setting |
 | D05 | **Final:** exposure mencakup AR, unbilled POD, transit dan stok teralokasi tanpa hitung ganda, dikurangi uang muka tertaut; backorder belum dialokasikan tidak memakai limit | Pimpinan finance | Detail pada dokumen 25 |
 | D07 | **Final sebagai nilai awal OPS-COMP:** IDR, tahun buku Jan–Des dan timezone Asia/Makassar; editable melalui UI dengan validasi dampak, sedangkan timestamp sistem tetap UTC | Finance | Perubahan mata uang setelah transaksi memerlukan cut-over/company baru |
-| D08 | **Final:** SO normal tidak memakai approval manual; unlock dan transaksi exception mengikuti approval policy per jenis | Pimpinan | Multi-peran tetap berlaku |
+| D08 | **Direvisi 24 Oktober 2026:** persetujuan SO dan dokumen lain mengikuti aturan pada mesin persetujuan umum; tanpa aturan aktif SO berjalan otomatis | Pimpinan | Multi-peran tetap berlaku |
 | D09 | **Final:** fingerprint melalui impor file ke staging; raw row immutable dan commit memerlukan mapping/deduplikasi/review. Profile file perangkat diisi saat implementasi; tidak ada koneksi langsung mesin pada versi awal | HR | Payroll resmi menunggu contoh file dan hasil parallel run |
 | D10 | **Final:** invoice asli boleh dibawa saat pengiriman dengan status Diterbitkan — Menunggu POD; nomor tetap dan posting setelah POD. COD TOP 0; prepay menunggu dana terverifikasi sebelum dispatch | Finance | Proforma tetap tanpa AR/pendapatan |
 | D11 | **Final:** retur target mengikuti periode credit note posted; atribusi default 100% owner invoice/SO dan split harus tepat 100%. Komisi memakai policy aktif dan payout setelah review | Pimpinan + HR/finance | Payroll/komisi resmi tetap menunggu rule perusahaan |
