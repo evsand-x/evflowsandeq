@@ -25,10 +25,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "month",
-        "day"
-      ],
+      "required": ["month", "day"],
       "properties": {
         "month": {
           "type": "integer",
@@ -86,17 +83,11 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "mode",
-        "value"
-      ],
+      "required": ["mode", "value"],
       "properties": {
         "mode": {
           "type": "string",
-          "enum": [
-            "percent",
-            "quantity"
-          ]
+          "enum": ["percent", "quantity"]
         },
         "value": {
           "type": "decimal",
@@ -118,17 +109,11 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "mode",
-        "value"
-      ],
+      "required": ["mode", "value"],
       "properties": {
         "mode": {
           "type": "string",
-          "enum": [
-            "percent",
-            "amount"
-          ]
+          "enum": ["percent", "amount"]
         },
         "value": {
           "type": "decimal",
@@ -150,19 +135,14 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "amount"
-      ],
+      "required": ["amount"],
       "properties": {
         "amount": {
           "type": "decimal",
           "minimum": "0"
         },
         "account_id": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       }
     },
@@ -189,13 +169,7 @@
     "default": "net_purchase_value",
     "schema": {
       "type": "string",
-      "enum": [
-        "net_purchase_value",
-        "weight",
-        "volume",
-        "quantity",
-        "equal"
-      ]
+      "enum": ["net_purchase_value", "weight", "volume", "quantity", "equal"]
     }
   },
   {
@@ -228,16 +202,11 @@
         },
         "unit": {
           "type": "string",
-          "enum": [
-            "business_hour",
-            "business_day"
-          ]
+          "enum": ["business_hour", "business_day"]
         },
         "expiry_action": {
           "type": "string",
-          "enum": [
-            "release_unpicked"
-          ]
+          "enum": ["release_unpicked"]
         },
         "working_weekdays": {
           "type": "array",
@@ -342,17 +311,11 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "mode",
-        "value"
-      ],
+      "required": ["mode", "value"],
       "properties": {
         "mode": {
           "type": "string",
-          "enum": [
-            "percent",
-            "quantity"
-          ]
+          "enum": ["percent", "quantity"]
         },
         "value": {
           "type": "decimal",
@@ -374,10 +337,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "with_expiry",
-        "without_expiry"
-      ]
+      "required": ["with_expiry", "without_expiry"]
     }
   },
   {
@@ -387,11 +347,7 @@
     "domain": "warehouse",
     "type": "array",
     "unit": null,
-    "default": [
-      "eligibility",
-      "batch_strategy",
-      "sales_order_commitment_time"
-    ],
+    "default": ["eligibility", "batch_strategy", "sales_order_commitment_time"],
     "schema": {
       "type": "array",
       "minItems": 3
@@ -440,9 +396,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "rules"
-      ]
+      "required": ["rules"]
     }
   },
   {
@@ -459,11 +413,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "enabled",
-        "cutoff",
-        "copy_remaining"
-      ]
+      "required": ["enabled", "cutoff", "copy_remaining"]
     }
   },
   {
@@ -479,10 +429,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "value",
-        "event"
-      ],
+      "required": ["value", "event"],
       "properties": {
         "value": {
           "type": "integer",
@@ -505,9 +452,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "template"
-      ]
+      "required": ["template"]
     }
   },
   {
@@ -524,11 +469,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "template",
-        "floor",
-        "cap"
-      ]
+      "required": ["template", "floor", "cap"]
     }
   },
   {
@@ -544,10 +485,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "enabled",
-        "metrics"
-      ],
+      "required": ["enabled", "metrics"],
       "constraints": [
         {
           "kind": "decimal_sum_equals_when",
@@ -669,10 +607,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "value",
-        "basis"
-      ],
+      "required": ["value", "basis"],
       "properties": {
         "value": {
           "type": "integer",
@@ -688,10 +623,7 @@
     "domain": "hr",
     "type": "array",
     "unit": "day_of_month",
-    "default": [
-      10,
-      25
-    ],
+    "default": [10, 25],
     "schema": {
       "type": "array",
       "minItems": 1
@@ -716,10 +648,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "currency",
-        "items"
-      ]
+      "required": ["currency", "items"]
     }
   },
   {
@@ -736,11 +665,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "threshold_hours",
-        "below_percent",
-        "at_or_above_percent"
-      ]
+      "required": ["threshold_hours", "below_percent", "at_or_above_percent"]
     }
   },
   {
@@ -756,10 +681,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "days",
-        "action"
-      ]
+      "required": ["days", "action"]
     }
   },
   {
@@ -775,10 +697,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "days_after_exit",
-        "legal_hold"
-      ]
+      "required": ["days_after_exit", "legal_hold"]
     }
   },
   {
@@ -860,10 +779,7 @@
     },
     "schema": {
       "type": "object",
-      "required": [
-        "value",
-        "unit"
-      ]
+      "required": ["value", "unit"]
     }
   },
   {
@@ -879,10 +795,253 @@
     },
     "schema": {
       "type": "object",
+      "required": ["value", "unit"]
+    }
+  },
+  {
+    "code": "OPS-FLX-01",
+    "name": "Mode pemeriksaan limit kredit",
+    "group": "sales",
+    "domain": "administration",
+    "type": "string",
+    "unit": null,
+    "default": "WARN",
+    "schema": {
+      "type": "string",
+      "enum": ["OFF", "WARN", "BLOCK"]
+    }
+  },
+  {
+    "code": "OPS-FLX-02",
+    "name": "Kebijakan COD awal pelanggan baru",
+    "group": "sales",
+    "domain": "administration",
+    "type": "object",
+    "unit": null,
+    "default": {
+      "enabled": false,
+      "months": 3,
+      "mode": "COD"
+    },
+    "schema": {
+      "type": "object",
+      "required": ["enabled", "months", "mode"],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "months": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["COD", "PREPAY"]
+        }
+      }
+    }
+  },
+  {
+    "code": "OPS-FLX-03",
+    "name": "Daftar termin pembayaran",
+    "group": "sales",
+    "domain": "administration",
+    "type": "array",
+    "unit": null,
+    "default": [
+      {
+        "code": "COD",
+        "label": "Tunai/COD",
+        "days": 0,
+        "kind": "COD"
+      },
+      {
+        "code": "PREPAY",
+        "label": "Bayar sebelum kirim",
+        "days": 0,
+        "kind": "PREPAY"
+      },
+      {
+        "code": "NET7",
+        "label": "Tempo 7 hari",
+        "days": 7,
+        "kind": "TEMPO"
+      },
+      {
+        "code": "NET14",
+        "label": "Tempo 14 hari",
+        "days": 14,
+        "kind": "TEMPO"
+      },
+      {
+        "code": "NET30",
+        "label": "Tempo 30 hari",
+        "days": 30,
+        "kind": "TEMPO"
+      },
+      {
+        "code": "NET45",
+        "label": "Tempo 45 hari",
+        "days": 45,
+        "kind": "TEMPO"
+      },
+      {
+        "code": "NET60",
+        "label": "Tempo 60 hari",
+        "days": 60,
+        "kind": "TEMPO"
+      }
+    ],
+    "schema": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["code", "label", "days", "kind"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["COD", "PREPAY", "TEMPO"]
+          }
+        }
+      }
+    }
+  },
+  {
+    "code": "OPS-FLX-04",
+    "name": "Ongkos kirim bawaan pada SO",
+    "group": "sales",
+    "domain": "administration",
+    "type": "object",
+    "unit": null,
+    "default": {
+      "mode": "CHARGE_CUSTOMER",
+      "tax_position": "BEFORE_TAX"
+    },
+    "schema": {
+      "type": "object",
+      "required": ["mode", "tax_position"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["COMPANY", "CHARGE_CUSTOMER"]
+        },
+        "tax_position": {
+          "type": "string",
+          "enum": ["BEFORE_TAX", "AFTER_TAX"]
+        }
+      }
+    }
+  },
+  {
+    "code": "OPS-FLX-05",
+    "name": "Pola penomoran untuk jenis dokumen baru",
+    "group": "company",
+    "domain": "administration",
+    "type": "object",
+    "unit": null,
+    "default": {
+      "digits": 5,
+      "reset_yearly": true
+    },
+    "schema": {
+      "type": "object",
+      "required": ["digits", "reset_yearly"],
+      "properties": {
+        "digits": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 10
+        },
+        "reset_yearly": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  {
+    "code": "OPS-FLX-06",
+    "name": "Format angka",
+    "group": "company",
+    "domain": "administration",
+    "type": "object",
+    "unit": null,
+    "default": {
+      "currency": "IDR",
+      "thousand_separator": ".",
+      "decimal_separator": ",",
+      "money_decimals": 0,
+      "quantity_decimals": 2
+    },
+    "schema": {
+      "type": "object",
       "required": [
-        "value",
-        "unit"
-      ]
+        "currency",
+        "thousand_separator",
+        "decimal_separator",
+        "money_decimals",
+        "quantity_decimals"
+      ],
+      "properties": {
+        "currency": {
+          "type": "string",
+          "enum": ["IDR"]
+        },
+        "thousand_separator": {
+          "type": "string",
+          "enum": [".", ",", " "]
+        },
+        "decimal_separator": {
+          "type": "string",
+          "enum": [",", "."]
+        },
+        "money_decimals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "quantity_decimals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
+        }
+      }
+    }
+  },
+  {
+    "code": "OPS-FLX-07",
+    "name": "Persetujuan Sales Order aktif",
+    "group": "sales",
+    "domain": "administration",
+    "type": "boolean",
+    "unit": null,
+    "default": false,
+    "schema": {
+      "type": "boolean"
+    }
+  },
+  {
+    "code": "OPS-FLX-08",
+    "name": "Izinkan persetujuan dokumen sendiri",
+    "group": "sales",
+    "domain": "administration",
+    "type": "boolean",
+    "unit": null,
+    "default": false,
+    "schema": {
+      "type": "boolean"
     }
   }
 ]

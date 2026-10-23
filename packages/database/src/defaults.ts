@@ -1,5 +1,6 @@
 /** Editable seed data shipped with the schema; consumers copy it into company configuration. */
 import chartFile from "./data/chart-of-accounts.json";
+import numberingFile from "./data/numbering-defaults.json";
 import policyFile from "./data/operational-policies.json";
 
 export type ChartAccountData = {
@@ -32,3 +33,13 @@ export const chartOfAccounts = chartFile as {
   posting_accounts: Record<string, string>;
 };
 export const operationalPolicyCatalog = policyFile as PolicyCatalogEntry[];
+
+export type NumberingDefault = {
+  document_kind: string;
+  label: string;
+  prefix: string;
+  digits: number;
+  reset_yearly: boolean;
+};
+
+export const numberingDefaults = numberingFile as NumberingDefault[];

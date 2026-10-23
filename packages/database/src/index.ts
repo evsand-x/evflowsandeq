@@ -22,7 +22,9 @@ export {
 
 export {
   chartOfAccounts,
+  numberingDefaults,
   operationalPolicyCatalog,
+  type NumberingDefault,
   type ChartAccountData,
   type PolicyCatalogEntry,
 } from "./defaults";
