@@ -28,7 +28,12 @@ import {
   DropdownMenuGroup,
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
-import { Info, Columns3, Rows3, ChevronLeft, ChevronRight } from "lucide-react";
+import { Info, Rows3 } from "lucide-react";
+import {
+  IconChevronLeft as ChevronLeft,
+  IconChevronRight as ChevronRight,
+  IconColumns as Columns3,
+} from "@/components/web/icons";
 export function Notice({ children }: { children: ReactNode }) {
   return (
     <Alert className="crm-notice">
@@ -143,9 +148,14 @@ export function DataTable<T>({
           {showColumns && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="crm-columns-trigger">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="crm-columns-trigger"
+                  aria-label="Pilih kolom"
+                  title="Pilih kolom"
+                >
                   <Columns3 aria-hidden="true" />
-                  Kolom
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="crm-columns-menu">

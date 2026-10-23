@@ -13,6 +13,11 @@ import { parseServerEnv } from "@evflow/config/env";
 import { AuditService } from "../common/audit.service";
 import { transactionCommand } from "../common/transaction-command";
 import { orderView } from "./order-view";
+import {
+  fulfillmentOrderIds,
+  orderFilterWhere,
+  type OrderListFilters,
+} from "./order-list-filters";
 import { proformaKinds, proformaStatus } from "./proforma";
 import { lineAmounts } from "./pricing-controls";
 
@@ -396,6 +401,7 @@ export class OperationsService {
     state?: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED",
     stage?: "checking" | "shipping" | "pod",
     view?: string,
+    orderFilters: OrderListFilters = {},
   ) {
     const skip = (page - 1) * 25,
       query = { contains: search, mode: "insensitive" as const };
@@ -497,10 +503,21 @@ export class OperationsService {
       return { rows: filtered.slice(skip, skip + 25), total: filtered.length, summary };
     }
     if (kind === "orders") {
+      const company = await prisma.company.findUniqueOrThrow({
+        where: { id: c },
+        select: { timezone: true },
+      });
+      const fulfillmentIds = orderFilters.fulfillment
+        ? await fulfillmentOrderIds(c, orderFilters.fulfillment)
+        : undefined;
       const where: Prisma.SalesOrderWhereInput = {
         companyId: c,
         ...(state ? { state } : {}),
         OR: [{ number: query }, { customer: { name: query } }],
+        AND: [
+          ...orderFilterWhere(orderFilters, company.timezone),
+          ...(fulfillmentIds ? [{ id: { in: fulfillmentIds } }] : []),
+        ],
       };
       const [rows, total] = await prisma.$transaction([
         prisma.salesOrder.findMany({
@@ -545,11 +562,24 @@ export class OperationsService {
           where: { companyId: c, state: "OPEN", lines: { some: { backorderQuantity: { gt: 0 } } } },
         }),
       ]);
+      // Pilihan filter pelanggan hanya dari pelanggan yang memiliki SO pada perusahaan ini.
+      const customers = await prisma.salesOrder.findMany({
+        where: { companyId: c },
+        distinct: ["customerId"],
+        select: { customer: { select: { id: true, name: true } } },
+        orderBy: { customerId: "asc" },
+        take: 500,
+      });
       return {
         rows: rows.map(({ lines, ...row }) => ({ ...row, ...orderView({ ...row, lines }) })),
         total,
         pageSize: 25,
         summary: { draft, open, partial: partial[0]?.count ?? 0, creditHold: null, backorder },
+        filters: {
+          customers: customers
+            .map((row) => row.customer)
+            .sort((a, b) => a.name.localeCompare(b.name, "id")),
+        },
         asOf: new Date().toISOString(),
       };
     }
@@ -765,7 +795,7 @@ export class OperationsService {
     const row = await prisma.salesOrder.findFirst({
       where: { companyId: c, id },
       include: {
-        customer: { select: { name: true } },
+        customer: { select: { name: true, channel: { select: { name: true } } } },
         lines: {
           include: {
             product: { select: { code: true, name: true, baseUom: { select: { name: true } } } },

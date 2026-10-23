@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import "./dashboard-modern.css";
 import "./office-modern.css";
+import "./office-foundation.css";
 import { SessionProvider } from "./session-provider";
 import { Toaster } from "@/components/ui/sonner";
 

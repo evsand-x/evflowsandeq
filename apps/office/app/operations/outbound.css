@@ -1,5 +1,5 @@
 .ob-workspace {
-  --ob-green: #087f5b;
+  --ob-green: hsl(var(--primary));
   display: flex;
   flex-direction: column;
   gap: 20px;

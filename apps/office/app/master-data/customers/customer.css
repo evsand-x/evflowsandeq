@@ -28,8 +28,8 @@
 .customer-badge {
   display: inline-flex;
   align-items: center;
-  background: #edf1ef;
-  color: #40514a;
+  background: var(--ev-color-neutral-soft);
+  color: #3d4a63;
   font-size: 11px;
   line-height: 18px;
   padding: 2px 9px;
@@ -37,16 +37,16 @@
   white-space: normal;
 }
 .customer-badge.is-success {
-  background: #def1e9;
-  color: #12674e;
+  background: var(--ev-color-success-soft);
+  color: var(--ev-color-success);
 }
 .customer-badge.is-warning {
-  background: #fff0d3;
-  color: #805b0b;
+  background: var(--ev-color-warning-soft);
+  color: var(--ev-color-warning);
 }
 .customer-badge.is-danger {
-  background: #fde5e7;
-  color: #a32332;
+  background: var(--ev-color-danger-soft);
+  color: var(--ev-color-danger);
 }
 .customer-panel {
   background: hsl(var(--card));
@@ -82,10 +82,10 @@
 }
 .customer-note {
   font-size: 12px;
-  background: #eaf5ef;
-  color: #32604c;
-  border: 1px solid #dcece4;
-  border-radius: 5px;
+  background: var(--ev-color-primary-soft);
+  color: var(--ev-color-primary);
+  border: 1px solid #b9d3f5;
+  border-radius: var(--ev-radius-control);
   padding: 10px 12px;
   margin: 14px 0 0;
 }

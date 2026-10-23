@@ -102,35 +102,49 @@
   --ev-color-danger-soft: #450a0a;
 }
 
-/* Approved Office direction. Opt-in root keeps Field unchanged and covers portals. */
+/* Approved Office direction (23 Oct 2026): blues taken from the evflow logo.
+   Opt-in root keeps Field unchanged and covers portals. */
 :root.office-modern {
-  --background: 150 12% 97%;
-  --foreground: 160 16% 13%;
+  --background: 217 50% 97%;
+  --foreground: 219 57% 13%;
   --card: 0 0% 100%;
-  --card-foreground: 160 16% 13%;
+  --card-foreground: 219 57% 13%;
   --popover: 0 0% 100%;
-  --popover-foreground: 160 16% 13%;
-  --primary: 162 77% 24%;
+  --popover-foreground: 219 57% 13%;
+  --primary: 214 87% 34%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 150 16% 95%;
-  --secondary-foreground: 160 16% 13%;
-  --muted: 150 12% 95%;
-  --muted-foreground: 155 7% 40%;
-  --accent: 156 34% 93%;
-  --accent-foreground: 162 77% 24%;
-  --border: 150 11% 88%;
-  --input: 150 11% 83%;
-  --ring: 162 77% 24%;
+  --secondary: 217 30% 95%;
+  --secondary-foreground: 219 57% 13%;
+  --muted: 217 30% 95%;
+  --muted-foreground: 221 17% 43%;
+  --accent: 213 77% 95%;
+  --accent-foreground: 214 87% 34%;
+  --destructive: 4 77% 40%;
+  --border: 216 34% 89%;
+  --input: 216 39% 84%;
+  --ring: 210 76% 50%;
   --sidebar: 0 0% 100%;
-  --sidebar-foreground: 160 16% 13%;
-  --sidebar-primary: 162 77% 24%;
+  --sidebar-foreground: 219 57% 13%;
+  --sidebar-primary: 223 83% 16%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 156 34% 93%;
-  --sidebar-accent-foreground: 162 77% 24%;
-  --sidebar-border: 150 11% 88%;
-  --sidebar-ring: 162 77% 24%;
-  --radius: 0.75rem;
-  --ev-radius-card: 14px;
-  --ev-radius-control: 9px;
+  --sidebar-accent: 217 50% 97%;
+  --sidebar-accent-foreground: 223 83% 16%;
+  --sidebar-border: 216 34% 89%;
+  --sidebar-ring: 210 76% 50%;
+  --radius: 0.5rem;
+  --ev-radius-card: 12px;
+  --ev-radius-control: 8px;
+  --ev-radius-badge: 6px;
+  --ev-color-navy: #071a4a;
+  --ev-color-navy-2: #0b2a6b;
+  --ev-color-azure: #1f7fe0;
+  --ev-color-on-navy-muted: #c9dcf7;
+  --ev-color-success: #17663f;
+  --ev-color-success-soft: #e5f4ec;
+  --ev-color-warning: #8a5300;
+  --ev-color-warning-soft: #fff1d6;
+  --ev-color-danger-soft: #fdecea;
+  --ev-color-neutral-soft: #eef1f6;
   --ev-color-surface-subtle: hsl(var(--muted));
+  --ev-shadow-float: 0 16px 40px -10px rgb(7 26 74 / 28%), 0 2px 6px rgb(7 26 74 / 8%);
 }

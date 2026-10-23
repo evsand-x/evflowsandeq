@@ -3,7 +3,8 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Pencil, Plus } from "lucide-react";
+import type { CrmContact } from "@evflow/contracts";
+import { IconPencil as Pencil, IconPlus as Plus } from "@/components/web/icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -79,7 +80,11 @@ function useCan() {
   const { principal } = useSession();
   return (p: string) => !!principal && hasCompanyPermission(principal, p);
 }
-export function CustomerSubNav({ active }: { active: "customers" | "channels" | "rayons" }) {
+export function CustomerSubNav({
+  active,
+}: {
+  active: "customers" | "channels" | "rayons" | "contacts";
+}) {
   const can = useCan();
   return (
     <SubNav
@@ -92,6 +97,10 @@ export function CustomerSubNav({ active }: { active: "customers" | "channels" | 
           : []),
         ...(can("master_rayon.read")
           ? [{ label: "Rayon", href: `${base}/rayons`, active: active === "rayons" }]
+          : []),
+        // Kontak memakai data CRM yang sama dan izin crm_contact sendiri, bukan master_customer.
+        ...(can("crm_contact.read")
+          ? [{ label: "Kontak", href: `${base}/contacts`, active: active === "contacts" }]
           : []),
       ]}
     />
@@ -126,9 +135,11 @@ const crumbs = [{ label: "Master Data" }, { label: "Pelanggan", href: base }];
 export function CustomerWorkspace({ path = [] }: { path?: string[] }) {
   const { principal } = useSession(),
     can = useCan();
-  const reference = path[0] ? references[path[0]] : undefined;
-  const id = !reference && path[0] && path[0] !== "new" ? path[0] : undefined,
-    form = !reference && (path[0] === "new" || path[1] === "edit");
+  const reference = path[0] ? references[path[0]] : undefined,
+    contactTab = path[0] === "contacts";
+  const id =
+      !reference && !contactTab && path[0] && path[0] !== "new" ? path[0] : undefined,
+    form = !reference && !contactTab && (path[0] === "new" || path[1] === "edit");
   const detail = useQuery({
     queryKey: [
       "customer-master",
@@ -141,6 +152,7 @@ export function CustomerWorkspace({ path = [] }: { path?: string[] }) {
     enabled: !!id && can("master_customer.read"),
   });
   if (reference) return <ReferenceWorkspace config={reference} path={path.slice(1)} />;
+  if (contactTab) return <CustomerContactList />;
   const row = detail.data?.data;
   if (!can("master_customer.read"))
     return (
@@ -264,7 +276,6 @@ function CustomerList() {
   ) => (
     <SelectionField
       label={label}
-      hideLabel
       value={[value]}
       options={options}
       onChange={(v) => list.set({ [key]: v[0] ?? "ALL", page: 1 })}
@@ -302,8 +313,12 @@ function CustomerList() {
         busy={rows.isFetching}
         label="pelanggan"
         toolbar={
-          <>
-            <ListFilters list={list} searchLabel="Cari kode atau nama pelanggan" status={false} />
+          <ListFilters
+            list={list}
+            searchLabel="Cari kode atau nama pelanggan"
+            status={false}
+            filterKeys={["onboarding", "relationship", "channel"]}
+          >
             {filter("Status onboarding", "onboarding", onboard, [
               { id: "ALL", name: "Semua status onboarding" },
               ...Object.entries(onboarding).map(([id, name]) => ({ id, name })),
@@ -316,9 +331,133 @@ function CustomerList() {
               { id: "ALL", name: "Semua channel" },
               ...(refs.data ?? []),
             ])}
-          </>
+          </ListFilters>
         }
       />
+    </OfficePage>
+  );
+}
+const contactStates = { ALL: "Semua status", ACTIVE: "Aktif", INACTIVE: "Nonaktif" };
+// Tab Kontak membaca /crm/workspace/contacts; tambah/ubah tetap lewat command kontak CRM.
+function CustomerContactList() {
+  const { principal } = useSession(),
+    can = useCan(),
+    list = useListParams();
+  const status = list.get("status");
+  const allowed = can("crm_contact.read");
+  const query = new URLSearchParams({
+    q: list.q,
+    page: String(list.page),
+    status: status === "ALL" ? "all" : status,
+  }).toString();
+  const rows = useQuery({
+    queryKey: [
+      "crm-contacts",
+      principal?.company_id,
+      principal?.user_id,
+      principal?.permissions,
+      "master-tab",
+      query,
+    ],
+    queryFn: () =>
+      apiRequest<{ data: CrmContact[]; total: number }>(`/crm/workspace/contacts?${query}`),
+    enabled: allowed,
+  });
+  const columns: ColumnDef<CrmContact>[] = [
+    {
+      accessorKey: "code",
+      header: "Kode",
+      cell: ({ row }) => (
+        <Link className="page-frame-link" href={`/crm/contacts/${row.original.id}`}>
+          {row.original.code}
+        </Link>
+      ),
+    },
+    { accessorKey: "full_name", header: "Nama kontak" },
+    { id: "job", header: "Jabatan", cell: ({ row }) => row.original.job_title ?? "—" },
+    {
+      id: "functions",
+      header: "Fungsi PIC",
+      cell: ({ row }) =>
+        row.original.pic_functions.map((f) => roles[f] ?? f).join(", ") || "—",
+    },
+    { id: "phone", header: "HP/WA", cell: ({ row }) => row.original.phone ?? "—" },
+    { id: "email", header: "Email", cell: ({ row }) => row.original.email ?? "—" },
+    {
+      id: "customer",
+      header: "Pelanggan",
+      cell: ({ row }) => {
+        const customer = row.original.customer;
+        if (!customer) return "—";
+        return customer.id && can("master_customer.read") ? (
+          <Link className="page-frame-link" href={`${base}/${customer.id}`}>
+            {customer.name}
+          </Link>
+        ) : (
+          customer.name
+        );
+      },
+    },
+    {
+      id: "state",
+      header: "Status",
+      cell: ({ row }) => (row.original.state === "ACTIVE" ? "Aktif" : "Nonaktif"),
+    },
+  ];
+  return (
+    <OfficePage
+      section="master"
+      crumbs={[...crumbs, { label: "Kontak" }]}
+      title="Kontak"
+      subtitle="Kontak pelanggan dari CRM. Data yang sama dengan menu CRM › Kontak."
+      actions={
+        allowed &&
+        can("crm_contact.create") && (
+          <Button asChild>
+            <Link href="/crm/contacts/new">
+              <Plus aria-hidden="true" />
+              Tambah kontak
+            </Link>
+          </Button>
+        )
+      }
+    >
+      <CustomerSubNav active="contacts" />
+      {!allowed ? (
+        <PageNotice tone="error">Anda tidak memiliki izin melihat Kontak.</PageNotice>
+      ) : (
+        <>
+          {rows.isError && (
+            <PageNotice tone="error" onRetry={() => void rows.refetch()}>
+              {rows.error.message}
+            </PageNotice>
+          )}
+          <DataTable
+            data={rows.data?.data ?? []}
+            columns={columns}
+            total={rows.data?.total ?? 0}
+            page={list.page}
+            onPage={(page) => list.set({ page })}
+            busy={rows.isFetching}
+            label="kontak"
+            toolbar={
+              <ListFilters
+                list={list}
+                searchLabel="Cari nama, HP, atau email kontak"
+                status={false}
+                filterKeys={["status"]}
+              >
+                <SelectionField
+                  label="Status kontak"
+                  value={[status]}
+                  options={Object.entries(contactStates).map(([id, name]) => ({ id, name }))}
+                  onChange={(v) => list.set({ status: v[0] ?? "ALL", page: 1 })}
+                />
+              </ListFilters>
+            }
+          />
+        </>
+      )}
     </OfficePage>
   );
 }

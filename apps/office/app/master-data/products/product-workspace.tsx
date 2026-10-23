@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Pencil, Plus } from "lucide-react";
+import { IconPencil as Pencil, IconPlus as Plus } from "@/components/web/icons";
 import { Button } from "@/components/ui/button";
 import {
   DataTable,
@@ -266,11 +266,10 @@ function ProductList() {
         busy={rows.isFetching}
         label="produk"
         toolbar={
-          <ListFilters list={list} searchLabel="Cari kode atau nama produk">
+          <ListFilters list={list} searchLabel="Cari kode atau nama produk" filterKeys={["parent"]}>
             {categories.data && (
               <SelectionField
                 label="Kategori"
-                hideLabel
                 value={[list.parent]}
                 options={[{ id: "ALL", name: "Semua kategori" }, ...categories.data.map((c) => ({ id: c.id, name: c.name }))]}
                 onChange={(v) => list.set({ parent: v[0] ?? "ALL", page: 1 })}

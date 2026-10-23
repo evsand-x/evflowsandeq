@@ -1,5 +1,13 @@
 # evflow — ERP PT Sandeq Sarana Medika
 
+## Keputusan pengguna — 23 Oktober 2026: fondasi visual biru logo
+
+Office memakai warna dari logo evflow menggantikan aksen emerald: navy untuk navigasi aktif dan pita judul, biru merek untuk aksi utama, biru terang untuk fokus. Menu akun dan notifikasi pindah ke topbar; notifikasi berasal dari Tugas & Persetujuan sesuai izin. Ketentuan normatif: [standar desain global web](../mockup/web-design-standard.md). Keputusan ini hanya presentasi; izin, data dan aturan bisnis tidak berubah.
+
+## Keputusan pengguna — 23 Oktober 2026: struktur detail Sales Order
+
+Detail Sales Order memakai tab Ringkasan, Pemenuhan, Dokumen dan Riwayat. Tabel barang (dipesan, teralokasi, dikirim, diterima POD, backorder, ditutup, harga, subtotal) menjadi bagian tab Ringkasan; tab Barang tersendiri dihapus. Tab Tagihan dihapus: invoice tampil sebagai baris dokumen bertautan langsung pada tab Dokumen bersama Proforma, Picking Slip, Packing List, Surat Jalan dan POD, sesuai izin masing-masing. Daftar, Detail dan Form SO memakai kerangka Office (`OfficePage`). Keputusan ini hanya presentasi; command, izin, approval exception dan invariant pemenuhan tidak berubah. Acuan: OTC-01/04/05/10/11, [Design](07-design.md), [catatan redesign Sales](../development/sales-redesign-2026-10-16.md).
+
 ## Keputusan pengguna — 23 Oktober 2026: tab Kontak di Master Data › Pelanggan
 
 Halaman Master Data › Pelanggan memiliki tab Pelanggan, Channel, Rayon dan Kontak. Tab Kontak menampilkan data kontak CRM yang sama dengan Sales & Marketing › CRM › Kontak, tanpa salinan kedua, dan memakai izin `crm_contact.*` sendiri. Izin `master_customer.*` tidak membuka tab Kontak, dan izin `crm_contact.*` tidak membuka data Pelanggan; tab yang tidak diizinkan tidak tampil dan API tetap menolak. Tindakan tambah/ubah kontak dari tab ini memakai command dan izin kontak CRM yang sama. Menu CRM › Kontak tetap ada. Tab Channel dan Rayon memakai `master_customer_channel` dan `master_rayon`. Acuan: IAM-01/04, CRM-05, [Design](07-design.md), [Master Data](14-master-data.md).

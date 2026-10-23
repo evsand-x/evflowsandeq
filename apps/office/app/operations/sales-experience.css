@@ -1,5 +1,5 @@
 .sales-sketch {
-  --sales-green: #087f5b;
+  --sales-green: hsl(var(--primary));
   --sales-line: #e0e5e3;
   gap: 20px;
 }
@@ -19,9 +19,9 @@
   text-decoration: none;
 }
 .sales-document-nav a[aria-current="page"] {
-  background: #087f5b;
+  background: hsl(var(--primary));
   color: white;
-  border-color: #087f5b;
+  border-color: hsl(var(--primary));
 }
 .sales-sketch .executive-heading {
   padding-bottom: 20px;
@@ -50,7 +50,7 @@
   font-size: 12px;
 }
 .sales-sketch [data-slot="button"][data-variant="default"] {
-  background: #087f5b;
+  background: hsl(var(--primary));
   color: white;
 }
 .sales-sketch [data-slot="button"][data-variant="outline"] {
@@ -88,7 +88,7 @@
 }
 .sales-sketch .so-kpis .so-metric-value strong {
   font-size: 26px;
-  color: #087f5b;
+  color: hsl(var(--primary));
 }
 .sales-sketch .so-kpis svg {
   display: none;
@@ -231,8 +231,8 @@
   border-bottom: 2px solid transparent;
 }
 .sales-list-tabs button[aria-pressed="true"] {
-  color: #087f5b;
-  border-color: #087f5b;
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary));
   font-weight: 600;
 }
 .sales-sketch .so-form-fields {
@@ -311,7 +311,7 @@
 .office-modern .so-workspace.sales-sketch .sales-kpi-number {
   font-size: 26px;
   line-height: 1.1;
-  color: #087f5b;
+  color: hsl(var(--primary));
 }
 .office-modern .so-workspace.sales-sketch :is(.so-edit-lines, .so-detail-main) :is(th, td) {
   padding: 12px;
@@ -427,7 +427,7 @@
 .office-modern .so-workspace.sales-sketch .so-kpis strong {
   font-size: 23px;
   line-height: 1.2;
-  color: #087f5b;
+  color: hsl(var(--primary));
 }
 .office-modern .sales-sketch .so-value {
   display: grid;
@@ -802,9 +802,9 @@
   color: #59635e;
 }
 .office-modern .sales-sketch .sales-progress li[aria-current="step"] {
-  background: #087f5b;
+  background: hsl(var(--primary));
   color: white;
-  border-color: #087f5b;
+  border-color: hsl(var(--primary));
   font-weight: 600;
 }
 .office-modern .sales-sketch .sales-evaluation .so-value {

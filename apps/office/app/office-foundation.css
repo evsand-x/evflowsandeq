@@ -1,0 +1,827 @@
+/* Fondasi visual Office (23 Okt 2026): biru logo, ikon tegas, sabit sebagai penanda posisi.
+   Normatif: docs/mockup/web-design-standard.md, bagian "Fondasi visual biru logo". */
+
+/* Kesamaan dengan canvas: ukuran sidebar, pita bertumpuk, kartu ringkasan, tab berpanel, tabel. */
+/* Skala huruf rapat (koreksi 23 Okt 2026): tabel dan sidebar tidak lebih dari 12.5px. */
+.office-modern {
+  --ev-text-table: 12px;
+  --ev-text-table-head: 11px;
+  --ev-text-nav: 12.5px;
+  --ev-text-page-title: 24px;
+  --ev-text-page-title-lh: 32px;
+  --ev-text-page-sub: 12.5px;
+  --ev-text-eyebrow: 11px;
+}
+.office-modern .ev-sidebar [data-sidebar="menu-button"] {
+  height: 36px;
+  min-height: 36px;
+  font-size: var(--ev-text-nav);
+  font-weight: 500;
+  border-radius: var(--ev-radius-control);
+}
+.office-modern .ev-sidebar .ev-sidebar-dashboard > [data-sidebar="menu-button"] {
+  font-size: var(--ev-text-nav);
+}
+.office-modern .ev-sidebar-sub-link {
+  min-height: 32px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: var(--ev-text-nav);
+  font-weight: 500;
+  border-radius: var(--ev-radius-control);
+  color: #3d4a63;
+}
+.office-modern .ev-sidebar-sub-link:hover {
+  background: hsl(var(--background));
+  color: var(--ev-color-navy);
+}
+.office-modern .executive-topbar {
+  padding: 0 24px 0 40px;
+}
+
+/* Pita judul tinggi; panel pertama menumpang di bagian bawah pita (daftar dan detail). */
+.office-modern .page-frame-band {
+  padding: 18px 40px 80px;
+}
+.office-modern .page-frame-band .page-frame-title h1 {
+  font-size: var(--ev-text-page-title);
+  line-height: var(--ev-text-page-title-lh);
+  font-weight: 750;
+}
+.office-modern .page-frame-band .page-frame-subtitle {
+  font-size: var(--ev-text-page-sub);
+  line-height: 18px;
+}
+.office-modern .page-frame-crumbs,
+.office-modern .page-frame-crumbs li,
+.office-modern .page-frame-crumbs a,
+.office-modern .page-frame-crumbs [data-slot="breadcrumb-separator"] {
+  font-size: var(--ev-text-eyebrow);
+}
+.office-modern .page-frame-body {
+  position: relative;
+  margin-top: -52px;
+  padding: 0 40px 40px;
+}
+/* Teks status pemuatan yang jatuh di atas pita tetap terbaca. */
+.office-modern .page-frame-body > p:first-child {
+  color: var(--ev-color-on-navy-muted);
+}
+/* Form: pita ringkas tanpa tumpukan. */
+.office-modern .page-frame:has(.page-frame-form) .page-frame-band {
+  padding-bottom: 30px;
+}
+.office-modern .page-frame:has(.page-frame-form) .page-frame-band .page-frame-title h1 {
+  font-size: 22px;
+  line-height: 30px;
+}
+.office-modern .page-frame:has(.page-frame-form) .page-frame-body {
+  margin-top: 0;
+  padding-top: 24px;
+}
+/* Sub-submenu menjadi tab di dasar pita. */
+.office-modern .page-frame-body > .page-frame-subnav:first-child {
+  margin-top: -6px;
+  gap: 24px;
+  border-bottom: 0;
+}
+.office-modern .page-frame-body > .page-frame-subnav:first-child a {
+  height: 40px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: var(--ev-text-nav);
+  color: var(--ev-color-on-navy-muted);
+  border-bottom: 3px solid transparent;
+}
+.office-modern .page-frame-body > .page-frame-subnav:first-child a:hover {
+  color: #ffffff;
+}
+.office-modern .page-frame-body > .page-frame-subnav:first-child a[aria-current="page"] {
+  color: #ffffff;
+  border-bottom-color: var(--ev-color-azure);
+}
+@media (max-width: 900px) {
+  .office-modern .page-frame-band {
+    padding: 20px 16px 76px;
+  }
+  .office-modern .page-frame-body {
+    padding: 0 16px 24px;
+  }
+}
+
+/* Kartu ringkasan terpisah; kartu pertama lebih lebar karena memuat info utama. */
+.office-modern .page-frame-summary {
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.office-modern .page-frame-summary > .page-frame-value {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ev-radius-card);
+  padding: 20px;
+  box-shadow: 0 1px 2px rgb(7 26 74 / 6%);
+}
+.office-modern .page-frame-summary > .page-frame-value dt {
+  font-size: 12px;
+  font-weight: 600;
+}
+.office-modern .page-frame-summary > .page-frame-value dd {
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 700;
+}
+.office-modern .page-frame-summary > .page-frame-value dd[data-empty] {
+  font-size: 15px;
+  font-weight: 500;
+}
+@media (max-width: 1100px) {
+  .office-modern .page-frame-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Tab berada di dalam panel putih. */
+.office-modern .page-frame-tabs {
+  gap: 0;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ev-radius-card);
+}
+.office-modern .page-frame-tabs [data-slot="tabs-list"] {
+  align-self: stretch;
+  padding: 0 20px;
+}
+.office-modern .page-frame-tabs .page-frame-panel {
+  border: 0;
+  border-radius: 0 0 var(--ev-radius-card) var(--ev-radius-card);
+}
+
+/* Tabel daftar */
+.office-modern .page-frame .crm-table-panel {
+  box-shadow: 0 1px 2px rgb(7 26 74 / 6%);
+}
+.office-modern .page-frame .crm-table-panel th {
+  height: auto;
+  padding: 10px 14px;
+  background: #f7f9fd;
+  font-size: var(--ev-text-table-head);
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  border-bottom: 1px solid hsl(var(--border));
+}
+.office-modern .page-frame .crm-table-panel td {
+  height: auto;
+  padding: 10px 14px;
+  font-size: var(--ev-text-table);
+  line-height: 16px;
+}
+.office-modern .page-frame .crm-table-panel tbody tr:hover td {
+  background: #f7f9fd;
+}
+.office-modern .page-frame .crm-table-toolbar {
+  border-bottom: 1px solid #eef1f6;
+}
+.office-modern .page-frame .crm-columns-trigger {
+  width: 40px;
+  height: 40px;
+}
+.office-modern .page-frame-link {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Navigasi seksi form */
+.office-modern .page-frame-form-nav a {
+  font-size: 13px;
+  padding: 10px 12px;
+  color: #3d4a63;
+}
+.office-modern .page-frame-form-nav a:hover {
+  background: hsl(var(--card));
+}
+.office-modern .page-frame-form-nav a[aria-current] {
+  background: hsl(var(--card));
+  color: hsl(var(--primary));
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #b9d3f5;
+}
+.office-modern .page-frame-form-footer {
+  background: hsl(var(--card));
+  margin: 0 -40px;
+  padding: 14px 40px;
+}
+
+/* Sidebar */
+.office-modern .ev-sidebar-logo img {
+  display: block;
+  width: 124px;
+  height: auto;
+}
+.office-modern .ev-sidebar-sub-link[aria-current="page"],
+.office-modern .ev-sidebar-sub-link[aria-current="page"]:hover {
+  position: relative;
+  padding-left: 22px;
+  background: var(--ev-color-navy);
+  color: #ffffff;
+  font-weight: 600;
+}
+.office-modern .ev-sidebar-sub-link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 9px;
+  height: 11px;
+  transform: translateY(-50%);
+  background: var(--ev-color-azure);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 14'%3E%3Cpath d='M8 1C4 1.4 1 4.4 1 7.9 1 11 3.3 13.2 6.5 13 4.3 12.3 2.8 10.3 2.8 7.8 2.8 4.9 4.9 2.3 8 1z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 14'%3E%3Cpath d='M8 1C4 1.4 1 4.4 1 7.9 1 11 3.3 13.2 6.5 13 4.3 12.3 2.8 10.3 2.8 7.8 2.8 4.9 4.9 2.3 8 1z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.office-modern .ev-sidebar-sub-link:focus-visible,
+.office-modern .ev-sidebar [data-sidebar="menu-button"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--ev-color-azure);
+}
+
+/* Topbar: notifikasi dan akun */
+/* Topbar dibekukan; pita judul tetap ikut tergulung. Elemen sticky lain memakai top: var(--ev-topbar-height). */
+.office-modern {
+  --ev-topbar-height: 64px;
+}
+.office-modern .executive-topbar {
+  height: var(--ev-topbar-height);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+/* Bayangan hanya setelah halaman digulung; peramban tanpa scroll-timeline tetap memakai garis bawah. */
+@supports (animation-timeline: scroll()) {
+  .office-modern .executive-topbar {
+    animation: ev-topbar-lift linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0 24px;
+  }
+}
+@keyframes ev-topbar-lift {
+  from {
+    box-shadow: 0 0 0 rgb(7 26 74 / 0%);
+  }
+  to {
+    box-shadow: 0 2px 8px rgb(7 26 74 / 8%);
+  }
+}
+@media (max-width: 640px) {
+  .office-modern {
+    --ev-topbar-height: 60px;
+  }
+}
+.office-modern .executive-utilities {
+  gap: 8px;
+}
+.office-modern .executive-search {
+  margin-right: 8px;
+  border-radius: var(--ev-radius-control);
+}
+.ev-topbar-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--ev-radius-control);
+  background: transparent;
+  color: var(--ev-color-navy-2);
+  font: inherit;
+  cursor: pointer;
+}
+.ev-topbar-button:hover {
+  background: hsl(var(--muted));
+}
+.ev-topbar-button[data-state="open"],
+.ev-topbar-button[aria-expanded="true"] {
+  background: hsl(var(--accent));
+  border-color: #b9d3f5;
+}
+.ev-topbar-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--ev-color-azure);
+}
+.ev-topbar-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.ev-topbar-count {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border: 2px solid #ffffff;
+  border-radius: var(--ev-radius-badge);
+  background: hsl(var(--primary));
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+}
+.ev-topbar-divider {
+  width: 1px;
+  height: 28px;
+  margin: 0 4px;
+  background: hsl(var(--border));
+}
+.ev-topbar-account {
+  padding: 0 10px 0 4px;
+}
+.ev-topbar-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ev-color-navy);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.ev-topbar-avatar-lg {
+  width: 52px;
+  height: 52px;
+  font-size: 18px;
+}
+.ev-topbar-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 180px;
+  line-height: 16px;
+  text-align: left;
+}
+.ev-topbar-identity strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+.ev-topbar-identity span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+}
+@media (max-width: 760px) {
+  .ev-topbar-identity,
+  .office-modern .executive-search {
+    display: none;
+  }
+}
+.office-modern .ev-account-menu {
+  min-width: 220px;
+  padding: 8px;
+  box-shadow: var(--ev-shadow-float);
+}
+.office-modern .ev-account-menu .ev-account-profile {
+  justify-content: center;
+  padding: 10px 0 12px;
+}
+.office-modern .ev-account-menu .ev-account-logout:focus,
+.office-modern .ev-account-menu .ev-account-logout:hover {
+  background: var(--ev-color-danger-soft);
+  color: var(--ev-color-danger);
+}
+.ev-topbar-popover.ev-notifications {
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  padding: 8px;
+  border-radius: var(--ev-radius-card);
+  box-shadow: var(--ev-shadow-float);
+}
+.ev-notifications-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 10px;
+  font-size: 14px;
+}
+.ev-notifications-head a {
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+}
+.ev-notifications-empty {
+  margin: 0;
+  padding: 8px 10px 12px;
+  font-size: 13px;
+  line-height: 20px;
+  color: hsl(var(--muted-foreground));
+}
+.ev-notifications-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ev-notification {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--ev-radius-control);
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  text-decoration: none;
+}
+a.ev-notification:hover {
+  background: hsl(var(--muted));
+}
+.ev-notification strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ev-notification span span {
+  color: hsl(var(--muted-foreground));
+}
+.ev-notification-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--ev-color-azure);
+}
+.ev-notification-dot[data-status="overdue"] {
+  background: var(--ev-color-warning);
+}
+
+/* Tab: garis bawah, bukan pil */
+.office-modern [data-slot="tabs-list"] {
+  height: auto;
+  padding: 0;
+  gap: 22px;
+  border-radius: 0;
+  background: transparent;
+  border-bottom: 1px solid hsl(var(--border));
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  justify-content: flex-start;
+}
+.office-modern [data-slot="tabs-trigger"] {
+  flex: none;
+  height: auto;
+  padding: 12px 2px 10px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  font-weight: 600;
+  transition: color 160ms, border-color 160ms;
+}
+.office-modern [data-slot="tabs-trigger"]:hover {
+  color: hsl(var(--foreground));
+}
+.office-modern [data-slot="tabs-trigger"][data-state="active"] {
+  background: transparent;
+  box-shadow: none;
+  color: hsl(var(--primary));
+  border-bottom-color: hsl(var(--primary));
+}
+.office-modern [data-slot="tabs-trigger"]::after {
+  display: none;
+}
+.office-modern [data-slot="tabs-trigger"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--ev-color-azure);
+}
+
+/* Toast: sukses navy, gagal bergaris merah; bayangan hanya untuk lapisan melayang */
+[data-sonner-toast][data-styled="true"].ev-toast {
+  border-radius: var(--ev-radius-card);
+  box-shadow: 0 18px 40px -12px rgb(7 26 74 / 35%);
+  font-family: var(--ev-font-family);
+  font-size: 13px;
+  padding: 14px 16px;
+}
+[data-sonner-toast][data-styled="true"].ev-toast[data-type="success"] {
+  background: var(--ev-color-navy);
+  border-color: var(--ev-color-navy);
+  color: #ffffff;
+}
+[data-sonner-toast][data-styled="true"].ev-toast[data-type="success"] [data-icon] {
+  color: #7fb5f0;
+}
+[data-sonner-toast][data-styled="true"].ev-toast[data-type="success"] [data-description] {
+  color: var(--ev-color-on-navy-muted);
+}
+[data-sonner-toast][data-styled="true"].ev-toast[data-type="error"] {
+  border-color: #f1b8b2;
+}
+[data-sonner-toast][data-styled="true"].ev-toast[data-type="error"] [data-icon] {
+  color: var(--ev-color-danger);
+}
+[data-sonner-toast][data-styled="true"].ev-toast[data-type="warning"] [data-icon] {
+  color: var(--ev-color-warning);
+}
+[data-sonner-toast][data-styled="true"].ev-toast[data-type="info"] [data-icon] {
+  color: hsl(var(--primary));
+}
+
+/* Popup melayang memakai satu bayangan bersama */
+.office-modern :is([data-slot="popover-content"], [data-slot="dropdown-menu-content"], [data-slot="select-content"]) {
+  border-color: hsl(var(--input));
+  box-shadow: var(--ev-shadow-float);
+}
+
+/* ---------------------------------------------------------------------------
+   Penerapan fondasi ke layar di luar Master Data (CRM, Sales, Warehouse, Finance,
+   Pajak, Setting). Layar ini memakai header lama (.executive-heading, .ob-header,
+   .access-heading); lapisan ini menyamakan tampilannya dengan OfficePage tanpa
+   mengubah alur. Selektor sengaja lebih spesifik dari CSS modul yang lebih lama.
+   --------------------------------------------------------------------------- */
+.office-modern {
+  --ev-page-gutter: 40px;
+  --ev-band-gradient: linear-gradient(
+    115deg,
+    var(--ev-color-navy) 0%,
+    var(--ev-color-navy-2) 50%,
+    hsl(var(--primary)) 100%
+  );
+  --ev-band-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400'%3E%3Cpath d='M250 36C150 36 64 112 64 214c0 92 70 160 168 160-70-14-118-76-118-156 0-88 60-160 136-182z' fill='%23fff' fill-opacity='.07'/%3E%3Cpath d='M286 30c64 26 104 92 104 166 0 104-84 184-188 184' fill='none' stroke='%23fff' stroke-opacity='.16' stroke-width='3'/%3E%3C/svg%3E");
+}
+.office-modern main.executive-content.crm-content {
+  max-width: none;
+  padding: 0 var(--ev-page-gutter) 40px;
+}
+:root.office-modern main.executive-content.crm-content > :is(.executive-heading, .ob-header),
+:root.office-modern .access-heading,
+:root.office-modern .access-page-heading {
+  position: relative;
+  overflow: hidden;
+  margin: 0 calc(-1 * var(--ev-page-gutter));
+  padding: 18px var(--ev-page-gutter) 24px;
+  border-bottom: 0;
+  background: var(--ev-band-mark) right 40px top -130px / 340px 340px no-repeat,
+    var(--ev-band-gradient);
+  color: #ffffff;
+  align-items: flex-end;
+}
+:root.office-modern main.crm-content > :is(.executive-heading, .ob-header) h1,
+:root.office-modern .access-heading h1,
+:root.office-modern .access-page-heading h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: var(--ev-text-page-title);
+  line-height: var(--ev-text-page-title-lh);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+:root.office-modern main.crm-content > :is(.executive-heading, .ob-header) :is(.executive-breadcrumb, nav[aria-label="Breadcrumb"]),
+:root.office-modern .access-heading nav[aria-label="Breadcrumb"] {
+  margin: 0 0 6px;
+  font-size: var(--ev-text-eyebrow);
+  line-height: 18px;
+  color: var(--ev-color-on-navy-muted);
+}
+:root.office-modern main.crm-content > :is(.executive-heading, .ob-header) .executive-breadcrumb a,
+:root.office-modern .access-heading nav a {
+  color: var(--ev-color-on-navy-muted);
+}
+:root.office-modern main.crm-content > :is(.executive-heading, .ob-header) .executive-breadcrumb a:hover,
+:root.office-modern .access-heading nav a:hover {
+  color: #ffffff;
+}
+:root.office-modern main.crm-content > :is(.executive-heading, .ob-header) p,
+:root.office-modern .access-page-heading p {
+  margin: 4px 0 0;
+  font-size: var(--ev-text-page-sub);
+  line-height: 18px;
+  color: var(--ev-color-on-navy-muted);
+}
+/* Tombol dan badge di atas pita */
+:root.office-modern :is(main.crm-content > :is(.executive-heading, .ob-header), .access-heading, .access-page-heading)
+  [data-slot="button"]:is([data-variant="default"], :not([data-variant])) {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: var(--ev-color-navy);
+}
+:root.office-modern :is(main.crm-content > :is(.executive-heading, .ob-header), .access-heading, .access-page-heading)
+  [data-slot="button"][data-variant="outline"] {
+  background: transparent;
+  border-color: #6f8fc4;
+  color: #ffffff;
+}
+:root.office-modern :is(main.crm-content > :is(.executive-heading, .ob-header), .access-heading, .access-page-heading)
+  [data-slot="button"][data-variant="outline"]:hover {
+  background: rgb(255 255 255 / 8%);
+}
+:root.office-modern :is(main.crm-content > :is(.executive-heading, .ob-header), .access-heading, .access-page-heading)
+  [data-slot="button"]:disabled {
+  opacity: 0.6;
+}
+:root.office-modern :is(main.crm-content > :is(.executive-heading, .ob-header), .access-heading, .access-page-heading)
+  [data-slot="button"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ev-color-navy), 0 0 0 4px #ffffff;
+}
+:root.office-modern :is(main.crm-content > :is(.executive-heading, .ob-header), .access-heading, .access-page-heading)
+  [data-slot="badge"] {
+  border-color: rgb(255 255 255 / 40%);
+  background: rgb(255 255 255 / 10%);
+  color: #ffffff;
+}
+/* Tab tahap Barang Keluar di dasar pita */
+:root.office-modern main.crm-content > .ob-header .ob-tabs a {
+  font-size: var(--ev-text-nav);
+  color: var(--ev-color-on-navy-muted);
+  border-color: transparent;
+  background: transparent;
+}
+:root.office-modern main.crm-content > .ob-header .ob-tabs a:hover,
+:root.office-modern main.crm-content > .ob-header .ob-tabs a[aria-current="page"] {
+  color: #ffffff;
+  background: rgb(255 255 255 / 10%);
+}
+/* Tab seksi CRM dan Barang Keluar memakai garis bawah 2 px primer. */
+.office-modern .crm-section-nav a {
+  font-size: var(--ev-text-nav);
+}
+/* Setting: wadah tanpa padding atas agar pita menempel di bawah topbar. */
+.office-modern main main:has(.access-heading, .access-page-heading) {
+  max-width: none;
+  padding: 0 var(--ev-page-gutter) 40px;
+}
+@media (max-width: 900px) {
+  .office-modern {
+    --ev-page-gutter: 16px;
+  }
+  :root.office-modern main.crm-content > :is(.executive-heading, .ob-header),
+  :root.office-modern .access-heading,
+  :root.office-modern .access-page-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    background: var(--ev-band-gradient);
+  }
+}
+
+/* Tabel di semua layar: skala huruf rapat yang sama dengan Master Data. */
+.office-modern main.executive-content td[data-slot="table-cell"],
+.office-modern main td[data-slot="table-cell"] {
+  font-size: var(--ev-text-table);
+  line-height: 16px;
+}
+.office-modern main.executive-content th[data-slot="table-head"],
+.office-modern main th[data-slot="table-head"] {
+  font-size: var(--ev-text-table-head);
+  font-weight: 600;
+}
+/* Daftar CRM: baris 80 px menjadi rapat; tabel isian form tidak diubah. */
+:root.office-modern .crm-saas .crm-table-panel:not(.crm-form .crm-table-panel) td {
+  height: auto;
+  padding: 10px 14px;
+}
+:root.office-modern .crm-saas .crm-table-panel:not(.crm-form .crm-table-panel) th {
+  height: auto;
+  padding: 10px 14px;
+}
+
+/* Ikon Lucide di layar yang belum dimigrasi mengikuti gaya icons.tsx: garis 1,75, ujung tegas. */
+.office-modern svg.lucide {
+  stroke-width: 1.75;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+/* Navigasi dokumen penjualan (Sales Order / Proforma / Invoice) di atas pita */
+:root.office-modern main.crm-content > .executive-heading .sales-document-nav a {
+  background: transparent;
+  border-color: rgb(255 255 255 / 30%);
+  color: var(--ev-color-on-navy-muted);
+}
+:root.office-modern main.crm-content > .executive-heading .sales-document-nav a:hover {
+  color: #ffffff;
+  background: rgb(255 255 255 / 8%);
+}
+:root.office-modern main.crm-content > .executive-heading .sales-document-nav a[aria-current="page"] {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: var(--ev-color-navy);
+}
+/* Dashboard (semua tampilan): header menjadi pita biru yang sama; banner tindakan lama dihapus. */
+:root.office-modern .executive-content:not(.crm-content) {
+  max-width: none;
+  padding: 0 var(--ev-page-gutter) 40px;
+}
+:root.office-modern .executive-content:not(.crm-content) > .executive-heading {
+  position: relative;
+  overflow: hidden;
+  margin: 0 calc(-1 * var(--ev-page-gutter)) 20px;
+  padding: 18px var(--ev-page-gutter) 24px;
+  background: var(--ev-band-mark) right 40px top -130px / 340px 340px no-repeat,
+    var(--ev-band-gradient);
+  color: #ffffff;
+  align-items: flex-end;
+}
+:root.office-modern .executive-content:not(.crm-content) > .executive-heading h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: var(--ev-text-page-title);
+  line-height: var(--ev-text-page-title-lh);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+:root.office-modern .executive-content:not(.crm-content) > .executive-heading .executive-breadcrumb {
+  margin: 0 0 6px;
+  font-size: var(--ev-text-eyebrow);
+  line-height: 18px;
+  color: var(--ev-color-on-navy-muted);
+}
+:root.office-modern .executive-content:not(.crm-content) > .executive-heading .modern-intro {
+  margin: 4px 0 0;
+  font-size: var(--ev-text-page-sub);
+  line-height: 18px;
+  color: var(--ev-color-on-navy-muted);
+}
+:root.office-modern .executive-content:not(.crm-content) > .executive-heading [data-slot="button"]:is([data-variant="default"], :not([data-variant])) {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: var(--ev-color-navy);
+}
+:root.office-modern .executive-content:not(.crm-content) > .executive-heading [data-slot="button"]:is([data-variant="default"], :not([data-variant])):hover {
+  background: hsl(var(--accent));
+}
+:root.office-modern .executive-content:not(.crm-content) > .executive-heading [data-slot="button"][data-variant="outline"] {
+  background: transparent;
+  border-color: #6f8fc4;
+  color: #ffffff;
+}
+:root.office-modern .executive-content:not(.crm-content) > .executive-heading [data-slot="button"][data-variant="outline"]:hover {
+  background: rgb(255 255 255 / 8%);
+}
+:root.office-modern .executive-content:not(.crm-content) > .executive-heading [data-slot="button"]:disabled {
+  opacity: 0.6;
+}
+:root.office-modern .executive-content:not(.crm-content) > .executive-heading [data-slot="button"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ev-color-navy), 0 0 0 4px #ffffff;
+}
+@media (max-width: 900px) {
+  :root.office-modern .executive-content:not(.crm-content) > .executive-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    background: var(--ev-band-gradient);
+  }
+}
+
+/* Daftar bertab (canvas Customer-list): tab di dasar pita, panel mulai 20 px di bawah pita, tanpa tumpukan. */
+.office-modern .page-frame[data-band-tabs] .page-frame-band {
+  padding-bottom: 0;
+}
+.office-modern .page-frame[data-band-tabs] .page-frame-body {
+  margin-top: 0;
+  padding-top: 20px;
+}
+.office-modern .page-frame-band-tabs {
+  flex-basis: 100%;
+  margin-top: 6px;
+}
+.office-modern .page-frame-band-tabs .page-frame-subnav {
+  gap: 24px;
+  border-bottom: 0;
+}
+.office-modern .page-frame-band-tabs .page-frame-subnav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 4px;
+  font-size: var(--ev-text-nav);
+  font-weight: 600;
+  color: var(--ev-color-on-navy-muted);
+  border-bottom: 3px solid transparent;
+  background: transparent;
+}
+.office-modern .page-frame-band-tabs .page-frame-subnav a:hover {
+  color: #ffffff;
+}
+.office-modern .page-frame-band-tabs .page-frame-subnav a[aria-current="page"] {
+  color: #ffffff;
+  border-bottom-color: var(--ev-color-azure);
+}

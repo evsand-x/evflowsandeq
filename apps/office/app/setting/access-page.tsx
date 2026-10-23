@@ -68,7 +68,7 @@ function PageHeading({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="access-page-heading flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
         <p className="text-muted-foreground mt-1 text-sm">{description}</p>

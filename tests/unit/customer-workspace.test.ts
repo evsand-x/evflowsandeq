@@ -30,6 +30,10 @@ import {
   customerWhere,
 } from "../../packages/backend/src/master/customer-workspace";
 import type { AuditService } from "../../packages/backend/src/common/audit.service";
+import {
+  hasResourcePermission,
+  resourcePermissionCode,
+} from "../../packages/backend/src/identity/resource-permissions";
 describe("customer workspace boundaries", () => {
   beforeEach(() => vi.clearAllMocks());
   it("retains company scope with combined filters", () => {
@@ -59,6 +63,31 @@ describe("customer workspace boundaries", () => {
     expect(customerAllowed(auth, "customer.payment_policy.manage")).toBe(false);
     auth.permissions[0]!.scope_id = "a";
     expect(customerAllowed(auth, "customer.payment_policy.manage")).toBe(true);
+  });
+  it("keeps the Kontak tab on crm_contact, separate from master_customer", () => {
+    const contacts = resourcePermissionCode(
+      { family: "crm", action: "read", source: "params", key: "resource" },
+      "contacts",
+    );
+    const customers = resourcePermissionCode(
+      { family: "master", action: "read", source: "params", key: "resource" },
+      "customers",
+    );
+    expect(contacts).toBe("crm_contact.read");
+    expect(customers).toBe("master_customer.read");
+    const masterOnly = {
+      company_id: "a",
+      roles: [],
+      permissions: [{ code: "master_customer.read", scope_type: "company", scope_id: "a" }],
+    } as unknown as AuthPrincipal;
+    const contactOnly = {
+      company_id: "a",
+      roles: [],
+      permissions: [{ code: "crm_contact.read", scope_type: "company", scope_id: "a" }],
+    } as unknown as AuthPrincipal;
+    expect(hasResourcePermission(masterOnly, contacts)).toBe(false);
+    expect(hasResourcePermission(contactOnly, customers)).toBe(false);
+    expect(hasResourcePermission(contactOnly, contacts)).toBe(true);
   });
   const service = new CrmService({ recordWith: mocks.audit } as unknown as AuditService);
   it("rejects a contact outside current company", async () => {

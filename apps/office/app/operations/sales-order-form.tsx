@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import Decimal from "decimal.js";
-import { Trash2, Plus, Paperclip, Check } from "lucide-react";
+import { IconPlus as Plus, IconTrash as Trash2 } from "@/components/web/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,16 +16,15 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { AddOrderCustomer } from "./so-add-customer";
 import { SelectionField } from "@/components/web/selection-field";
 import { Switch } from "@/components/ui/switch";
 import { apiRequest } from "@/lib/api";
+import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
 import { DataTable, Notice } from "../crm/crm-common";
 import { Upload, ErrorBox, Evidence } from "./workspace";
-import { Panel, Totals, Value } from "./sales-order";
 import { amount, terms, type Order, type OrderCommand } from "./sales-order-types";
 
 const D = Decimal.clone({ precision: 50 });
@@ -80,6 +79,77 @@ function PriceInput({
   );
 }
 
+// Seksi bernomor mengikuti canvas "SO-form"; judul membawa angka urut dan aksi opsional.
+function FormSection({
+  id,
+  no,
+  title,
+  description,
+  action,
+  children,
+}: {
+  id: string;
+  no: number;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section id={id} className="page-frame-panel so-form-section" aria-labelledby={`${id}-title`}>
+      <div className="so-form-section-head">
+        <div>
+          <h2 id={`${id}-title`}>
+            <span className="so-step" aria-hidden="true">
+              {no}
+            </span>
+            {title}
+          </h2>
+          {description && <p>{description}</p>}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+type FreightMode = "NONE" | "CUSTOMER" | "COMPANY" | "CARRIER";
+const freightModes: Record<FreightMode, string> = {
+  NONE: "Belum ditetapkan",
+  CUSTOMER: "Ditagihkan ke pelanggan per pengiriman",
+  COMPANY: "Ditanggung perusahaan",
+  CARRIER: "Ditanggung ekspedisi",
+};
+function CheckIcon({ tone }: { tone: "success" | "info" | "warning" | "danger" }) {
+  return (
+    <svg
+      className="so-check-icon"
+      data-tone={tone}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="square"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {tone === "success" ? (
+        <path d="M5 12.5l4.5 4.5L19 7.5" />
+      ) : tone === "warning" ? (
+        <>
+          <path d="M12 4l9 16H3z" />
+          <path d="M12 10v4M12 17v.5" />
+        </>
+      ) : (
+        <>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 8v4.5l3 2" />
+        </>
+      )}
+    </svg>
+  );
+}
+// Form SO mengikuti canvas "SO-form": lima seksi bernomor, ringkasan di kanan, footer draf/ajukan.
 export function SalesOrderForm({
   initial,
   command,
@@ -94,6 +164,7 @@ export function SalesOrderForm({
   const session = useSession();
   const principal = session.principal;
   const router = useRouter();
+  const canSubmit = !!principal && hasCompanyPermission(principal, "sales_order.submit");
   const [dirty, setDirty] = useState(false),
     [leaving, setLeaving] = useState(false),
     [localError, setLocalError] = useState("");
@@ -105,7 +176,11 @@ export function SalesOrderForm({
     [proof, setProof] = useState(initial?.evidenceId ?? ""),
     [notes, setNotes] = useState(initial?.notes ?? ""),
     [reason, setReason] = useState("");
-  const [freightEnabled, setFreightEnabled] = useState(initial?.freightEstimate != null),
+  const [freightMode, setFreightMode] = useState<FreightMode>(
+      initial?.freightEstimate != null
+        ? (initial.freightTermsSnapshot?.payer ?? "CUSTOMER")
+        : "NONE",
+    ),
     [freightAmount, setFreightAmount] = useState(initial?.freightEstimate ?? ""),
     [freightTaxable, setFreightTaxable] = useState(
       initial?.freightTermsSnapshot?.tax_mode === "TAXABLE",
@@ -132,15 +207,38 @@ export function SalesOrderForm({
   const taxes = useQuery({
     queryKey: ["tax-options", principal?.company_id, principal?.user_id, principal?.permissions],
     queryFn: () =>
-      apiRequest<{ data: { id: string; name: string; percentage: string }[] }>("/tax/options?usage=SALES"),
+      apiRequest<{ data: { id: string; name: string; percentage: string }[] }>(
+        "/tax/options?usage=SALES",
+      ),
     enabled: !!principal,
   });
   const selected = options?.customers.find((c) => c.id === customer);
+  const policy = initial?.paymentSnapshot ?? selected?.paymentPolicies[0];
   const currency = initial?.currency ?? options?.currency;
-  const values = lines.map(subtotal),
-    total = values.every((v) => v !== null)
-      ? values.reduce<Decimal>((sum, v) => sum.add(v!), new D(0)).toString()
+  const freightEnabled = freightMode !== "NONE";
+  const productOf = (id: string) =>
+    options?.products.find((p) => p.id === id) ??
+    initial?.lines.find((l) => l.productId === id)?.product;
+  const values = lines.map(subtotal);
+  const total = values.every((v) => v !== null)
+    ? values.reduce<Decimal>((sum, v) => sum.add(v!), new D(0))
+    : undefined;
+  // PPN di sini perkiraan dari tarif yang dipilih; nilai final ditetapkan server saat evaluasi.
+  const taxRate = (id?: string) => taxes.data?.data.find((t) => t.id === id)?.percentage;
+  const tax =
+    total && lines.every((l) => l.tax_master_id && taxRate(l.tax_master_id))
+      ? lines.reduce(
+          (sum, l, i) => sum.add(values[i]!.mul(taxRate(l.tax_master_id)!).div(100)),
+          new D(0),
+        )
       : undefined;
+  const qtyTotal = lines.every((l) => validQty(l.quantity))
+    ? lines.reduce((sum, l) => sum.add(l.quantity), new D(0))
+    : undefined;
+  const units = new Set(
+    lines.map((l) => productOf(l.product_id)?.baseUom?.name).filter(Boolean),
+  );
+  const unit = units.size === 1 ? [...units][0] : "unit";
   useEffect(() => {
     if (!dirty) return;
     const prevent = (event: BeforeUnloadEvent) => {
@@ -177,50 +275,29 @@ export function SalesOrderForm({
   const back = `/operations/orders${initial ? `/${initial.id}` : ""}`;
   const columns: ColumnDef<DraftLine>[] = [
     {
-      id: "code",
-      header: "Kode produk",
-      cell: ({ row }) => (
-        <span className="so-code">
-          {(
-            options?.products.find((p) => p.id === row.original.product_id) ??
-            initial?.lines.find((l) => l.productId === row.original.product_id)?.product
-          )?.code ?? "—"}
-        </span>
-      ),
-    },
-    {
-      id: "name",
-      header: "Nama produk",
+      id: "product",
+      header: "Produk",
       cell: ({ row }) => {
-        const product =
-          options?.products.find((p) => p.id === row.original.product_id) ??
-          initial?.lines.find((l) => l.productId === row.original.product_id)?.product;
-        return (
-          <div className="so-product-choice">
-            {initial ? (
-              <strong>{product?.name}</strong>
-            ) : (
-              <SelectionField
-                label={`Produk baris ${row.index + 1}`}
-                hideLabel
-                placeholder="Cari dan pilih produk"
-                options={options?.products ?? []}
-                value={row.original.product_id ? [row.original.product_id] : []}
-                onChange={(v) => change(row.original.key, "product_id", v[0] ?? "")}
-              />
-            )}
-          </div>
+        const product = productOf(row.original.product_id);
+        return initial ? (
+          <span className="so-product">
+            <strong>{product?.name}</strong>
+            <small>{product?.code}</small>
+          </span>
+        ) : (
+          <SelectionField
+            label={`Produk baris ${row.index + 1}`}
+            hideLabel
+            placeholder="Cari dan pilih produk"
+            options={(options?.products ?? []).map((p) => ({
+              id: p.id,
+              name: `${p.code} · ${p.name}`,
+            }))}
+            value={row.original.product_id ? [row.original.product_id] : []}
+            onChange={(v) => change(row.original.key, "product_id", v[0] ?? "")}
+          />
         );
       },
-    },
-    {
-      id: "unit",
-      header: "Satuan",
-      cell: ({ row }) =>
-        (
-          options?.products.find((p) => p.id === row.original.product_id) ??
-          initial?.lines.find((l) => l.productId === row.original.product_id)?.product
-        )?.baseUom?.name ?? "—",
     },
     {
       id: "qty",
@@ -228,6 +305,7 @@ export function SalesOrderForm({
       cell: ({ row }) => (
         <Input
           required
+          className="so-num-input"
           aria-label={`Jumlah baris ${row.index + 1}`}
           inputMode="decimal"
           value={row.original.quantity}
@@ -237,8 +315,13 @@ export function SalesOrderForm({
       ),
     },
     {
+      id: "unit",
+      header: "Satuan",
+      cell: ({ row }) => productOf(row.original.product_id)?.baseUom?.name ?? "—",
+    },
+    {
       id: "price",
-      header: "Harga satuan",
+      header: "Harga",
       cell: ({ row }) => (
         <PriceInput
           label={`Harga baris ${row.index + 1}`}
@@ -248,17 +331,12 @@ export function SalesOrderForm({
       ),
     },
     {
-      id: "discount",
-      header: "Diskon",
-      cell: () => <span className="so-unavailable">Belum didukung</span>,
-    },
-    {
       id: "tax",
-      header: "Pajak",
+      header: "PPN",
       cell: ({ row }) => (
         <SelectionField
           hideLabel
-          label={`Pajak baris ${row.index + 1}`}
+          label={`PPN baris ${row.index + 1}`}
           value={row.original.tax_master_id ? [row.original.tax_master_id] : []}
           options={(taxes.data?.data ?? []).map((t) => ({
             id: t.id,
@@ -272,19 +350,23 @@ export function SalesOrderForm({
     {
       id: "net",
       header: "Subtotal",
-      cell: ({ row }) => amount(subtotal(row.original)?.toString()),
+      cell: ({ row }) => {
+        const value = subtotal(row.original);
+        return <span className="so-num so-strong">{value ? amount(value.toString(), currency) : "—"}</span>;
+      },
     },
     ...(!initial
       ? [
           {
             id: "actions",
-            header: "",
+            header: "Aksi",
             cell: ({ row }: { row: { index: number; original: DraftLine } }) => (
               <Button
                 type="button"
                 variant="ghost"
+                size="icon"
                 className="so-remove-line"
-                aria-label={`Hapus produk baris ${row.index + 1}`}
+                aria-label={`Hapus baris ${row.index + 1}`}
                 disabled={lines.length === 1 || pending}
                 onClick={() => {
                   setDirty(true);
@@ -298,122 +380,119 @@ export function SalesOrderForm({
         ]
       : []),
   ];
+  const freightPayload = () => ({
+    payer: freightMode as Exclude<FreightMode, "NONE">,
+    basis: "PER_SHIPMENT",
+    estimate: freightAmount.trim() || "0",
+    tax_mode: freightTaxable ? "TAXABLE" : "NON_TAXABLE",
+    ...(initial?.freightTermsSnapshot?.tax_rule_id
+      ? { tax_rule_id: initial.freightTermsSnapshot.tax_rule_id }
+      : {}),
+  });
+  const save = async (submitAfter: boolean) => {
+    setLocalError("");
+    if (
+      !customer ||
+      !proof ||
+      !currency ||
+      (freightEnabled && !/^\d{1,14}(\.\d{1,10})?$/.test(freightAmount.trim() || "0")) ||
+      lines.some((l) => !l.product_id || !validQty(l.quantity) || !validPrice(l.unit_price))
+    ) {
+      setLocalError(
+        "Lengkapi pelanggan, bukti SP, produk, jumlah positif, dan harga yang valid. Gunakan titik untuk desimal.",
+      );
+      requestAnimationFrame(() => errorRef.current?.focus());
+      return;
+    }
+    const payload = initial
+      ? {
+          version: initial.version,
+          reason,
+          evidence_id: proof,
+          customer_reference: reference,
+          delivery_address: address,
+          ...(freightTouched ? { freight: freightEnabled ? freightPayload() : null } : {}),
+          lines: lines.map((l) => ({
+            line_id: l.line_id,
+            quantity: l.quantity,
+            unit_price: l.unit_price,
+            ...(l.tax_master_id ? { tax_master_id: l.tax_master_id } : {}),
+          })),
+        }
+      : {
+          customer_id: customer,
+          customer_reference: reference,
+          delivery_address: address,
+          evidence_id: proof,
+          currency,
+          notes,
+          ...(freightEnabled ? { freight: freightPayload() } : {}),
+          lines: lines.map(({ product_id, quantity, unit_price, tax_master_id }) => ({
+            product_id,
+            quantity,
+            unit_price,
+            ...(tax_master_id ? { tax_master_id } : {}),
+          })),
+        };
+    try {
+      const saved = await command(
+        initial ? `/sales-orders/${initial.id}/revise` : "/sales-orders",
+        payload,
+      );
+      setDirty(false);
+      // Ajukan = command submit terpisah; bila gagal, SO tetap tersimpan sebagai Draft.
+      if (submitAfter)
+        await command(`/sales-orders/${saved.data.id}/submit`).catch(() => undefined);
+      onSaved(saved.data.id);
+    } catch {
+      // Pesan galat ditampilkan oleh useOrderCommand.
+    }
+  };
+  const checks: { tone: "success" | "info" | "warning" | "danger"; text: string }[] = [
+    { tone: "success", text: "Produk aktif, harga dan pajak per baris" },
+    !customer
+      ? { tone: "info", text: "Ketentuan pembayaran mengikuti pelanggan yang dipilih" }
+      : !policy
+      ? { tone: "danger", text: "Ketentuan pembayaran pelanggan belum ditetapkan" }
+      : policy.mode === "PREPAY"
+        ? { tone: "info", text: "Bayar sebelum kirim: dana diverifikasi sebelum dispatch" }
+        : { tone: "info", text: "Past due dan limit kredit dicek bila tempo" },
+    { tone: "warning", text: "Stok per barang dicek; kekurangan menjadi backorder" },
+  ];
   return (
     <form
-      className="web-form so-order-form"
+      className="web-form so-order-form so-frame-form"
       onChange={() => setDirty(true)}
       onSubmit={(event) => {
         event.preventDefault();
-
-        setLocalError("");
-        if (
-          !customer ||
-          !proof ||
-          !currency ||
-          (freightEnabled && !/^\d{1,14}(\.\d{1,10})?$/.test(freightAmount.trim())) ||
-          lines.some((l) => !l.product_id || !validQty(l.quantity) || !validPrice(l.unit_price))
-        ) {
-          setLocalError(
-            "Lengkapi pelanggan, lampiran SP, produk, jumlah positif, dan harga yang valid. Gunakan titik untuk desimal.",
-          );
-          requestAnimationFrame(() => errorRef.current?.focus());
-          return;
-        }
-        const payload = initial
-          ? {
-              version: initial.version,
-              reason,
-              evidence_id: proof,
-              customer_reference: reference,
-              delivery_address: address,
-              ...(freightTouched
-                ? {
-                    freight: freightEnabled
-                      ? {
-                          payer: initial.freightTermsSnapshot?.payer ?? "CUSTOMER",
-                          basis: "PER_SHIPMENT",
-                          estimate: freightAmount.trim(),
-                          tax_mode: freightTaxable ? "TAXABLE" : "NON_TAXABLE",
-                          ...(initial.freightTermsSnapshot?.tax_rule_id
-                            ? { tax_rule_id: initial.freightTermsSnapshot.tax_rule_id }
-                            : {}),
-                        }
-                      : null,
-                  }
-                : {}),
-              lines: lines.map((l) => ({
-                line_id: l.line_id,
-                quantity: l.quantity,
-                unit_price: l.unit_price,
-                ...(l.tax_master_id ? { tax_master_id: l.tax_master_id } : {}),
-              })),
-            }
-          : {
-              customer_id: customer,
-              customer_reference: reference,
-              delivery_address: address,
-              evidence_id: proof,
-              currency,
-              notes,
-              ...(freightEnabled
-                ? {
-                    freight: {
-                      payer: "CUSTOMER",
-                      basis: "PER_SHIPMENT",
-                      estimate: freightAmount || "0",
-                      tax_mode: freightTaxable ? "TAXABLE" : "NON_TAXABLE",
-                    },
-                  }
-                : {}),
-              lines: lines.map(({ product_id, quantity, unit_price, tax_master_id }) => ({
-                product_id,
-                quantity,
-                unit_price,
-                ...(tax_master_id ? { tax_master_id } : {}),
-              })),
-            };
-        void command(initial ? `/sales-orders/${initial.id}/revise` : "/sales-orders", payload)
-          .then((r) => {
-            setDirty(false);
-            onSaved(r.data.id);
-          })
-          .catch(() => undefined);
+        const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+        void save(submitter?.value === "submit");
       }}
     >
       {lookup.error && (
-        <>
-          <ErrorBox message={String(lookup.error)} />
-          <Button type="button" variant="outline" onClick={() => void lookup.refetch()}>
+        <Notice>
+          Pilihan pelanggan dan produk gagal dimuat.{" "}
+          <Button type="button" variant="outline" size="sm" onClick={() => void lookup.refetch()}>
             Muat ulang pilihan
           </Button>
-        </>
+        </Notice>
       )}
       {localError && (
         <div ref={errorRef} tabIndex={-1}>
           <ErrorBox message={localError} />
         </div>
       )}
-      <Button
-        className="sales-back"
-        type="button"
-        variant="outline"
-        onClick={() => {
-          setLeaveTo(null);
-          if (dirty) setLeaving(true);
-          else router.push(back);
-        }}
-      >
-        Kembali ke daftar
-      </Button>
       <fieldset disabled={pending} className="so-form-fields">
         <div className="so-form-main">
-          <Panel title="1 · Pelanggan">
-            <p className="so-help">Field bertanda * wajib diisi.</p>
-            <FieldGroup className="sales-customer-fields">
+          <FormSection id="so-customer" no={1} title="Pelanggan">
+            <div className="so-grid2">
               {initial ? (
-                <Value label="Pelanggan">{initial.customer?.name}</Value>
+                <div className="so-static">
+                  <span>Pelanggan</span>
+                  <strong>{initial.customer?.name}</strong>
+                </div>
               ) : (
-                <div className="so-customer-picker">
+                <div className="so-field">
                   <SelectionField
                     label="Pelanggan *"
                     options={options?.customers ?? []}
@@ -429,78 +508,83 @@ export function SalesOrderForm({
                   <AddOrderCustomer />
                 </div>
               )}
-
-              <Value label="Termin">
-                {terms(initial?.paymentSnapshot ?? selected?.paymentPolicies[0])}
-              </Value>
-            </FieldGroup>
-            <Value label="Sisa limit kredit">Belum tersedia</Value>
-            {initial && (
-              <Field>
-                <FieldLabel htmlFor="so-reason">Alasan revisi *</FieldLabel>
-                <Textarea
-                  id="so-reason"
-                  required
-                  maxLength={1000}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                />
-                <p className="so-help">
-                  Revisi membatalkan hasil evaluasi sebelumnya dan memerlukan pengajuan ulang.
-                </p>
-              </Field>
-            )}
-          </Panel>
-          <Panel title="2 · Referensi SP/PO">
-            {" "}
-            <Field>
-              <FieldLabel htmlFor="so-reference">Referensi SP/PO pelanggan *</FieldLabel>
-              <Input
-                id="so-reference"
-                required
-                maxLength={100}
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-              />
-            </Field>{" "}
-            <div className="so-document-links">
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button type="button" variant="outline">
-                    {proof ? (
-                      <Check data-icon="inline-start" aria-hidden="true" />
-                    ) : (
-                      <Paperclip data-icon="inline-start" aria-hidden="true" />
-                    )}
-                    {proof ? "Lampiran SP/PO tersimpan" : "Unggah SP/PO pelanggan *"}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Lampiran SP Pelanggan</DialogTitle>
-                    <DialogDescription>
-                      Unggah bukti SP/PO pelanggan berupa JPEG atau PNG, maksimal 2 MB.
-                    </DialogDescription>
-                  </DialogHeader>
-                  {
-                    <Upload
-                      purpose="SALES_ORDER"
-                      onChange={(id) => {
-                        setProof(id);
-                        setDirty(true);
-                      }}
-                    />
-                  }
-                  {proof && <Evidence id={proof} />}
-                </DialogContent>
-              </Dialog>
+              <div className="so-policy">
+                <span>Ketentuan pembayaran (snapshot dari Finance)</span>
+                <strong>{terms(policy)}</strong>
+                <small>
+                  {policy
+                    ? "Past due dan limit dicek saat diajukan."
+                    : customer
+                      ? "SO dapat disimpan sebagai Draft, tetapi belum bisa diajukan."
+                      : "Pilih pelanggan untuk melihat ketentuan pembayaran."}
+                </small>
+              </div>
+              {initial && (
+                <label className="so-field so-span">
+                  Alasan revisi *
+                  <Textarea
+                    required
+                    maxLength={1000}
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                  <small>
+                    Revisi membatalkan hasil evaluasi sebelumnya dan memerlukan pengajuan ulang.
+                  </small>
+                </label>
+              )}
             </div>
-          </Panel>
-          <Panel title="3 · Barang">
-            <p className="so-help">
-              {lines.length} baris produk · Isi jumlah dan harga satuan. Gunakan titik untuk
-              desimal.
-            </p>
+          </FormSection>
+          <FormSection id="so-reference" no={2} title="Referensi pesanan">
+            <div className="so-grid2">
+              <label className="so-field">
+                Nomor SP pelanggan *
+                <Input
+                  required
+                  maxLength={100}
+                  placeholder="Nomor surat pesanan"
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                />
+              </label>
+              <div className="so-field so-span">
+                <Upload
+                  purpose="SALES_ORDER"
+                  onChange={(id) => {
+                    setProof(id || (initial?.evidenceId ?? ""));
+                    setDirty(true);
+                  }}
+                />
+                {proof && <Evidence id={proof} />}
+              </div>
+            </div>
+          </FormSection>
+          <FormSection
+            id="so-lines"
+            no={3}
+            title="Barang"
+            description="Isi jumlah dan harga satuan; PPN dipilih dari aturan pajak yang berlaku. Gunakan titik untuk desimal."
+            action={
+              !initial && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  disabled={lines.length >= 100}
+                  onClick={() => {
+                    setDirty(true);
+                    setLines((old) => [
+                      ...old,
+                      { key: crypto.randomUUID(), product_id: "", quantity: "", unit_price: "" },
+                    ]);
+                  }}
+                >
+                  <Plus aria-hidden="true" />
+                  Tambah barang
+                </Button>
+              )
+            }
+          >
             <div className="so-edit-lines">
               <DataTable
                 data={lines}
@@ -508,73 +592,55 @@ export function SalesOrderForm({
                 total={lines.length}
                 formTable
                 showColumns={false}
-                label="produk pesanan"
+                label="barang"
               />
             </div>
-            {!initial && (
-              <Button
-                variant="outline"
-                type="button"
-                disabled={lines.length >= 100}
-                onClick={() => {
-                  setDirty(true);
-                  setLines((old) => [
-                    ...old,
-                    { key: crypto.randomUUID(), product_id: "", quantity: "", unit_price: "" },
-                  ]);
-                }}
-              >
-                <Plus data-icon="inline-start" aria-hidden="true" />
-                Tambah Produk
-              </Button>
-            )}
-          </Panel>
-          <Panel title="4 · Pengiriman & ongkos kirim" className="so-freight-card">
-            {" "}
-            <Field>
-              <FieldLabel htmlFor="so-address">Alamat pengiriman *</FieldLabel>
-              <Input
-                id="so-address"
-                required
-                maxLength={1000}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
-            </Field>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <p className="text-sm font-medium">Tambahkan ongkos kirim</p>
-                <p className="text-muted-foreground text-xs">Ditagihkan per pengiriman.</p>
+            <small className="so-note">
+              Ketersediaan stok tidak dicadangkan dari form ini. Kekurangan tetap dicatat dan
+              menjadi backorder setelah diajukan.
+            </small>
+          </FormSection>
+          <FormSection id="so-delivery" no={4} title="Pengiriman">
+            <div className="so-grid2">
+              <label className="so-field so-span">
+                Alamat pengantaran *
+                <Textarea
+                  required
+                  maxLength={1000}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                />
+                <small>Diambil dari data pelanggan; perubahan di sini hanya untuk SO ini.</small>
+              </label>
+              <div className="so-field">
+                <SelectionField
+                  label="Ketentuan ongkir"
+                  value={[freightMode]}
+                  options={Object.entries(freightModes).map(([id, name]) => ({ id, name }))}
+                  onChange={(v) => {
+                    setFreightMode((v[0] as FreightMode | undefined) ?? "NONE");
+                    setFreightTouched(true);
+                    setDirty(true);
+                  }}
+                />
               </div>
-              <Switch
-                checked={freightEnabled}
-                onCheckedChange={(checked) => {
-                  setFreightEnabled(checked);
-                  setFreightTouched(true);
-                  setDirty(true);
-                }}
-                aria-label="Aktifkan ongkos kirim"
-              />
-            </div>
-            {freightEnabled && (
-              <FieldGroup className="mt-4">
-                <Field>
-                  <FieldLabel htmlFor="freight-amount">Nominal ongkos kirim</FieldLabel>
-                  <Input
-                    id="freight-amount"
-                    inputMode="decimal"
-                    value={freightAmount}
-                    onChange={(e) => {
-                      setFreightAmount(e.target.value);
-                      setFreightTouched(true);
-                      setDirty(true);
-                    }}
-                    placeholder="0"
-                  />
-                </Field>
-                <Field>
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <FieldLabel htmlFor="freight-taxable">Kena PPN</FieldLabel>
+              {freightEnabled && (
+                <>
+                  <label className="so-field">
+                    Estimasi ongkir per pengiriman
+                    <Input
+                      inputMode="decimal"
+                      value={freightAmount}
+                      placeholder="0"
+                      onChange={(e) => {
+                        setFreightAmount(e.target.value);
+                        setFreightTouched(true);
+                        setDirty(true);
+                      }}
+                    />
+                  </label>
+                  <div className="so-switch">
+                    <label htmlFor="freight-taxable">Ongkir kena PPN</label>
                     <Switch
                       id="freight-taxable"
                       checked={freightTaxable}
@@ -583,53 +649,84 @@ export function SalesOrderForm({
                         setFreightTouched(true);
                         setDirty(true);
                       }}
-                      aria-label="Ongkos kirim kena PPN"
                     />
                   </div>
-                </Field>
-              </FieldGroup>
-            )}
-          </Panel>
-          <Panel title="5 · Catatan">
-            <Field>
-              <FieldLabel htmlFor="so-notes">Catatan (opsional)</FieldLabel>
+                </>
+              )}
+            </div>
+          </FormSection>
+          <FormSection id="so-notes" no={5} title="Catatan">
+            <label className="so-field">
+              Catatan untuk gudang dan finance
               <Textarea
-                id="so-notes"
-                placeholder="Tambahkan instruksi atau informasi untuk pesanan ini…"
+                placeholder="Instruksi khusus penerimaan barang"
                 maxLength={2000}
                 value={notes}
                 readOnly={!!initial}
                 onChange={(e) => setNotes(e.target.value)}
               />
-              {initial && <p className="so-help">Catatan asli dipertahankan pada revisi ini.</p>}
-            </Field>
-          </Panel>
+              {initial && <small>Catatan asli dipertahankan pada revisi ini.</small>}
+            </label>
+          </FormSection>
         </div>
-        <aside className="so-form-aside" aria-label="Ringkasan dan informasi dokumen">
-          <Panel title="Ringkasan">
-            <Totals
-              subtotal={total}
-              currency={currency}
-              freight={freightEnabled && validPrice(freightAmount) ? freightAmount : null}
-            />
-          </Panel>
-
-          <Panel title="Diperiksa saat diajukan">
-            <Value label="Aturan pembayaran">Dicek</Value>
-            <Value label="Past due / limit kredit">Dicek bila tempo</Value>
-            <Value label="Stok per item">Dicek</Value>
-          </Panel>
+        <aside className="so-form-aside" aria-label="Ringkasan SO">
+          <section className="page-frame-panel so-form-box" aria-labelledby="so-sum-title">
+            <h2 id="so-sum-title">Ringkasan</h2>
+            <dl className="so-sums">
+              <div>
+                <dt>
+                  {lines.length} baris
+                  {qtyTotal ? ` · ${amount(qtyTotal.toString())} ${unit}` : ""}
+                </dt>
+                <dd />
+              </div>
+              <div>
+                <dt>Nilai barang</dt>
+                <dd>{total ? amount(total.toString(), currency) : "—"}</dd>
+              </div>
+              <div>
+                <dt>PPN (perkiraan)</dt>
+                <dd>
+                  {tax ? amount(tax.toDecimalPlaces(2).toString(), currency) : "Pilih pajak tiap baris"}
+                </dd>
+              </div>
+              <div className="so-sums-total">
+                <dt>Total barang</dt>
+                <dd>
+                  {total && tax
+                    ? amount(total.add(tax).toDecimalPlaces(2).toString(), currency)
+                    : "—"}
+                </dd>
+              </div>
+            </dl>
+            <small className="so-note">
+              Ongkir dihitung per pengiriman, terpisah dari nilai barang. Nilai final ditetapkan
+              server saat diajukan.
+            </small>
+          </section>
+          <section className="page-frame-panel so-form-box" aria-labelledby="so-checks-title">
+            <h2 id="so-checks-title">Diperiksa saat diajukan</h2>
+            <small className="so-note">Server mengulang semua pemeriksaan ini.</small>
+            <ul className="so-checks">
+              {checks.map((check) => (
+                <li key={check.text}>
+                  <CheckIcon tone={check.tone} />
+                  {check.text}
+                </li>
+              ))}
+            </ul>
+          </section>
         </aside>
       </fieldset>
-      <footer className="so-footer so-save-bar">
+      <footer className="page-frame-form-footer so-frame-footer">
         <p className="so-save-status">
           {pending
             ? "Menyimpan perubahan…"
             : dirty
-              ? "Ada perubahan yang belum disimpan"
+              ? "Ada perubahan yang belum disimpan."
               : initial
-                ? "Belum ada perubahan pada revisi ini"
-                : "Draft baru · belum disimpan"}
+                ? "Belum ada perubahan pada revisi ini."
+                : "Draft dapat disimpan sebelum diajukan."}
         </p>
         <Button
           type="button"
@@ -643,9 +740,19 @@ export function SalesOrderForm({
         >
           Batal
         </Button>
-        <Button type="submit" disabled={pending || lookup.isLoading || !currency}>
-          {pending ? "Menyimpan…" : initial ? "Simpan Revisi" : "Simpan Draft"}
+        <Button
+          type="submit"
+          value="draft"
+          variant={canSubmit ? "outline" : "default"}
+          disabled={pending || lookup.isLoading || !currency}
+        >
+          {pending ? "Menyimpan…" : initial ? "Simpan revisi" : "Simpan draf"}
         </Button>
+        {canSubmit && (
+          <Button type="submit" value="submit" disabled={pending || lookup.isLoading || !currency}>
+            {initial ? "Simpan & ajukan" : "Ajukan SO"}
+          </Button>
+        )}
       </footer>
       <Dialog open={leaving} onOpenChange={setLeaving}>
         <DialogContent>

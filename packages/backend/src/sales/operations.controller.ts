@@ -25,6 +25,7 @@ import { RequirePermissions } from "../identity/permissions.decorator";
 import type { AuthenticatedRequest } from "../identity/auth.types";
 import { OperationsService } from "./operations.service";
 import { previewProforma } from "./proforma";
+import { orderListFilterSchema } from "./order-list-filters";
 import { requestException, decideException, manageException } from "./exception-controls";
 import { OtcPtpService } from "../otc-ptp.service";
 import { processExceptionEvaluations } from "./exception-evaluation";
@@ -638,19 +639,41 @@ export class OperationsController {
             "HANDOFF",
           ])
           .optional(),
+        customer_id: z.string().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
+        fulfillment: z.string().optional(),
+        remainder: z.string().optional(),
       })
       .strict()
       .parse(query);
+    const { customer_id, from, to, fulfillment, remainder, ...base } = q;
+    // Filter pelanggan/periode/pemenuhan/sisa hanya berlaku untuk daftar Sales Order.
+    const orderFilters =
+      type === "orders"
+        ? orderListFilterSchema.parse({ customer_id, from, to, fulfillment, remainder })
+        : undefined;
     return {
-      data: await this.service.list(
-        req.auth.company_id,
-        type,
-        q.page,
-        q.search,
-        q.state,
-        q.stage,
-        q.view,
-      ),
+      data: await (orderFilters
+        ? this.service.list(
+            req.auth.company_id,
+            type,
+            base.page,
+            base.search,
+            base.state,
+            base.stage,
+            base.view,
+            orderFilters,
+          )
+        : this.service.list(
+            req.auth.company_id,
+            type,
+            base.page,
+            base.search,
+            base.state,
+            base.stage,
+            base.view,
+          )),
     };
   }
   @Get("proformas/:id")

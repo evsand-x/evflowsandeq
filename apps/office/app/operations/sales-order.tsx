@@ -1,40 +1,58 @@
 "use client";
-import { SalesPeriod, SalesNavigation } from "./sales-experience";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import Decimal from "decimal.js";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Search, Plus, ArrowLeft, FileText, Package, Truck, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-
+import {
+  DataTable,
+  DetailTabs,
+  MetaItem,
+  ActiveFilters,
+  FilterChips,
+  FilterPopover,
+  OfficePage,
+  PageNotice,
+  SubNav,
+} from "@/components/web/page-frame";
+import { IconPlus, IconSearch } from "@/components/web/icons";
+import { SelectionField } from "@/components/web/selection-field";
 import { apiRequest } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
-import { DashboardSidebar } from "../dashboard-sidebar";
-import { ExecutiveTopbar } from "../dashboard-executive";
-import { DataTable } from "../crm/crm-common";
-import { SelectionField } from "@/components/web/selection-field";
-import { ErrorBox, type Row } from "./workspace";
+import { useListParams } from "../master-data/master-shared";
+import { type Row } from "./workspace";
 import { SalesExceptions } from "./extended-controls";
 import { SalesOrderForm, CloseRemainder } from "./sales-order-form";
-import { amount, terms, orderStates, type Order, type OrderCommand } from "./sales-order-types";
-import { OrderJourney } from "./sales-order-journey";
+import {
+  amount,
+  terms,
+  orderStates,
+  taxLabel,
+  type Order,
+  type OrderCommand,
+} from "./sales-order-types";
+import {
+  DocumentsTab,
+  FulfillmentTab,
+  NextStep,
+  Tone,
+  useOrderJourney,
+} from "./sales-order-journey";
 import "./sales-order.css";
 import "./sales-order-modern.css";
+import "./sales-order-frame.css";
 type OrderList = {
   rows: Order[];
   total: number;
@@ -45,57 +63,65 @@ type OrderList = {
     creditHold: number | null;
     backorder: number;
   };
+  filters?: { customers: { id: string; name: string }[] };
   asOf: string;
 };
+const orderStateFilters: Record<string, string> = {
+  ALL: "Semua status",
+  DRAFT: "Draft",
+  OPEN: "Open",
+  CLOSED: "Closed",
+  CANCELLED: "Dibatalkan",
+};
+const fulfillmentFilters: Record<string, string> = {
+  ALL: "Semua pemenuhan",
+  NOT_SHIPPED: "Belum Dikirim",
+  PARTIAL: "Sebagian",
+  SHIPPED: "Terkirim Semua",
+};
+const remainderFilters: Record<string, string> = {
+  ALL: "Semua sisa",
+  BACKORDER: "Backorder",
+  IN_PROGRESS: "Proses Pemenuhan",
+  NOT_EVALUATED: "Belum dievaluasi",
+  CLOSED: "Ditutup",
+};
+const filterKeys = ["customer_id", "from", "to", "fulfillment", "remainder"] as const;
+const base = "/operations/orders";
+const crumbs = [
+  { label: "Sales & Marketing" },
+  { label: "Pesanan Pelanggan" },
+  { label: "Sales Order", href: base },
+];
 
-export function SalesOrderWorkspace({ path }: { path: string[] }) {
-  const session = useSession();
-  const principal = session.principal,
-    state = session.state;
-  const base = "/operations/orders";
-  const router = useRouter();
+function useCan() {
+  const { principal } = useSession();
+  return (p: string) => !!principal && hasCompanyPermission(principal, p);
+}
+
+// Sub-menu Pesanan Pelanggan; tiap item memakai izin read submenu masing-masing.
+function OrderSubNav() {
+  const can = useCan();
+  return (
+    <SubNav
+      items={[
+        ["Sales Order", base, "sales_order.read"],
+        ["Proforma", "/operations/proformas", "proforma.read"],
+        ["Backorder & Sisa Pesanan", "/operations/backorders", "sales_backorder.read"],
+      ]
+        .filter(([, , permission]) => can(permission!))
+        .map(([label, href]) => ({ label: label!, href: href!, active: href === base }))}
+    />
+  );
+}
+
+// Perintah SO memakai Idempotency-Key per isi permintaan; backend tetap otoritas status dan izin.
+function useOrderCommand() {
   const client = useQueryClient();
-  const id = path[1],
-    creating = id === "new",
-    editing = path[2] === "edit",
-    list = !id;
-  const [search, setSearch] = useState(""),
-    [debounced, setDebounced] = useState(""),
-    [filter, setFilter] = useState("ALL"),
-    [page, setPage] = useState(1);
   const [pending, setPending] = useState(false),
     [error, setError] = useState("");
   const keys = useRef(new Map<string, string>());
   const busy = useRef(false);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebounced(search);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search]);
-  const can = (p: string) => !!principal && hasCompanyPermission(principal, p);
-  const allowed =
-    can(creating ? "sales_order.create" : "sales_order.read") &&
-    (!editing || can("sales_order.update"));
-  const endpoint = list
-    ? `/operations/lists/orders?page=${page}&search=${encodeURIComponent(debounced)}${filter !== "ALL" ? `&state=${filter}` : ""}`
-    : `/operations/orders/${id}`;
-  const query = useQuery({
-    queryKey: ["operations", principal?.company_id, principal?.user_id, endpoint],
-    queryFn: ({ signal }) =>
-      apiRequest<{
-        data: Order | OrderList;
-      }>(endpoint, { signal }),
-    enabled: allowed && !creating,
-    placeholderData: (previous, previousQuery) =>
-      list &&
-      previousQuery?.queryKey[1] === principal?.company_id &&
-      previousQuery?.queryKey[2] === principal?.user_id &&
-      String(previousQuery?.queryKey[3]).startsWith("/operations/lists/orders?")
-        ? previous
-        : undefined,
-  });
   const command: OrderCommand = async (url, body = {}) => {
     if (busy.current) throw new Error("Penyimpanan masih berlangsung.");
     busy.current = true;
@@ -130,242 +156,214 @@ export function SalesOrderWorkspace({ path }: { path: string[] }) {
       setPending(false);
     }
   };
-  if (!principal)
-    return (
-      <main>
-        <p role="status">
-          {state === "loading" ? "Memuat sesi…" : "Silakan masuk untuk mengakses Sales Order."}
-        </p>
-        <Link href="/login">Masuk</Link>
-      </main>
-    );
-  const row = !list ? (query.data?.data as Order | undefined) : undefined;
+  return { command, pending, error };
+}
 
-  const listing = list ? (query.data?.data as OrderList | undefined) : undefined;
+export function SalesOrderWorkspace({ path }: { path: string[] }) {
+  const id = path[1],
+    creating = id === "new",
+    editing = path[2] === "edit";
+  if (!id) return <OrderListPage />;
+  if (creating) return <OrderFormPage />;
+  return <OrderRecordPage id={id} editing={editing} />;
+}
+
+function OrderListPage() {
+  const { principal } = useSession(),
+    can = useCan(),
+    list = useListParams();
+  const state = list.get("state");
+  const value = (key: string) => (list.get(key) === "ALL" ? "" : list.get(key));
+  const params = new URLSearchParams({ page: String(list.page), search: list.q });
+  if (state !== "ALL") params.set("state", state);
+  for (const key of filterKeys) if (value(key)) params.set(key, value(key));
+  const endpoint = `/operations/lists/orders?${params}`;
+  const allowed = can("sales_order.read");
+  const query = useQuery({
+    queryKey: ["operations", principal?.company_id, principal?.user_id, endpoint],
+    queryFn: ({ signal }) => apiRequest<{ data: OrderList }>(endpoint, { signal }),
+    enabled: allowed,
+    placeholderData: (previous) => previous,
+  });
+  const listing = query.data?.data;
+  const stateCount = (id: string) =>
+    id === "DRAFT" ? listing?.summary.draft : id === "OPEN" ? listing?.summary.open : undefined;
+  const clear = (key: string) => () => list.set({ [key]: "ALL", page: 1 });
+  const customerName = listing?.filters?.customers.find(
+    (c) => c.id === list.get("customer_id"),
+  )?.name;
+  const period = [value("from"), value("to")].map((d) =>
+    d ? new Date(`${d}T00:00:00`).toLocaleDateString("id-ID", { dateStyle: "medium" }) : "",
+  );
+  const active = [
+    state !== "ALL" && { key: "state", label: `Status: ${orderStateFilters[state]}`, onRemove: clear("state") },
+    value("customer_id") && {
+      key: "customer_id",
+      label: `Pelanggan: ${customerName ?? "terpilih"}`,
+      onRemove: clear("customer_id"),
+    },
+    (value("from") || value("to")) && {
+      key: "period",
+      label: `Periode: ${period[0] || "awal"} – ${period[1] || "sekarang"}`,
+      onRemove: () => list.set({ from: "ALL", to: "ALL", page: 1 }),
+    },
+    value("fulfillment") && {
+      key: "fulfillment",
+      label: `Pemenuhan: ${fulfillmentFilters[value("fulfillment")]}`,
+      onRemove: clear("fulfillment"),
+    },
+    value("remainder") && {
+      key: "remainder",
+      label: `Sisa: ${remainderFilters[value("remainder")]}`,
+      onRemove: clear("remainder"),
+    },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[];
+  // Angka di tombol Filter hanya menghitung filter di popup; status/pemenuhan tampil di toolbar.
+  const popupCount = active.filter((item) => ["customer_id", "period", "remainder"].includes(item.key)).length;
   return (
-    <SidebarProvider
-      className="executive-shell"
-      style={{ "--sidebar-width": "248px" } as CSSProperties}
+    <OfficePage
+      section="sales"
+      crumbs={[...crumbs.slice(0, 2), { label: "Sales Order" }]}
+      title="Sales Order"
+      subtitle="Pesanan pelanggan dan pemenuhannya. Approval hanya untuk pengecualian."
+      tabs={<OrderSubNav />}
+      actions={
+        can("sales_order.create") && (
+          <Button asChild>
+            <Link href={`${base}/new`}>
+              <IconPlus aria-hidden="true" />
+              Buat Sales Order
+            </Link>
+          </Button>
+        )
+      }
     >
-      <DashboardSidebar principal={principal} activeView="sales" activeSection="sales" />
-      <SidebarInset className="min-w-0">
-        <ExecutiveTopbar companyName={principal.company_name} />
-        <main className="executive-content crm-content otc-workspace so-workspace sales-sketch">
-          <header className="executive-heading">
-            <div>
-              <nav className="executive-breadcrumb" aria-label="Breadcrumb">
-                Sales & Marketing / Pesanan Pelanggan / <Link href={base}>Sales Order</Link>
-              </nav>
-              <h1>
-                {list
-                  ? "Sales Order"
-                  : creating
-                    ? "Buat Sales Order"
-                    : editing
-                      ? "Edit Sales Order"
-                      : row
-                        ? `${row.number} · ${row.customer?.name ?? ""}`
-                        : "Detail Sales Order"}
-              </h1>
-              <p className="so-page-description">
-                {list
-                  ? "Kelola pesanan pelanggan dan pantau pemenuhannya."
-                  : creating
-                    ? "Lengkapi pelanggan dan produk untuk menyimpan draft pesanan."
-                    : editing
-                      ? "Perbarui rincian pesanan dan catat alasan revisi."
-                      : row
-                        ? `Dibuat ${new Date(row.createdAt).toLocaleDateString("id-ID")} oleh ${row.createdByName ?? "—"} · Total ${amount(row.total, row.currency)}`
-                        : "Rincian pesanan pelanggan"}
-              </p>
-            </div>
-            <SalesNavigation active="orders" />
-          </header>
-          {!allowed ? (
-            <ErrorBox message="Anda belum memiliki izin untuk mengakses halaman ini." />
-          ) : (
-            <>
-              {error && <ErrorBox message={error} />}
-              {query.error ? (
-                <>
-                  <ErrorBox message={String(query.error)} />
-                  <Button variant="outline" onClick={() => void query.refetch()}>
-                    Coba lagi
-                  </Button>
-                </>
-              ) : null}
-              {!creating && query.isLoading ? (
-                <div className="so-loading" role="status" aria-label="Memuat Sales Order">
-                  <Skeleton className="h-24 w-full" />
-                  <Skeleton className="h-64 w-full" />
-                </div>
-              ) : null}
-              {creating || (editing && row) ? (
-                <SalesOrderForm
-                  key={editing && row ? `${row.id}:${row.version}` : "new"}
-                  initial={editing ? row : undefined}
-                  command={command}
-                  pending={pending}
-                  onSaved={(value) => router.push(`${base}/${value}`)}
-                />
-              ) : listing ? (
-                <>
-                  <div className="sales-list-tabs" aria-label="Antrean Sales Order">
-                    <button disabled title="Antrean tugas personal belum tersedia">
-                      Perlu tindakan saya
-                    </button>
-                    {[
-                      ["ALL", "Semua"],
-                      ["DRAFT", "Draft"],
-                      ["OPEN", "Open"],
-                      ["CLOSED", "Selesai / Closed"],
-                    ].map(([value, label]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        aria-pressed={filter === value}
-                        onClick={() => {
-                          setFilter(value!);
-                          setPage(1);
-                        }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="so-context sr-only">
-                    {query.isPlaceholderData
-                      ? "Memuat hasil pencarian/filter terbaru…"
-                      : `Cakupan perusahaan · Diperbarui ${new Date(listing.asOf).toLocaleString("id-ID")}`}
-                  </p>
-                  <section className="so-kpis" aria-label="Ringkasan Sales Order">
-                    {[
-                      { label: "Draft", value: listing.summary.draft, icon: FileText },
-                      { label: "Open", value: listing.summary.open, icon: FileText },
-                      { label: "Perlu tindakan saya", value: null, icon: Truck },
-                      { label: "Backorder", value: listing.summary.backorder, icon: Package },
-                    ].map(({ label, value, icon: Icon }) => (
-                      <Panel key={label} title={label}>
-                        <div className="so-metric-value">
-                          <strong
-                            title={
-                              value == null
-                                ? "Ringkasan hasil evaluasi kredit belum tersedia."
-                                : undefined
-                            }
-                          >
-                            {value ?? "—"}
-                          </strong>
-                          <Icon aria-hidden="true" />
-                        </div>
-                      </Panel>
-                    ))}
-                  </section>
-                  <section className="sales-list-panel">
-                    <h2>Daftar Sales Order</h2>
-                    <DataTable
-                      data={listing.rows}
-                      columns={listColumns(base)}
-                      total={listing.total}
-                      pageSize={25}
-                      page={page}
-                      onPage={setPage}
-                      busy={query.isFetching}
-                      label="Sales Order"
-                      showColumns={false}
-                      toolbar={
-                        <>
-                          <InputGroup className="so-search">
-                            <InputGroupAddon>
-                              <Search aria-hidden="true" />
-                            </InputGroupAddon>
-                            <InputGroupInput
-                              aria-label="Cari nama atau nomor dokumen"
-                              placeholder="Cari nama atau nomor dokumen"
-                              value={search}
-                              onChange={(e) => setSearch(e.target.value)}
-                            />
-                          </InputGroup>
-                          <div className="so-status-filter">
-                            <SelectionField
-                              label="Status pesanan"
-                              hideLabel
-                              value={[filter]}
-                              options={Object.entries({
-                                ALL: "Semua status",
-                                DRAFT: "Draft",
-                                OPEN: "Open",
-                                CLOSED: "Closed",
-                                CANCELLED: "Dibatalkan",
-                              }).map(([id, name]) => ({ id, name }))}
-                              onChange={(v) => {
-                                setFilter(v[0] ?? "ALL");
-                                setPage(1);
-                              }}
-                            />
-                          </div>
-                          <SalesPeriod />
-                          {can("sales_order.create") && (
-                            <Button className="sales-toolbar-create" asChild>
-                              <Link href={`${base}/new`}>
-                                <Plus />
-                                Buat Sales Order
-                              </Link>
-                            </Button>
-                          )}
-                          {(search || filter !== "ALL") && (
-                            <Button
-                              variant="ghost"
-                              onClick={() => {
-                                setSearch("");
-                                setDebounced("");
-                                setFilter("ALL");
-                                setPage(1);
-                              }}
-                            >
-                              Reset filter
-                            </Button>
-                          )}
-                        </>
-                      }
-                    />
-                  </section>
-                </>
-              ) : row && !list && !editing ? (
-                <OrderDetail row={row} command={command} pending={pending} can={can} />
-              ) : null}
-            </>
+      {!allowed ? (
+        <PageNotice tone="error">Anda tidak memiliki izin melihat Sales Order.</PageNotice>
+      ) : (
+        <>
+          {query.isError && (
+            <PageNotice tone="error" onRetry={() => void query.refetch()}>
+              {query.error.message}
+            </PageNotice>
           )}
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+          <DataTable
+            data={listing?.rows ?? []}
+            columns={listColumns}
+            total={listing?.total ?? 0}
+            pageSize={25}
+            page={list.page}
+            onPage={(page) => list.set({ page })}
+            busy={query.isFetching}
+            label="Sales Order"
+            toolbar={
+              <>
+                <div className="page-frame-search">
+                  <IconSearch />
+                  <Input
+                    aria-label="Cari nomor SO atau pelanggan"
+                    placeholder="Cari nomor SO atau nama pelanggan"
+                    value={list.search}
+                    onChange={(event) => list.setSearch(event.target.value)}
+                  />
+                </div>
+                <FilterPopover
+                  count={popupCount}
+                  onReset={() =>
+                    list.set({ customer_id: "ALL", from: "ALL", to: "ALL", remainder: "ALL", page: 1 })
+                  }
+                  resultLabel={`Tampilkan ${listing?.total ?? 0} SO`}
+                >
+                  <fieldset className="page-frame-chip-group">
+                    <legend>Pelanggan</legend>
+                    <SelectionField
+                      label="Pelanggan"
+                      hideLabel
+                      value={[list.get("customer_id")]}
+                      options={[
+                        { id: "ALL", name: "Semua pelanggan" },
+                        ...(listing?.filters?.customers ?? []),
+                      ]}
+                      onChange={(v) => list.set({ customer_id: v[0] ?? "ALL", page: 1 })}
+                    />
+                  </fieldset>
+                  <fieldset className="page-frame-chip-group">
+                    <legend>Periode tanggal SO</legend>
+                    <div className="so-period">
+                      <Input
+                        type="date"
+                        aria-label="Dari tanggal"
+                        value={value("from")}
+                        max={value("to") || undefined}
+                        onChange={(e) => list.set({ from: e.target.value, page: 1 })}
+                      />
+                      <Input
+                        type="date"
+                        aria-label="Sampai tanggal"
+                        value={value("to")}
+                        min={value("from") || undefined}
+                        onChange={(e) => list.set({ to: e.target.value, page: 1 })}
+                      />
+                    </div>
+                  </fieldset>
+                  <FilterChips
+                    legend="Sisa pesanan"
+                    value={list.get("remainder")}
+                    options={Object.entries(remainderFilters)
+                      .filter(([id]) => id !== "ALL")
+                      .map(([id, label]) => ({
+                        id,
+                        label,
+                        count: id === "BACKORDER" ? listing?.summary.backorder : undefined,
+                      }))}
+                    onChange={(v) => list.set({ remainder: v, page: 1 })}
+                  />
+                </FilterPopover>
+                <SelectionField
+                  label="Status pesanan"
+                  hideLabel
+                  value={[state]}
+                  options={Object.entries(orderStateFilters).map(([id, name]) => ({
+                    id,
+                    name: stateCount(id) != null ? `${name} (${stateCount(id)})` : name,
+                  }))}
+                  onChange={(v) => list.set({ state: v[0] ?? "ALL", page: 1 })}
+                />
+                <SelectionField
+                  label="Pemenuhan"
+                  hideLabel
+                  value={[list.get("fulfillment")]}
+                  options={Object.entries(fulfillmentFilters).map(([id, name]) => ({ id, name }))}
+                  onChange={(v) => list.set({ fulfillment: v[0] ?? "ALL", page: 1 })}
+                />
+                <ActiveFilters items={active} />
+              </>
+            }
+          />
+          {listing && (
+            <p className="page-frame-subtitle">
+              Cakupan perusahaan · Diperbarui {new Date(listing.asOf).toLocaleString("id-ID")}
+            </p>
+          )}
+        </>
+      )}
+    </OfficePage>
   );
 }
-function Status({ children }: { children: string }) {
-  if (["Belum dievaluasi", "Belum diperiksa", "Lihat evaluasi"].includes(children))
-    return <span>{children}</span>;
-  return (
-    <Badge variant="outline" className="so-status" data-state={children}>
-      {children}
-    </Badge>
-  );
-}
-const listColumns = (base: string): ColumnDef<Order>[] => [
+// Kolom daftar SO sesuai urutan pengguna: No. SO, Tanggal SO, Pelanggan, Nilai SO, Status, Pemenuhan, Sisa.
+const listColumns: ColumnDef<Order>[] = [
   {
     id: "number",
     header: "No. SO",
     cell: ({ row }) => (
-      <div className="so-order-identity">
-        <Link className="so-link" href={`${base}/${row.original.id}`}>
-          {row.original.number}
-        </Link>
-      </div>
+      <Link className="page-frame-link" href={`${base}/${row.original.id}`}>
+        {row.original.number}
+      </Link>
     ),
   },
-  { id: "customer", header: "Pelanggan", cell: ({ row }) => row.original.customer?.name ?? "—" },
   {
     id: "date",
-    header: "Tanggal",
+    header: "Tanggal SO",
     cell: ({ row }) =>
       new Date(row.original.createdAt).toLocaleDateString("id-ID", {
         day: "numeric",
@@ -374,68 +372,112 @@ const listColumns = (base: string): ColumnDef<Order>[] => [
       }),
   },
   {
+    id: "customer",
+    header: "Pelanggan",
+    cell: ({ row }) => <span className="so-cell">{row.original.customer?.name ?? "—"}</span>,
+  },
+  {
     id: "value",
     header: "Nilai SO",
     cell: ({ row }) => (
       <span
-        className="so-list-amount"
+        className="so-num"
         title={
           row.original.total == null
             ? "Total belum tersedia; pajak belum ditetapkan."
             : "Total termasuk pajak"
         }
       >
-        {amount(row.original.total, row.original.currency)}
-        {row.original.total == null && <small>Pajak belum ditetapkan</small>}
+        {row.original.total == null
+          ? "Menunggu evaluasi"
+          : amount(row.original.total, row.original.currency)}
       </span>
     ),
   },
   {
     id: "state",
-    header: "Status pesanan",
-    cell: ({ row }) => <Status>{orderStates[row.original.state] ?? row.original.state}</Status>,
+    header: "Status",
+    cell: ({ row }) => <Tone>{orderStates[row.original.state] ?? row.original.state}</Tone>,
   },
   {
     id: "fulfillment",
     header: "Pemenuhan",
-    cell: ({ row }) => <Status>{row.original.fulfillment}</Status>,
-  },
-  {
-    id: "credit",
-    header: "Kredit",
-    cell: ({ row }) => (
-      <span title="Status kredit terbaru tetap diperiksa oleh server saat evaluasi.">
-        <Status>{row.original.state === "DRAFT" ? "Belum diperiksa" : "Lihat evaluasi"}</Status>
-      </span>
-    ),
+    cell: ({ row }) => <Tone>{row.original.fulfillment}</Tone>,
   },
   {
     id: "remainder",
     header: "Sisa",
-    cell: ({ row }) => <Status>{row.original.remainderStatus}</Status>,
-  },
-  {
-    id: "next",
-    header: "Langkah berikutnya",
-    cell: ({ row: r }) =>
-      r.original.state === "DRAFT"
-        ? "Ajukan / evaluasi SO"
-        : r.original.remainderStatus === "Backorder"
-          ? "Tinjau alokasi dan backorder"
-          : r.original.fulfillment === "Belum Dikirim"
-            ? "Lanjutkan pemenuhan"
-            : "Pantau POD dan tagihan",
-  },
-  {
-    id: "action",
-    header: "Tindakan",
-    cell: ({ row: r }) => (
-      <Button asChild variant={r.original.state === "DRAFT" ? "default" : "outline"}>
-        <Link href={`${base}/${r.original.id}`}>Buka</Link>
-      </Button>
-    ),
+    cell: ({ row }) => <Tone>{row.original.remainderStatus}</Tone>,
   },
 ];
+
+function OrderFormPage({ row }: { row?: Order }) {
+  const can = useCan(),
+    router = useRouter();
+  const { command, pending, error } = useOrderCommand();
+  const allowed = row ? can("sales_order.update") : can("sales_order.create");
+  return (
+    <OfficePage
+      section="sales"
+      crumbs={[
+        ...crumbs,
+        ...(row ? [{ label: row.number, href: `${base}/${row.id}` }] : []),
+        { label: row ? "Revisi" : "Baru" },
+      ]}
+      title={row ? `Revisi ${row.number}` : "Sales Order baru"}
+      subtitle={
+        row
+          ? "Perbarui rincian pesanan dan catat alasan revisi. Revisi memerlukan pengajuan ulang."
+          : "Catat barang dan jumlah sesuai SP. Setelah diajukan, server memeriksa harga, satuan, kredit dan stok tanpa approval rutin."
+      }
+    >
+      {!allowed ? (
+        <PageNotice tone="error">Anda tidak memiliki izin untuk halaman ini.</PageNotice>
+      ) : (
+        <>
+          {error && <PageNotice tone="error">{error}</PageNotice>}
+          <SalesOrderForm
+            key={row ? `${row.id}:${row.version}` : "new"}
+            initial={row}
+            command={command}
+            pending={pending}
+            onSaved={(value) => router.push(`${base}/${value}`)}
+          />
+        </>
+      )}
+    </OfficePage>
+  );
+}
+
+function OrderRecordPage({ id, editing }: { id: string; editing: boolean }) {
+  const { principal } = useSession(),
+    can = useCan();
+  const allowed = can("sales_order.read");
+  const endpoint = `/operations/orders/${id}`;
+  const query = useQuery({
+    queryKey: ["operations", principal?.company_id, principal?.user_id, endpoint],
+    queryFn: ({ signal }) => apiRequest<{ data: Order }>(endpoint, { signal }),
+    enabled: allowed,
+  });
+  const row = query.data?.data;
+  if (!allowed || !row)
+    return (
+      <OfficePage section="sales" crumbs={[...crumbs, { label: "Detail" }]} title="Sales Order">
+        {!allowed ? (
+          <PageNotice tone="error">Anda tidak memiliki izin melihat Sales Order.</PageNotice>
+        ) : query.isError ? (
+          <PageNotice tone="error" onRetry={() => void query.refetch()}>
+            {query.error.message}
+          </PageNotice>
+        ) : (
+          <p role="status">Memuat Sales Order…</p>
+        )}
+      </OfficePage>
+    );
+  if (editing) return <OrderFormPage row={row} />;
+  return <OrderDetail row={row} />;
+}
+
 export function Value({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="so-value">
@@ -514,173 +556,268 @@ export function Totals({
     </aside>
   );
 }
-function OrderDetail({
-  row,
-  command,
-  pending,
-  can,
-}: {
-  row: Order;
-  command: OrderCommand;
-  pending: boolean;
-  can: (p: string) => boolean;
-}) {
+
+type Line = Order["lines"][number];
+const sum = (lines: Line[], pick: (line: Line) => Decimal.Value) =>
+  lines.reduce((total, line) => total.add(pick(line)), new Decimal(0));
+const shippedOf = (line: Line) =>
+  sum([line], () =>
+    (line.allocations ?? []).reduce(
+      (t, a) => t.add(a.acceptedQuantity).add(a.inTransitQuantity).add(a.returnedQuantity),
+      new Decimal(0),
+    ),
+  );
+const receivedOf = (line: Line) =>
+  (line.allocations ?? []).reduce((t, a) => t.add(a.acceptedQuantity), new Decimal(0));
+const pct = (part: Decimal, whole: Decimal) =>
+  whole.isZero() ? "0%" : `${part.div(whole).mul(100).toDecimalPlaces(2).toString()}%`;
+
+function OrderDetail({ row }: { row: Order }) {
+  const can = useCan();
+  const { command, pending, error } = useOrderCommand();
+  const journey = useOrderJourney(row, can);
   const [action, setAction] = useState<"close" | "cancel" | null>(null);
   const editable =
     ["DRAFT", "OPEN"].includes(row.state) &&
     row.fulfillments?.every((b) => b.state === "CANCELLED") &&
     row.lines.every((l) => /^0(?:\.0*)?$/.test(l.closedQuantity));
-  return (
-    <>
-      <Button className="sales-back" variant="outline" asChild>
-        <Link href="/operations/orders">
-          <ArrowLeft />
-          Kembali ke daftar
-        </Link>
-      </Button>
-      <div className="so-print-area web-form">
-        <div className="so-detail-overview">
-          <div className="so-dimensions">
-            <div>
-              <span>Pesanan</span>
-              <Status>{orderStates[row.state] ?? row.state}</Status>
-            </div>
-            <div>
-              <span>Pemenuhan</span>
-              <Status>{row.fulfillment}</Status>
-            </div>
-            <div>
-              <span>Sisa pesanan</span>
-              <Status>{row.remainderStatus}</Status>
-            </div>
+  const closable = can("sales_order.close_remainder") && ["OPEN", "DRAFT"].includes(row.state);
+  const tracked = row.lines.every((line) => line.allocations);
+  const ordered = sum(row.lines, (l) => l.orderedQuantity),
+    shipped = sum(row.lines, shippedOf),
+    closed = sum(row.lines, (l) => l.closedQuantity),
+    backorder = sum(row.lines, (l) => l.backorderQuantity);
+  const unit = new Set(row.lines.map((l) => l.product.baseUom?.name)).size === 1
+    ? (row.lines[0]?.product.baseUom?.name ?? "")
+    : "unit";
+  const customer = row.customer as { name?: string; channel?: { name: string } | null } | undefined;
+  const channel = customer?.channel?.name;
+  const rates = new Set(row.lines.map((l) => l.taxSnapshot?.rate ?? ""));
+  const taxTitle =
+    rates.size === 1 && row.lines[0]?.taxSnapshot
+      ? `PPN ${taxLabel(row.lines[0].taxSnapshot)}`
+      : "Pajak";
+  const submittedAt = (row as Order & { submittedAt?: string | null }).submittedAt;
+  const customerLink = (className: string) =>
+    customer?.name && can("master_customer.read") && row.customerId ? (
+      <Link className={className} href={`/master-data/customers/${row.customerId}`}>
+        {customer.name}
+      </Link>
+    ) : (
+      (customer?.name ?? "Pelanggan belum tersedia")
+    );
+  const items: ColumnDef<Line>[] = [
+    {
+      id: "product",
+      header: "Produk",
+      cell: ({ row: r }) => (
+        <span className="so-product">
+          <strong>{r.original.product.name}</strong>
+          <small>
+            {r.original.product.code} · {r.original.product.baseUom?.name ?? "—"}
+            {r.original.taxSnapshot ? ` · ${r.original.taxSnapshot.name}` : ""}
+          </small>
+        </span>
+      ),
+    },
+    ...(
+      [
+        ["orderedQuantity", "Dipesan"],
+        ["allocatedQuantity", "Teralokasi"],
+      ] as const
+    ).map(([key, label]) => ({
+      id: key,
+      header: label,
+      cell: ({ row: r }: { row: { original: Line } }) => (
+        <span className="so-num">{amount(r.original[key])}</span>
+      ),
+    })),
+    {
+      id: "shipped",
+      header: "Dikirim",
+      cell: ({ row: r }) => (
+        <span className="so-num">
+          {r.original.allocations ? amount(shippedOf(r.original).toString()) : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "received",
+      header: "Diterima (POD)",
+      cell: ({ row: r }) => (
+        <span className="so-num">
+          {r.original.allocations ? amount(receivedOf(r.original).toString()) : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "backorder",
+      header: "Backorder",
+      cell: ({ row: r }) => (
+        <span className="so-num" data-warn={new Decimal(r.original.backorderQuantity).gt(0) || undefined}>
+          {amount(r.original.backorderQuantity)}
+        </span>
+      ),
+    },
+    {
+      id: "closed",
+      header: "Ditutup",
+      cell: ({ row: r }) => <span className="so-num">{amount(r.original.closedQuantity)}</span>,
+    },
+    {
+      id: "price",
+      header: "Harga",
+      cell: ({ row: r }) => <span className="so-num">{amount(r.original.unitPrice, row.currency)}</span>,
+    },
+    {
+      id: "subtotal",
+      header: "Subtotal",
+      cell: ({ row: r }) => (
+        <span className="so-num so-strong">{amount(r.original.subtotal, row.currency)}</span>
+      ),
+    },
+  ];
+  const summary = (
+    <div className="so-tab-stack">
+      <div className="so-summary">
+        <dl className="so-kv">
+          <div>
+            <dt>Pelanggan</dt>
+            <dd>{customerLink("page-frame-link")}</dd>
           </div>
-        </div>
-        <OrderJourney
-          row={row}
-          can={can}
-          command={command}
-          pending={pending}
-          onCloseRemainder={() => setAction("close")}
-          history={
-            can("audit_event.read") ? (
-              <History id={row.id} />
+          <div>
+            <dt>Channel</dt>
+            <dd data-empty={!channel || undefined}>{channel ?? "Belum ditetapkan"}</dd>
+          </div>
+          <div className="so-kv-span">
+            <dt>Alamat pengantaran</dt>
+            <dd>{row.deliveryAddress}</dd>
+          </div>
+          <div>
+            <dt>Ketentuan pembayaran (snapshot)</dt>
+            <dd data-empty={!row.paymentSnapshot || undefined}>
+              {row.paymentSnapshot ? terms(row.paymentSnapshot) : "Ditetapkan saat SO diajukan"}
+            </dd>
+          </div>
+          <div>
+            <dt>Ongkir</dt>
+            <dd data-empty={!row.freightTermsSnapshot || undefined}>
+              {!row.freightTermsSnapshot
+                ? "Belum ditetapkan"
+                : row.freightTermsSnapshot.payer === "COMPANY"
+                  ? "Ditanggung perusahaan"
+                  : row.freightTermsSnapshot.payer === "CARRIER"
+                    ? "Ditanggung ekspedisi"
+                    : "Ditagihkan per pengiriman"}
+              {row.freightEstimate != null
+                ? ` · estimasi ${amount(row.freightEstimate, row.currency)}`
+                : ""}
+            </dd>
+          </div>
+          <div>
+            <dt>Catatan</dt>
+            <dd data-empty={!row.notes || undefined}>{row.notes || "Tidak ada"}</dd>
+          </div>
+        </dl>
+        <aside className="so-summary-aside" aria-label="Nilai dan progres pesanan">
+          <div className="so-box">
+            <dl className="so-sums">
+              <div>
+                <dt>Nilai barang · {amount(ordered.toString())} {unit}</dt>
+                <dd>{amount(row.subtotal, row.currency)}</dd>
+              </div>
+              <div>
+                <dt>{taxTitle}</dt>
+                <dd>{row.taxAmount == null ? "Ditetapkan saat evaluasi" : amount(row.taxAmount, row.currency)}</dd>
+              </div>
+              <div className="so-sums-total">
+                <dt>Total barang</dt>
+                <dd>{row.total == null ? "Menunggu evaluasi" : amount(row.total, row.currency)}</dd>
+              </div>
+            </dl>
+            <p className="page-frame-subtitle">Ongkir dihitung per pengiriman, terpisah dari nilai barang.</p>
+          </div>
+          <div className="so-box">
+            <strong className="so-box-title">Progres jumlah</strong>
+            {tracked ? (
+              <>
+                <div
+                  className="so-progress"
+                  role="img"
+                  aria-label={`Dikirim ${amount(shipped.toString())} dari ${amount(ordered.toString())} ${unit}, backorder ${amount(backorder.toString())}, ditutup ${amount(closed.toString())}`}
+                >
+                  <span style={{ width: pct(shipped, ordered) }} />
+                  <span data-kind="closed" style={{ width: pct(closed, ordered) }} />
+                </div>
+                <div className="so-progress-legend">
+                  <span>Dikirim {amount(shipped.toString())}</span>
+                  <span>
+                    {backorder.gt(0)
+                      ? `Backorder ${amount(backorder.toString())}`
+                      : `Ditutup ${amount(closed.toString())}`}
+                  </span>
+                  <span>Dipesan {amount(ordered.toString())}</span>
+                </div>
+              </>
             ) : (
-              <p>Anda tidak memiliki izin membaca riwayat.</p>
-            )
-          }
-        >
-          <div className="so-detail-layout">
-            <div className="so-detail-main">
-              <Panel title="Pelanggan & referensi">
-                <div className="so-info-grid">
-                  <Value label="Pelanggan">{row.customer?.name}</Value>
-                  <Value label="Alamat">{row.deliveryAddress}</Value>
-                  <Value label="Tanggal kirim diminta">Belum tersedia</Value>
-                  <Value label="Referensi SP Pelanggan">{row.customerReference}</Value>
-                  <Value label="Termin">{terms(row.paymentSnapshot)}</Value>
-                  <Value label={"Dicatat oleh"}>{row.createdByName}</Value>
-                </div>
-              </Panel>
-              <Panel title="Pengiriman & ongkos kirim">
-                <Value label="Ongkos kirim">
-                  {row.freightTermsSnapshot?.payer === "COMPANY"
-                    ? "Ditanggung perusahaan"
-                    : row.freightTermsSnapshot?.payer === "CARRIER"
-                      ? "Ditanggung ekspedisi"
-                      : "Ditagihkan ke pelanggan"}
-                </Value>
-                <Value label="Estimasi ongkir">
-                  {row.freightEstimate == null
-                    ? "Belum ditetapkan"
-                    : amount(row.freightEstimate, row.currency)}
-                </Value>
-                <Value label="Penagihan">Per pengiriman</Value>
-                <Value label="Perhitungan PPN">
-                  {row.freightTermsSnapshot?.tax_mode === "TAXABLE"
-                    ? "Sebelum PPN · Kena PPN"
-                    : "Sesudah PPN · Tidak kena PPN"}
-                </Value>
-                <p className="so-help">Nilai final mengikuti masing-masing tahap pengiriman.</p>
-              </Panel>
-              <Panel title="Catatan SO">
-                <p>{row.notes || "Tidak ada catatan."}</p>
-              </Panel>
-            </div>
-            <aside className="so-detail-aside" aria-label="Nilai dan catatan pesanan">
-              <Panel title="Nilai pesanan">
-                <Totals
-                  subtotal={row.subtotal}
-                  tax={row.taxAmount}
-                  total={row.total}
-                  currency={row.currency}
-                  freight={row.freightEstimate}
-                />
-              </Panel>
-              <Panel title="Hasil evaluasi">
-                <div className="sales-evaluation">
-                  <Value label="Aturan pembayaran">
-                    {row.paymentSnapshot ? terms(row.paymentSnapshot) : "Belum dievaluasi"}
-                  </Value>
-                  <Value label="Kredit">Lihat hasil evaluasi server</Value>
-                  <Value label="Stok">
-                    <Status>{row.remainderStatus}</Status>
-                  </Value>
-                  <Value label="Status pesanan">
-                    <Status>{orderStates[row.state] ?? row.state}</Status>
-                  </Value>
-                </div>
-              </Panel>
-              <Panel title="Progres pemenuhan">
-                {[
-                  ["orderedQuantity", "Dipesan"],
-                  ["allocatedQuantity", "Teralokasi"],
-                  ["shippedQuantity", "Terkirim"],
-                  ["backorderQuantity", "Backorder"],
-                ].map(([key, label]) => (
-                  <Value key={key} label={label!}>
-                    {key === "shippedQuantity" && row.lines.some((line) => !line.allocations)
-                      ? "Belum tersedia"
-                      : amount(
-                          row.lines
-                            .reduce(
-                              (sum, line) =>
-                                sum.add(
-                                  key === "shippedQuantity"
-                                    ? (line.allocations ?? []).reduce(
-                                        (total, allocation) =>
-                                          total
-                                            .add(allocation.acceptedQuantity)
-                                            .add(allocation.inTransitQuantity)
-                                            .add(allocation.returnedQuantity),
-                                        new Decimal(0),
-                                      )
-                                    : String(line[key as "orderedQuantity"] ?? "0"),
-                                ),
-                              new Decimal(0),
-                            )
-                            .toString(),
-                        )}{" "}
-                    unit
-                  </Value>
-                ))}
-              </Panel>
-            </aside>
+              <p className="page-frame-subtitle">
+                Jumlah terkirim tersedia setelah ada alokasi. Dipesan {amount(ordered.toString())}{" "}
+                {unit}.
+              </p>
+            )}
           </div>
-        </OrderJourney>
+        </aside>
       </div>
-
-      <div className="so-footer so-detail-actions">
-        {can("sales_order.close_remainder") && ["OPEN", "DRAFT"].includes(row.state) && (
-          <>
-            <Button variant="outline" disabled={pending} onClick={() => setAction("cancel")}>
-              Batalkan SO / sisa
-            </Button>
+      <section>
+        <h3 className="so-section-title">Barang</h3>
+        <div className="so-embedded">
+          <DataTable data={row.lines} columns={items} total={row.lines.length} label="barang" showColumns={false} />
+        </div>
+        <p className="page-frame-subtitle so-footnote">
+          Jumlah ditutup tidak dihitung sebagai terkirim dan tidak menghapus jumlah pesanan asli.
+        </p>
+      </section>
+      <details className="so-exceptions">
+        <summary>Persetujuan unlock & harga khusus</summary>
+        <SalesExceptions row={row} command={command} pending={pending} can={can} />
+      </details>
+    </div>
+  );
+  return (
+    <OfficePage
+      section="sales"
+      crumbs={[...crumbs, { label: row.number }]}
+      title={row.number}
+      subtitle={
+        <>
+          {customerLink("page-frame-band-link")}
+          {row.customerReference ? ` · SP ${row.customerReference}` : ""} ·{" "}
+          {submittedAt ? "diajukan" : "dibuat"}{" "}
+          {new Date(submittedAt ?? row.createdAt).toLocaleDateString("id-ID", {
+            dateStyle: "medium",
+          })}
+        </>
+      }
+      meta={
+        <>
+          <MetaItem label="Status pesanan">
+            <Tone>{orderStates[row.state] ?? row.state}</Tone>
+          </MetaItem>
+          <MetaItem label="Pemenuhan">
+            <Tone>{row.fulfillment}</Tone>
+          </MetaItem>
+          <MetaItem label="Sisa">
+            <Tone>{row.remainderStatus}</Tone>
+          </MetaItem>
+        </>
+      }
+      actions={
+        <>
+          {closable && backorder.gt(0) && (
             <Button variant="outline" disabled={pending} onClick={() => setAction("close")}>
-              Tutup sisa pesanan
+              Tutup sisa
             </Button>
-          </>
-        )}
-        {(can("sales_order.update") || can("sales_order.close_remainder")) && (
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">Lainnya</Button>
@@ -689,69 +826,77 @@ function OrderDetail({
               {can("sales_order.update") && (
                 <DropdownMenuItem disabled={!editable || pending} asChild={!!editable}>
                   {editable ? (
-                    <Link href={`/operations/orders/${row.id}/edit`}>Edit/Revisi</Link>
+                    <Link href={`${base}/${row.id}/edit`}>Revisi SO</Link>
                   ) : (
-                    <span>Edit/Revisi — pemenuhan masih terikat</span>
+                    <span>Revisi SO tidak tersedia: pemenuhan sudah berjalan</span>
                   )}
                 </DropdownMenuItem>
               )}
-              {can("sales_order.close_remainder") && ["OPEN", "DRAFT"].includes(row.state) && (
-                <>
-                  <DropdownMenuItem disabled={pending} onSelect={() => setAction("close")}>
-                    Tutup Sisa Pesanan
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled={pending} onSelect={() => setAction("cancel")}>
-                    Batalkan Sisa
-                  </DropdownMenuItem>
-                </>
+              {closable && (
+                <DropdownMenuItem disabled={pending} onSelect={() => setAction("cancel")}>
+                  Batalkan SO / sisa
+                </DropdownMenuItem>
               )}
+              <DropdownMenuItem onSelect={() => window.print()}>Cetak SO</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        )}{" "}
-        <Button variant="outline" onClick={() => window.print()}>
-          Cetak SO
-        </Button>
-        <ProformaAction row={row} canIssue={can("proforma.issue")} />
-        {can("fulfillment.pick") &&
-          row.fulfillments?.some((b) => b.state === "ALLOCATED" && !b.pickList) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button disabled={pending}>Buat Pick Slip</Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {row.fulfillments
-                  .filter((b) => b.state === "ALLOCATED" && !b.pickList)
-                  .map((b) => (
-                    <DropdownMenuItem
-                      key={b.id}
-                      onSelect={() =>
-                        void command(`/fulfillment-batches/${b.id}/create-picking`).catch(
-                          () => undefined,
-                        )
-                      }
-                    >
-                      {b.number}
-                    </DropdownMenuItem>
-                  ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+          {row.state === "DRAFT" && can("sales_order.submit") ? (
+            <Button
+              disabled={pending}
+              onClick={() => void command(`/sales-orders/${row.id}/submit`).catch(() => undefined)}
+            >
+              {pending ? "Memproses…" : "Ajukan SO"}
+            </Button>
+          ) : (
+            can("sales_order.create") && (
+              <Button asChild>
+                <Link href={`${base}/new`}>
+                  <IconPlus aria-hidden="true" />
+                  SO baru
+                </Link>
+              </Button>
+            )
           )}
-        {row.state === "DRAFT" && can("sales_order.submit") && (
-          <Button
-            disabled={pending}
-            onClick={() => void command(`/sales-orders/${row.id}/submit`).catch(() => undefined)}
-          >
-            {pending ? "Memproses…" : "Ajukan SO"}
-          </Button>
-        )}
-      </div>
-
-      {
-        <details className="so-exceptions">
-          <summary>Persetujuan unlock & harga khusus</summary>
-          {<SalesExceptions row={row} command={command} pending={pending} can={can} />}
-        </details>
+        </>
       }
+    >
+      {error && <PageNotice tone="error">{error}</PageNotice>}
+      <NextStep row={row} journey={journey} can={can} command={command} pending={pending} />
+      <DetailTabs
+        tabs={[
+          { id: "summary", label: "Ringkasan", content: summary },
+          {
+            id: "fulfillment",
+            label: "Pemenuhan",
+            count: journey.active.length,
+            content: (
+              <FulfillmentTab
+                row={row}
+                journey={journey}
+                can={can}
+                command={command}
+                pending={pending}
+                onCloseRemainder={() => setAction("close")}
+              />
+            ),
+          },
+          {
+            id: "documents",
+            label: "Dokumen",
+            count: journey.q.isSuccess ? journey.entries.length + 1 : undefined,
+            content: <DocumentsTab row={row} journey={journey} can={can} />,
+          },
+          {
+            id: "history",
+            label: "Riwayat",
+            content: can("audit_event.read") ? (
+              <History id={row.id} />
+            ) : (
+              <PageNotice>Anda tidak memiliki izin membaca riwayat.</PageNotice>
+            ),
+          },
+        ]}
+      />
       {action && (
         <CloseRemainder
           row={row}
@@ -761,68 +906,27 @@ function OrderDetail({
           onClose={() => setAction(null)}
         />
       )}
-    </>
+    </OfficePage>
   );
 }
 
-function ProformaAction({ row, canIssue }: { row: Row; canIssue: boolean }) {
-  const documentFor = (batch: Row) =>
-    row.documents?.find((d) => d.batchId === batch.id && d.kind.startsWith("PROFORMA"));
-  const canReview = (batch: Row) => canIssue && row.state === "OPEN" && batch.state === "ALLOCATED";
-  const batches = (row.fulfillments ?? []).filter((b) => canReview(b) || documentFor(b));
-  if (!batches.length) return null;
-  const hrefFor = (batch: Row) => {
-    const document = documentFor(batch);
-    if (document?.status === "REVISION_REQUIRED" && canReview(batch))
-      return `/operations/proformas/from-order/${row.id}/${batch.id}`;
-    return document
-      ? `/operations/proformas/${document.id}`
-      : `/operations/proformas/from-order/${row.id}/${batch.id}`;
-  };
-  const labelFor = (batch: Row) => {
-    const document = documentFor(batch);
-    if (!document) return "Belum diterbitkan · Buka detail";
-    if (document.status === "VOID" || batch.state === "CANCELLED")
-      return "Dibatalkan · Lihat arsip";
-    if (document.status === "REVISION_REQUIRED")
-      return canReview(batch) ? "Perlu revisi · Buka revisi" : "Perlu revisi · Lihat dokumen";
-    return document.status === "ISSUED" ? "Diterbitkan · Lihat Proforma" : "Lihat Proforma";
-  };
-  if (batches.length === 1) {
-    return (
-      <Button variant="outline" className="so-proforma-action" asChild>
-        <Link href={hrefFor(batches[0]!)}>
-          {documentFor(batches[0]!) ? "Lihat Proforma" : "Tinjau & Terbitkan Proforma"}
-        </Link>
-      </Button>
-    );
-  }
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="so-proforma-action">
-          Tinjau Proforma <ChevronDown data-icon="inline-end" aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {batches.map((batch) => (
-          <DropdownMenuItem key={batch.id} asChild>
-            <Link href={hrefFor(batch)} className="flex flex-col items-start gap-1">
-              <span>{batch.number}</span>
-              <span className="text-muted-foreground text-xs">
-                {documentFor(batch)?.number ?? "Nomor belum tersedia"}
-              </span>
-              <span className="text-xs">{labelFor(batch)}</span>
-            </Link>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
+const auditLabels: Record<string, string> = {
+  "sales_order.created": "SO dibuat",
+  "sales_order.submitted": "SO diajukan dan dievaluasi",
+  "sales_order.revised": "SO direvisi",
+  "sales_order.remainder_closed": "Sisa pesanan ditutup",
+  "sales_order.cancelled": "SO dibatalkan",
+};
+const auditTones: Record<string, string> = {
+  "sales_order.created": "#5A6680",
+  "sales_order.submitted": "#1F7FE0",
+  "sales_order.revised": "#8A5300",
+  "sales_order.remainder_closed": "#5A6680",
+  "sales_order.cancelled": "#B42318",
+};
+// Riwayat (canvas SO-detail): garis waktu bertanda sabit, judul aktivitas dan waktu di kanan.
 function History({ id }: { id: string }) {
   const { principal } = useSession();
-  const [category, setCategory] = useState("ALL");
   const q = useQuery({
     queryKey: ["operations", principal?.company_id, principal?.user_id, "audit", id],
     queryFn: ({ signal }) =>
@@ -831,70 +935,44 @@ function History({ id }: { id: string }) {
         { signal },
       ),
   });
-  if (q.isLoading) return <p role="status">Memuat riwayat…</p>;
-  if (q.error)
+  if (q.isPending) return <p role="status">Memuat riwayat…</p>;
+  if (q.isError)
     return (
-      <>
-        <ErrorBox message={String(q.error)} />
-        <Button variant="outline" onClick={() => void q.refetch()}>
-          Coba Lagi
-        </Button>
-      </>
+      <PageNotice tone="error" onRetry={() => void q.refetch()}>
+        {q.error.message}
+      </PageNotice>
     );
-  const rows = (q.data?.data ?? []).filter(
-    (event) =>
-      category === "ALL" ||
-      (category === "DOCUMENT"
-        ? /document|proforma|invoice/.test(event.action)
-        : category === "PAYMENT"
-          ? /receipt|payment/.test(event.action)
-          : /order|allocation|remainder/.test(event.action)),
+  const rows = [...q.data.data].sort(
+    (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
   );
   return (
-    <>
-      <div className="sales-list-tabs">
-        {[
-          ["ALL", "Semua"],
-          ["STATUS", "Status"],
-          ["DOCUMENT", "Dokumen"],
-          ["PAYMENT", "Pembayaran"],
-        ].map(([value, label]) => (
-          <button key={value} aria-pressed={category === value} onClick={() => setCategory(value!)}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <DataTable
-        data={rows}
-        total={rows.length}
-        showColumns={false}
-        columns={[
-          {
-            id: "time",
-            header: "Waktu",
-            cell: ({ row: r }) => new Date(r.original.occurredAt).toLocaleString("id-ID"),
-          },
-          { id: "actor", header: "Pengguna", cell: () => "Lihat audit rinci" },
-          {
-            id: "action",
-            header: "Aktivitas",
-            cell: ({ row: r }) =>
-              (
-                ({
-                  "sales_order.created": "SO dibuat",
-                  "sales_order.submitted": "SO diajukan dan dievaluasi",
-                  "sales_order.revised": "SO direvisi",
-                  "sales_order.remainder_closed": "Sisa pesanan ditutup",
-                  "sales_order.cancelled": "SO dibatalkan",
-                }) as Record<string, string>
-              )[r.original.action] ?? r.original.action,
-          },
-          { id: "notes", header: "Keterangan", cell: () => "—" },
-        ]}
-      />
-      <p className="sales-notice">
+    <div className="so-tab-stack">
+      {rows.length ? (
+        <ol className="so-timeline">
+          {rows.map((event) => (
+            <li key={event.id}>
+              <svg viewBox="0 0 12 14" aria-hidden="true" focusable="false">
+                <path
+                  fill={auditTones[event.action] ?? "#0B4DA2"}
+                  d="M8 1C4 1.4 1 4.4 1 7.9 1 11 3.3 13.2 6.5 13 4.3 12.3 2.8 10.3 2.8 7.8 2.8 4.9 4.9 2.3 8 1z"
+                />
+              </svg>
+              <strong>{auditLabels[event.action] ?? event.action}</strong>
+              <time dateTime={event.occurredAt}>
+                {new Date(event.occurredAt).toLocaleString("id-ID", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </time>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="page-frame-subtitle">Belum ada aktivitas.</p>
+      )}
+      <p className="page-frame-subtitle so-footnote">
         Pembatalan atau penutupan sisa memerlukan catatan konfirmasi pelanggan.
       </p>
-    </>
+    </div>
   );
 }

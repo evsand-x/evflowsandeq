@@ -811,7 +811,7 @@ Koreksi review sidebar 7 Oktober 2026: gunakan accordion satu modul dan satu sub
 
 ### Arah visual Dashboard terbaru — 7 Oktober 2026
 
-Pengguna menyetujui tema terang netral-charcoal, emerald dan Plus Jakarta Sans untuk Dashboard, menggantikan ketentuan biru/Inter sebelumnya pada permukaan tersebut. Ringkasan Eksekutif memprioritaskan akses tugas, KPI terpisah, tindak lanjut, analisis dan akses cepat berizin. Hierarki tujuh tampilan, izin, formula dan sumber data tidak berubah. Lihat [standar global](../mockup/web-design-standard.md) dan [cakupan modernisasi](../mockup/dashboard-modern-2026-10-07.md).
+Keputusan 23 Oktober 2026: aksen emerald diganti biru dari logo evflow untuk seluruh Office (navy `#071A4A`, primer `#0B4DA2`, fokus `#1F7FE0`), dengan pita judul bergradien, ikon satu warna bergaris tegas, menu akun dan notifikasi di topbar, tab garis bawah dan popup filter; rincian normatif di [standar global](../mockup/web-design-standard.md). Sebelumnya: pengguna menyetujui tema terang netral-charcoal, emerald dan Plus Jakarta Sans untuk Dashboard, menggantikan ketentuan biru/Inter sebelumnya pada permukaan tersebut. Ringkasan Eksekutif memprioritaskan akses tugas, KPI terpisah, tindak lanjut, analisis dan akses cepat berizin. Hierarki tujuh tampilan, izin, formula dan sumber data tidak berubah. Lihat [standar global](../mockup/web-design-standard.md) dan [cakupan modernisasi](../mockup/dashboard-modern-2026-10-07.md).
 
 ### Akses Proforma operasional — 7 Oktober 2026
 

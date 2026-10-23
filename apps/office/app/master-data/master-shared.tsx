@@ -16,6 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SelectionField } from "@/components/web/selection-field";
+import { FilterPopover } from "@/components/web/page-frame";
+import { IconSearch } from "@/components/web/icons";
 import { apiRequest } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
@@ -83,35 +85,49 @@ export function useListParams() {
   return { q, state, parent, page, search, setSearch, set, query, get };
 }
 
+// Pencarian tetap terlihat; filter lain di dalam popup Filter. filterKeys = parameter URL yang dihitung.
 export function ListFilters({
   list,
   searchLabel,
   status = true,
+  filterKeys = [],
   children,
 }: {
   list: ReturnType<typeof useListParams>;
   searchLabel: string;
   status?: boolean;
+  filterKeys?: string[];
   children?: React.ReactNode;
 }) {
+  const keys = [...(status ? ["state"] : []), ...filterKeys];
+  const count = keys.filter((key) => list.get(key) !== "ALL").length;
   return (
     <>
-      <Input
-        aria-label={searchLabel}
-        placeholder="Cari kode atau nama…"
-        value={list.search}
-        onChange={(event) => list.setSearch(event.target.value)}
-      />
-      {status && (
-        <SelectionField
-          label="Status"
-          hideLabel
-          value={[list.state]}
-          options={stateOptions}
-          onChange={(value) => list.set({ state: value[0] ?? "ALL", page: 1 })}
+      <div className="page-frame-search">
+        <IconSearch />
+        <Input
+          aria-label={searchLabel}
+          placeholder="Cari kode atau nama…"
+          value={list.search}
+          onChange={(event) => list.setSearch(event.target.value)}
         />
+      </div>
+      {(status || children) && (
+        <FilterPopover
+          count={count}
+          onReset={() => list.set({ ...Object.fromEntries(keys.map((key) => [key, "ALL"])), page: 1 })}
+        >
+          {status && (
+            <SelectionField
+              label="Status data"
+              value={[list.state]}
+              options={stateOptions}
+              onChange={(value) => list.set({ state: value[0] ?? "ALL", page: 1 })}
+            />
+          )}
+          {children}
+        </FilterPopover>
       )}
-      {children}
     </>
   );
 }

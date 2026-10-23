@@ -1,16 +1,90 @@
 .page-frame {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+.page-frame-body {
+  display: flex;
+  flex-direction: column;
   gap: 20px;
   min-width: 0;
-  padding: 28px 32px 24px;
+  padding: 24px 32px 32px;
 }
 .page-frame-header {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+}
+/* Pita judul: gradien logo hanya di sini, sebagai pemisah identitas halaman dari area kerja. */
+.page-frame-band {
+  position: relative;
+  overflow: hidden;
+  padding: 24px 32px 28px;
+  background: linear-gradient(115deg, var(--ev-color-navy) 0%, var(--ev-color-navy-2) 50%, hsl(var(--primary)) 100%);
+  color: #ffffff;
+}
+.page-frame-band-mark {
+  position: absolute;
+  right: 40px;
+  top: -130px;
+  width: 340px;
+  height: 340px;
+  pointer-events: none;
+}
+.page-frame-band > :not(svg) {
+  position: relative;
+}
+.page-frame-band .page-frame-title h1 {
+  color: #ffffff;
+  font-size: 30px;
+  line-height: 38px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.page-frame-band .page-frame-subtitle,
+.page-frame-band .page-frame-crumbs,
+.page-frame-band .page-frame-crumbs :is(a, span, li) {
+  color: var(--ev-color-on-navy-muted);
+}
+.page-frame-band .page-frame-crumbs a:hover {
+  color: #ffffff;
+}
+.page-frame-band .page-frame-crumbs [data-slot="breadcrumb-page"] {
+  color: #ffffff;
+}
+.page-frame-band .page-frame-subtitle {
+  font-size: 14px;
+  line-height: 20px;
+}
+.page-frame-band [data-slot="button"][data-variant="default"] {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: var(--ev-color-navy);
+}
+.page-frame-band [data-slot="button"][data-variant="default"]:hover {
+  background: hsl(var(--accent));
+}
+.page-frame-band [data-slot="button"][data-variant="outline"] {
+  background: transparent;
+  border-color: #6f8fc4;
+  color: #ffffff;
+}
+.page-frame-band [data-slot="button"][data-variant="outline"]:hover {
+  background: rgb(255 255 255 / 8%);
+}
+.page-frame-band [data-slot="button"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ev-color-navy), 0 0 0 4px #ffffff;
+}
+@media (max-width: 900px) {
+  .page-frame-band {
+    padding: 20px 16px 22px;
+  }
+  .page-frame-band-mark {
+    display: none;
+  }
 }
 .page-frame-heading {
   display: flex;
@@ -74,6 +148,42 @@
   border-bottom-color: var(--ev-color-primary);
   font-weight: 600;
 }
+.page-frame-filter-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: var(--ev-radius-badge);
+  background: hsl(var(--primary));
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+.page-frame-filter-panel {
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+  border-radius: var(--ev-radius-card);
+}
+.page-frame-filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.page-frame-filter-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.page-frame-filter-fields > [data-slot="field"] {
+  width: 100%;
+}
 .page-frame-badge {
   display: inline-flex;
   align-items: center;
@@ -81,7 +191,7 @@
   line-height: 18px;
   font-weight: 600;
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--ev-radius-badge);
   background: var(--ev-color-neutral-soft);
   color: var(--ev-color-text-muted);
 }
@@ -107,6 +217,24 @@
   flex: 1 1 260px;
   min-width: 180px;
   max-width: 420px;
+}
+.page-frame-search {
+  position: relative;
+  flex: 1 1 260px;
+  min-width: 180px;
+  max-width: 420px;
+}
+.page-frame-search > svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+.page-frame-search > input {
+  width: 100%;
+  padding-left: 38px;
 }
 .page-frame .crm-table-toolbar > [data-slot="field"] {
   flex: 0 1 170px;
@@ -202,7 +330,7 @@
 }
 .page-frame-form-nav {
   position: sticky;
-  top: 16px;
+  top: calc(var(--ev-topbar-height, 0px) + 16px);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -314,7 +442,7 @@
   }
 }
 @media (max-width: 900px) {
-  .page-frame {
+  .page-frame-body {
     padding: 20px 16px;
   }
   .page-frame-form.web-form {
@@ -329,4 +457,184 @@
   .page-frame-fields {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Deret status dokumen di pita (detail transaksi). */
+.page-frame-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin: 10px 0 0;
+}
+.page-frame-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.page-frame-meta-item dt {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  color: var(--ev-color-on-navy-muted);
+}
+.page-frame-meta-item dd {
+  margin: 0;
+}
+/* Nada badge berdasar makna, dipakai transaksi: success, warning, danger, info, neutral. */
+.page-frame-badge[data-tone="success"] {
+  background: var(--ev-color-success-soft);
+  color: var(--ev-color-success);
+}
+.page-frame-badge[data-tone="warning"] {
+  background: var(--ev-color-warning-soft);
+  color: var(--ev-color-warning);
+}
+.page-frame-badge[data-tone="danger"] {
+  background: var(--ev-color-danger-soft);
+  color: var(--ev-color-danger);
+}
+.page-frame-badge[data-tone="info"] {
+  background: var(--ev-color-primary-soft);
+  color: var(--ev-color-primary);
+}
+
+/* Toolbar daftar canvas Supplier-list: segmen status, chip filter, filter aktif, footer popup. */
+.page-frame-segments {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: #eef1f6;
+}
+.page-frame-segments button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #3d4a63;
+  cursor: pointer;
+}
+.page-frame-segments button:hover {
+  background: #ffffff;
+}
+.page-frame-segments button[aria-pressed="true"] {
+  background: #ffffff;
+  color: var(--ev-color-navy);
+  box-shadow: 0 1px 2px rgb(7 26 74 / 12%);
+}
+.page-frame-segments button span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ev-color-text-muted);
+}
+.page-frame-segments button:focus-visible,
+.page-frame-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--ev-color-azure);
+}
+.page-frame-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #c6d3e6;
+  border-radius: 6px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: #3d4a63;
+  cursor: pointer;
+}
+.page-frame-chip[aria-pressed="true"] {
+  border-color: hsl(var(--primary));
+  background: var(--ev-color-primary-soft);
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+.page-frame-chip > span {
+  font-size: 11px;
+  font-weight: 700;
+}
+.page-frame-chip > svg {
+  width: 12px;
+  height: 12px;
+}
+.page-frame-chip-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.page-frame-chip-group legend {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ev-color-text-muted);
+}
+.page-frame-chip-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.page-frame-filter-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #eef1f6;
+}
+.page-frame-active-filters {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px -16px -16px;
+  padding: 10px 16px;
+  border-top: 1px solid #eef1f6;
+}
+.page-frame-active-filters > span {
+  font-size: 12px;
+  color: var(--ev-color-text-muted);
+}
+/* Popup Filter sesuai canvas Supplier-list: 340 px, padding 18, jarak 16, isi bergulir bila layar pendek. */
+.page-frame-filter-panel {
+  width: 340px;
+  padding: 18px;
+  max-height: calc(var(--radix-popover-content-available-height, 80vh) - 16px);
+  overflow-y: auto;
+}
+.page-frame-filter-panel .page-frame-filter-fields {
+  gap: 16px;
+}
+.page-frame-filter-panel .page-frame-filter-head strong {
+  font-size: 14px;
+}
+.page-frame-filter-close {
+  width: 32px;
+  height: 32px;
+}
+.page-frame-filter-panel .page-frame-chip-group [data-slot="field"],
+.page-frame-filter-panel .page-frame-chip-group button[data-slot="select-trigger"] {
+  width: 100%;
+}
+/* Angka pada tab detail (canvas SO-detail): chip abu-abu kecil. */
+.page-frame-tab-count {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #eef1f6;
+  color: #3d4a63;
+  font-size: 11px;
+  font-weight: 700;
 }

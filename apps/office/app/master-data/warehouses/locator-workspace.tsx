@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Pencil, Plus } from "lucide-react";
+import { IconPencil as Pencil, IconPlus as Plus } from "@/components/web/icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -191,11 +191,10 @@ function LocatorList() {
         busy={rows.isFetching}
         label="lokator"
         toolbar={
-          <ListFilters list={list} searchLabel="Cari kode atau nama lokator">
+          <ListFilters list={list} searchLabel="Cari kode atau nama lokator" filterKeys={["parent"]}>
             {warehouses.data && (
               <SelectionField
                 label="Gudang"
-                hideLabel
                 value={[list.parent]}
                 options={[
                   { id: "ALL", name: "Semua gudang" },

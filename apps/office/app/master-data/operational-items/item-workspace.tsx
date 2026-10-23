@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Pencil, Plus } from "lucide-react";
+import { IconPencil as Pencil, IconPlus as Plus } from "@/components/web/icons";
 import { Button } from "@/components/ui/button";
 import {
   DataTable,

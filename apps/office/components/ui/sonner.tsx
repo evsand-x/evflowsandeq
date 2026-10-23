@@ -1,26 +1,22 @@
 "use client";
 
-import {
-  CircleCheckIcon,
-  InfoIcon,
-  Loader2Icon,
-  OctagonXIcon,
-  TriangleAlertIcon,
-} from "lucide-react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { IconAlert, IconCheck, IconError, IconInfo, IconLoader } from "@/components/web/icons";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme="light"
       className="toaster group"
+      position="bottom-right"
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
-        info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />,
+        success: <IconCheck size={18} />,
+        info: <IconInfo size={18} />,
+        warning: <IconAlert size={18} />,
+        error: <IconError size={18} />,
+        loading: <IconLoader size={18} className="animate-spin" />,
       }}
+      toastOptions={{ classNames: { toast: "ev-toast" } }}
       style={
         {
           "--normal-bg": "hsl(var(--popover))",

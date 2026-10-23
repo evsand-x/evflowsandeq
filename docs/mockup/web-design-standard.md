@@ -1,6 +1,32 @@
 # Standar desain global web evflow
 
-Keputusan lanjutan 7 Oktober 2026: tema netral-emerald dan Plus Jakarta Sans berlaku untuk seluruh Office, termasuk transaksi, CRM, Master, Finance, Warehouse, HRIS yang tersedia, Setting dan portal. Prioritas QA desktop; pekerjaan khusus mobile ditunda. Ketentuan Dashboard-only sebelumnya menjadi historis. Radius kartu 14px/kontrol 9px memakai token bersama; Field tidak berubah. [Cakupan rollout dan data uji](web-modern-rollout-2026-10-07.md).
+## Fondasi visual biru logo — 23 Oktober 2026
+
+Disetujui pengguna dari [canvas evflow Office Design](https://claude.ai/artifact/U1gLxdQ8GcjczdRcaiuybx) lalu diterapkan ke Office. Bagian ini menggantikan ketentuan warna emerald (7 Oktober) dan tabel warna biru `#064A9D`/Inter di bawah; ketentuan lain tetap berlaku bila tidak bertentangan. Sumber token: `packages/design-tokens/src/theme.css` (`:root.office-modern`); gaya shell: `apps/office/app/office-foundation.css`; ikon: `apps/office/components/web/icons.tsx`.
+
+| Peran | Nilai | Pemakaian |
+|---|---|---|
+| Navy 900 | `#071A4A` | Item navigasi aktif, avatar, toast sukses, awal gradien pita |
+| Biru merek 700 (primer) | `#0B4DA2` | Tombol utama, tautan, tab aktif, angka filter |
+| Biru terang 500 | `#1F7FE0` | Cincin fokus, tanda sabit aktif; tidak untuk teks kecil |
+| Latar halaman / permukaan | `#F3F6FB` / `#FFFFFF` | Area kerja putih di atas latar dingin |
+| Teks / teks kedua | `#0E1B33` / `#5A6680` | Kontras AA pada putih dan latar |
+| Garis / garis kontrol | `#D8E0EC` / `#C6D3E6` | Panel datar, input |
+| Status sukses / peringatan / bahaya | `#17663F` di `#E5F4EC`, `#8A5300` di `#FFF1D6`, `#B42318` di `#FDECEA` | Status saja, bukan aksen |
+
+- Cakupan (23 Oktober 2026): fondasi berlaku untuk seluruh layar Office yang terbangun. Master Data memakai `OfficePage`; CRM, Sales (SO, Proforma, Backorder, Invoice), Warehouse (Barang Keluar), Finance (Pajak, Akun, Akuntansi, Kontrol) dan Setting (Pengguna, Peran, Matrix) tetap memakai header lamanya (`.executive-heading`, `.ob-header`, `.access-heading`, `.access-page-heading`) yang ditampilkan sebagai pita oleh lapisan penyesuaian di `office-foundation.css`. Seluruh tampilan Dashboard (Ringkasan Eksekutif, Sales, Finance, Warehouse, HRIS, Tugas & Persetujuan, Laporan & Ekspor) juga memakai pita; banner tindakan biru terpisah dihapus dan tombol "Buka tugas saya" pindah ke pita. Skala tabel dan gaya ikon (Lucide dipaksa garis 1,75 ujung tegas lewat CSS) berlaku global. Migrasi struktural ke `OfficePage`/`DataTable` dan penggantian ikon Lucide tetap utang per modul.
+- Gradien navy ke biru hanya pada pita judul halaman (`OfficePage`), dengan bentuk sabit logo samar di kanan. Area kerja tetap putih. Tombol utama di pita berwarna putih; tombol sekunder bergaris terang.
+- Radius 8 px kontrol, 12 px panel dan popup, 6 px badge; tidak ada bentuk pil. Panel datar bergaris; bayangan hanya untuk lapisan yang bisa ditutup (popup, menu, dialog, toast).
+- Plus Jakarta Sans tetap dipakai: bentuknya sejalan dengan wordmark dan memiliki angka tabular. Judul pita 24/32 bobot 750 (form 22/30), subjudul 12,5/18, eyebrow/breadcrumb 11 px, tab di pita 12,5 px; token `--ev-text-page-title`, `--ev-text-page-sub`, `--ev-text-eyebrow`.
+- Skala rapat (koreksi pengguna 23 Oktober 2026, huruf 13 px terasa besar pada layar browser normal): isi tabel 12/16 px, header tabel 11 px bobot 600, padding sel 10×14 px; menu sidebar 12,5 px dengan tinggi item modul 36 px dan submenu 32 px. Nilai disimpan sebagai `--ev-text-table`, `--ev-text-table-head`, `--ev-text-nav` di `office-foundation.css`; ukur ulang di browser 1440 px saat QA.
+- Ikon satu warna (`currentColor`), garis 1,75 px dengan ujung dan sudut tegas, dari `icons.tsx`. Ikon Lucide di layar yang belum dimigrasi adalah utang migrasi.
+- Sidebar memakai logo gambar (`/evflow-logo.webp`). Submenu aktif berlatar navy dengan tanda sabit biru terang. Menu akun tidak lagi di footer sidebar.
+- Topbar dibekukan (sticky, tinggi `--ev-topbar-height` 64 px; 60 px di bawah 640 px) dan mendapat bayangan tipis hanya setelah halaman digulung. Pita judul tetap ikut tergulung. Elemen sticky lain (header tabel, bar aksi form) wajib memakai `top: var(--ev-topbar-height)`.
+- Topbar memuat nama perusahaan, notifikasi, dan menu akun. Notifikasi diturunkan dari Tugas & Persetujuan (`/dashboard/actions`, tab tindak lanjut) dengan izin `dashboard_actions.read`; angka di lonceng = tugas lewat waktu. Tanpa izin, popup menjelaskan kebutuhan izin dan tidak menampilkan angka.
+- Tab memakai garis bawah 2 px primer, bukan pil. Daftar memakai kotak cari berikon dan tombol Filter berikon corong; filter lain ada di popup dengan angka filter aktif dan tombol Hapus filter.
+- Toast di kanan bawah: sukses berlatar navy, info/peringatan/gagal berlatar putih dengan ikon berwarna sesuai makna.
+
+Keputusan lanjutan 7 Oktober 2026 (warna digantikan oleh bagian di atas): tema netral-emerald dan Plus Jakarta Sans berlaku untuk seluruh Office, termasuk transaksi, CRM, Master, Finance, Warehouse, HRIS yang tersedia, Setting dan portal. Prioritas QA desktop; pekerjaan khusus mobile ditunda. Ketentuan Dashboard-only sebelumnya menjadi historis. Radius kartu 14px/kontrol 9px memakai token bersama; Field tidak berubah. [Cakupan rollout dan data uji](web-modern-rollout-2026-10-07.md).
 
 Keputusan terbaru 7 Oktober 2026: Dashboard memakai tema terang netral/charcoal, aksen emerald, Plus Jakarta Sans, kartu radius 14px dan kontrol 9px. Token primer 162 77% 24%, latar 150 12% 97%, teks 160 16% 13%. Ini menggantikan ketentuan biru/Inter pada Dashboard dan portal-nya. Hierarki konten: sapaan, akses tugas, KPI, tindak lanjut, analisis, akses modul, riwayat. Modul transaksi lain belum termasuk perombakan ini. [Cakupan dan QA](dashboard-modern-2026-10-07.md).
 
@@ -24,6 +50,8 @@ Gunakan komponen/token bersama yang sudah tersedia. Perbaikan pola bersama dilak
 
 ## Warna dan kontrol bersama
 
+Tabel berikut historis; warna yang berlaku ada di bagian Fondasi visual biru logo.
+
 | Peran | Acuan |
 |---|---|
 | Primer | `#064A9D` |
@@ -40,7 +68,7 @@ Gunakan token semantik yang menghasilkan warna tersebut, dengan Inter dan ikon L
 
 ## Menu akun
 
-- Pemicu ada di footer sidebar: avatar dan identitas saat diperluas; avatar tetap dapat diakses ketika diciutkan.
+- Sejak 23 Oktober 2026 pemicu ada di kanan topbar: avatar, nama dan peran (nama/peran disembunyikan pada web sempit). Sebelumnya di footer sidebar.
 - Bagian atas popup hanya avatar, tanpa nama/jabatan. Avatar dapat difokuskan dan diklik, dengan label aksesibilitas/tooltip “Buka profil saya”. Gunakan inisial sebagai fallback jika foto belum tersedia.
 - Tujuan akhirnya Profil Saya milik pengguna aktif. Saat ini halaman itu belum tersedia; klik memberi keterangan jujur, bukan tautan rusak atau klaim navigasi berhasil.
 - Separator memisahkan avatar dari item terakhir “Keluar”, dengan ikon LogOut. Teks normal mengikuti menu; hover/focus memakai teks merah dan latar merah lembut.

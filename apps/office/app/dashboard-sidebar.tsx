@@ -1,16 +1,6 @@
 "use client";
 
 import type { AuthPrincipal } from "@evflow/contracts";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuSeparator,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-import { useSession } from "./session-provider";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sidebar,
@@ -33,7 +23,6 @@ import {
   ChevronRight,
   Database,
   LayoutDashboard,
-  LogOut,
   ChevronLeft,
   Settings,
   Users,
@@ -241,40 +230,6 @@ export function DashboardSidebar({
     setOpenMobile(false);
     setFlyout(null);
   }
-  const { logout } = useSession();
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [logoutError, setLogoutError] = useState(false);
-  const logoutPending = useRef(false);
-  async function handleLogout(confirmed = false) {
-    if (logoutPending.current) return;
-    if (
-      !confirmed &&
-      !window.dispatchEvent(
-        new CustomEvent("evflow:before-logout", {
-          cancelable: true,
-          detail: { proceed: () => void handleLogout(true) },
-        }),
-      )
-    )
-      return;
-    if (preview) {
-      toast.info(
-        "Pratinjau memakai data simulasi. Keluar tersedia pada sesi aplikasi yang sebenarnya.",
-      );
-      return;
-    }
-    logoutPending.current = true;
-    setLoggingOut(true);
-    setLogoutError(false);
-    try {
-      await logout();
-    } catch {
-      setLogoutError(true);
-    } finally {
-      logoutPending.current = false;
-      setLoggingOut(false);
-    }
-  }
   const views = visibleDashboardViews(principal);
   const modules = visibleModules(principal);
 
@@ -286,7 +241,7 @@ export function DashboardSidebar({
           className="ev-sidebar-logo"
           aria-label="evflow Dashboard"
         >
-          evflow
+          <img src="/evflow-logo.webp" alt="evflow" width={2000} height={699} />
         </Link>
         <button
           type="button"
@@ -688,77 +643,6 @@ export function DashboardSidebar({
           <Info aria-hidden="true" />
           <span>Pusat bantuan</span>
         </button>
-        {logoutError && (
-          <Alert variant="destructive" className="ev-sidebar-logout-error">
-            <AlertDescription>
-              Keluar belum berhasil. Periksa koneksi lalu coba lagi melalui menu akun.
-            </AlertDescription>
-          </Alert>
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="ev-sidebar-profile"
-              aria-label={loggingOut ? "Keluar…" : `Menu akun ${principal.display_name}`}
-              disabled={loggingOut}
-            >
-              <span className="ev-sidebar-avatar" aria-hidden="true">
-                {principal.display_name
-                  .split(" ")
-                  .filter(Boolean)
-                  .slice(0, 2)
-                  .map((part) => part[0])
-                  .join("")}
-              </span>
-              <div className="ev-sidebar-identity">
-                <strong>{loggingOut ? "Keluar…" : principal.display_name}</strong>
-                <span title={principal.roles.map((role) => role.name).join(", ")}>
-                  {principal.roles.map((role) => role.name).join(", ")}
-                </span>
-              </div>
-              <ChevronDown aria-hidden="true" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            side={isMobile || state === "expanded" ? "top" : "right"}
-            align="end"
-            sideOffset={8}
-            className="ev-account-menu"
-          >
-            <DropdownMenuGroup>
-              <DropdownMenuItem
-                className="ev-account-profile"
-                aria-label="Buka profil saya"
-                title="Buka profil saya"
-                onSelect={() => toast.info("Halaman Profil Saya belum tersedia.")}
-              >
-                <span className="ev-sidebar-avatar" aria-hidden="true">
-                  {principal.display_name
-                    .split(" ")
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .map((part) => part[0])
-                    .join("")}
-                </span>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem
-                className="ev-account-logout"
-                disabled={loggingOut}
-                onSelect={() => void handleLogout()}
-              >
-                <LogOut aria-hidden="true" />
-                {loggingOut ? "Keluar…" : "Keluar"}
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <span role="status" className="sr-only">
-          {loggingOut ? "Sedang keluar dari aplikasi…" : ""}
-        </span>
       </SidebarFooter>
     </Sidebar>
   );

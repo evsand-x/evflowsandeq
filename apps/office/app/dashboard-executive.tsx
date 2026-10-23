@@ -8,7 +8,6 @@ import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tan
 import {
   ArrowUpRight,
   Banknote,
-  Bell,
   Building2,
   CalendarDays,
   ChevronDown,
@@ -18,7 +17,6 @@ import {
   Download,
   FileText,
   PackageSearch,
-  Search,
   RefreshCw,
   TrendingUp,
   Truck,
@@ -38,6 +36,8 @@ import {
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IconBuilding } from "@/components/web/icons";
+import { AccountMenu, NotificationsMenu } from "@/components/web/topbar-menus";
 import {
   Select,
   SelectContent,
@@ -123,18 +123,14 @@ export function ExecutiveTopbar({
     <header className="executive-topbar">
       <div className="executive-company">
         <SidebarTrigger className="md:hidden" aria-label="Buka menu" />
-        <Building2 aria-hidden="true" />
+        <IconBuilding />
         <strong>{companyName}</strong>
       </div>
       <div className="executive-utilities">
-        <div className="executive-search" title="Pencarian global belum tersedia">
-          <Search aria-hidden="true" />
-          <span>Cari menu atau dokumen</span>
-        </div>
-        <Button variant="ghost" size="icon" disabled aria-label="Notifikasi belum tersedia">
-          <Bell aria-hidden="true" />
-        </Button>
         {preview && <Badge className="executive-demo">Data simulasi</Badge>}
+        <NotificationsMenu preview={preview} />
+        <span className="ev-topbar-divider" aria-hidden="true" />
+        <AccountMenu preview={preview} />
       </div>
     </header>
   );
@@ -265,6 +261,14 @@ export function ExecutiveDashboard({
           <p className="modern-intro">Ringkasan bisnis dan pekerjaan Anda, dalam satu tempat.</p>
         </div>
         <div className="executive-controls">
+          {/* Banner tindakan lama digantikan pita judul; ajakan ke tugas tetap di sini. */}
+          {!preview && (
+            <Button asChild>
+              <Link href="/?view=actions">
+                Buka tugas saya <ArrowUpRight aria-hidden="true" />
+              </Link>
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={unavailable}
@@ -325,20 +329,6 @@ export function ExecutiveDashboard({
             belum tersedia.
           </AlertDescription>
         </Alert>
-      )}
-      {!preview && (
-        <div className="modern-workspace-banner">
-          <div className="modern-banner-copy">
-            <span className="modern-eyebrow">RUANG KERJA ANDA</span>
-            <h2>Mulai dari yang perlu ditindaklanjuti.</h2>
-            <p>Buka tugas Anda atau lanjutkan pekerjaan di modul operasional.</p>
-          </div>
-          <Button asChild className="modern-task-button">
-            <Link href="/?view=actions">
-              Buka tugas saya <ArrowUpRight aria-hidden="true" />
-            </Link>
-          </Button>
-        </div>
       )}
       <section className="executive-kpis" aria-label="Ringkasan kinerja">
         {kpis.map((item) => (
