@@ -1,5 +1,2 @@
-import { AccessWorkspace } from "../../access-workspace";
-export default async function Page({ params }: { params: Promise<{ path: string[] }> }) {
-  const { path } = await params;
-  return <AccessWorkspace section="users" path={path} />;
-}
+import {AccessWorkspace} from "../../access-workspace";
+export default async function Page({params}:{params:Promise<{path:string[]}>}){const {path}=await params;return <AccessWorkspace section="users" path={path}/>;}
