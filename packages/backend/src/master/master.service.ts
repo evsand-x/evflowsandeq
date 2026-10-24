@@ -7,7 +7,11 @@ import {
   PreconditionFailedException,
 } from "@nestjs/common";
 import { AuditService } from "../common/audit.service";
-import { recordCreditChange, resolveCustomerCredit } from "../sales/customer-credit";
+import {
+  customerCreditOmit,
+  recordCreditChange,
+  resolveCustomerCredit,
+} from "../sales/customer-credit";
 
 type MasterState = "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
 
@@ -74,12 +78,7 @@ export class MasterService {
           where: { companyId, ...(contains ? { name: contains } : {}) },
           include: { channel: true, rayon: true },
           // Credit values need customer_credit.update; this list is for master readers.
-          omit: {
-            creditLimit: true,
-            creditFrozen: true,
-            freezeReason: true,
-            pastDueGraceDays: true,
-          },
+          omit: customerCreditOmit,
           orderBy: { name: "asc" },
         });
       case "suppliers":

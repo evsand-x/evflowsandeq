@@ -118,6 +118,18 @@ export function translateProblem(problem: { detail?: string; message?: string } 
         "Pajak penjualan bawaan belum diatur. Tandai satu pajak sebagai bawaan penjualan di Setting › Pajak.",
       settings_href: "/setting/tax",
     };
+  if (detail === "PAYMENT_POLICY_REQUIRED")
+    return {
+      message:
+        "Pelanggan belum punya termin bawaan dan daftar termin tidak memiliki termin COD. Tambahkan termin COD di Setting › Termin & Kredit.",
+      settings_href: "/setting/terms",
+    };
+  if (detail === "PAYMENT_TERM_INVALID")
+    return {
+      message:
+        "Termin bawaan pelanggan tidak ada lagi di daftar termin. Pilih termin lain pada data pelanggan atau periksa Setting › Termin & Kredit.",
+      settings_href: "/setting/terms",
+    };
   const taxMessages: Record<string, string> = {
     TAX_DEFAULT_INVALID:
       "Pajak bawaan harus PPN yang aktif, ditambahkan ke transaksi, dan berlaku untuk penggunaan tersebut.",

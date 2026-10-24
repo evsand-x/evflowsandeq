@@ -10,7 +10,10 @@ import {
   customerCredit,
   setCustomerCredit,
 } from "../../packages/backend/src/sales/customer-credit";
-import { checkCredit } from "../../packages/backend/src/sales/transaction-controls";
+import {
+  checkCredit,
+  currentPaymentPolicy,
+} from "../../packages/backend/src/sales/transaction-controls";
 import type { AuthenticatedRequest } from "../../packages/backend/src/identity/auth.types";
 import { ensureTestTermList } from "../../tools/qa/payment-terms-fixture";
 
@@ -260,6 +263,20 @@ describe("customer credit attributes", () => {
         effectiveFrom: new Date("2026-03-01"),
       });
       await policy({ customerId: other.id, mode: "COD", topDays: 0 });
+      const thirdName = `Pelanggan tempo lama ${randomUUID()}`;
+      const third = await prisma.customer.create({
+        data: {
+          companyId: c,
+          code: randomUUID(),
+          name: thirdName,
+          normalizedName: thirdName.toLowerCase(),
+          state: "ACTIVE",
+          createdById: actor,
+          updatedById: actor,
+        },
+      });
+      // 90 days is not in the default OPS-FLX-03 list: the term stays NULL, the rest is copied.
+      await policy({ customerId: third.id, topDays: 90, creditLimit: "750", pastDueGraceDays: 4 });
 
       const sql = readFileSync(
         "packages/database/prisma/migrations/20261024140000_customer_credit/migration.sql",
@@ -280,13 +297,36 @@ describe("customer credit attributes", () => {
       expect(first.defaultTaxInvoiceCode).toBe("01");
       expect(second.defaultTermCode).toBe("COD");
       expect(second.creditLimit).toBeNull();
+      const unmapped = await prisma.customer.findUniqueOrThrow({ where: { id: third.id } });
+      expect(unmapped.defaultTermCode).toBeNull();
+      expect(unmapped.creditLimit?.toString()).toBe("750");
+      expect(unmapped.pastDueGraceDays).toBe(4);
+
+      // The follow-up migration records the unmapped customers per company.
+      const followUp = readFileSync(
+        "packages/database/prisma/migrations/20261024150000_customer_credit_unmapped/migration.sql",
+        "utf8",
+      );
+      await prisma.$executeRawUnsafe(
+        followUp.slice(
+          followUp.indexOf("-- @unmapped-begin"),
+          followUp.indexOf("-- @unmapped-end"),
+        ),
+      );
+      const recorded = await prisma.auditEvent.findMany({
+        where: { companyId: c, action: "customer_credit.term_unmapped" },
+      });
+      expect(recorded).toHaveLength(1);
+      expect(recorded[0]!.metadata).toMatchObject({
+        customer_ids: [third.id],
+        policies: [{ customer_id: third.id, mode: "TEMPO", top_days: 90 }],
+      });
     });
   });
 
   it("credit check reads customer attributes", async () => {
     await inRollback(async ({ c, actor, customerId }) => {
       const run = () => prisma.$transaction((tx) => checkCredit(tx, c, customerId, "IDR"));
-      await expect(run()).rejects.toThrow("PAYMENT_POLICY_REQUIRED");
       // The archived table is no longer consulted.
       await prisma.customerPaymentPolicy.create({
         data: {
@@ -354,6 +394,124 @@ describe("customer credit attributes", () => {
         data: { defaultTermCode: "GONE" },
       });
       await expect(run()).rejects.toThrow("PAYMENT_TERM_INVALID");
+    });
+  });
+  it("customer without default term submits as COD", async () => {
+    await inRollback(async ({ c, customerId }) => {
+      // checkCredit is the credit gate of SO submission; its result becomes the payment snapshot.
+      const run = () => prisma.$transaction((tx) => checkCredit(tx, c, customerId, "IDR"));
+      expect(await run()).toMatchObject({ mode: "COD", topDays: 0, termCode: "COD" });
+      expect(
+        await prisma.$transaction((tx) => currentPaymentPolicy(tx, c, customerId)),
+      ).toMatchObject({ termCode: "COD", termLabel: "Tunai/COD", mode: "COD" });
+      // Only when the company term list has no COD entry is the submission blocked.
+      const version = await prisma.policyVersion.findFirstOrThrow({
+        where: { policy: { companyId: c, code: "OPS-FLX-03" }, state: "ACTIVE" },
+      });
+      await prisma.policyVersion.update({
+        where: { id: version.id },
+        data: {
+          valueSnapshot: (version.valueSnapshot as { kind: string }[]).filter(
+            (t) => t.kind !== "COD",
+          ),
+        },
+      });
+      await expect(run()).rejects.toThrow("PAYMENT_POLICY_REQUIRED");
+    });
+  });
+
+  it("tempo default term without credit limit is allowed", async () => {
+    await inRollback(async ({ c, actor, customerId }) => {
+      const editor = request(c, actor, ["master_customer.update", "customer_credit.update"]);
+      const row = await prisma.customer.findUniqueOrThrow({ where: { id: customerId } });
+      await controller.updateCustomer(
+        customerId,
+        `"${row.version}"`,
+        { name: row.name, version: row.version, default_term_code: "NET30" },
+        editor,
+      );
+      const saved = await prisma.customer.findUniqueOrThrow({ where: { id: customerId } });
+      expect(saved.defaultTermCode).toBe("NET30");
+      expect(saved.creditLimit).toBeNull();
+      expect(saved.pastDueGraceDays).toBeNull();
+      // No limit means no limit check, even with open receivables.
+      const order = await prisma.salesOrder.create({
+        data: { companyId: c, customerId, number: `SO-${randomUUID()}`, createdById: actor },
+      });
+      const due = new Date();
+      due.setUTCDate(due.getUTCDate() + 10);
+      await prisma.salesInvoice.create({
+        data: {
+          companyId: c,
+          customerId,
+          salesOrderId: order.id,
+          number: `INV-${randomUUID()}`,
+          state: "POSTED",
+          subtotal: "999999",
+          total: "999999",
+          outstandingAmount: "999999",
+          dueDate: due,
+          postedAt: new Date(),
+        },
+      });
+      expect(
+        await prisma.$transaction((tx) => checkCredit(tx, c, customerId, "IDR")),
+      ).toMatchObject({ mode: "TEMPO", topDays: 30, creditLimit: null });
+    });
+  });
+
+  it("state change response hides credit fields without customer_credit.update", async () => {
+    await inRollback(async ({ c, actor, customerId }) => {
+      await prisma.$transaction((tx) =>
+        setCustomerCredit(tx, new AuditService(), c, actor, customerId, {
+          default_term_code: "NET30",
+          credit_limit: "1000",
+          credit_frozen: true,
+          freeze_reason: "Uji",
+          past_due_grace_days: 2,
+        }),
+      );
+      const version = () =>
+        prisma.customer.findUniqueOrThrow({ where: { id: customerId } }).then((x) => x.version);
+      const plain = request(c, actor, [
+        "master_customer.update",
+        "master_customer.activate",
+        "master_customer.read",
+      ]);
+      const credit = request(c, actor, [
+        "master_customer.update",
+        "master_customer.activate",
+        "customer_credit.update",
+      ]);
+      const hidden = ["creditLimit", "creditFrozen", "freezeReason", "pastDueGraceDays"];
+      const state = async (
+        action: "activate" | "deactivate",
+        req: AuthenticatedRequest,
+      ): Promise<Record<string, unknown>> => {
+        const v = await version();
+        return (await controller[action]("customers", customerId, `"${v}"`, { version: v }, req))
+          .data as Record<string, unknown>;
+      };
+      const deactivated = await state("deactivate", plain);
+      for (const key of hidden) expect(deactivated).not.toHaveProperty(key);
+      const activated = await state("activate", plain);
+      for (const key of hidden) expect(activated).not.toHaveProperty(key);
+      const archived = (
+        await controller.archiveCustomer(
+          customerId,
+          `"${await version()}"`,
+          { reason: "Uji arsip" },
+          plain,
+        )
+      ).data as Record<string, unknown>;
+      for (const key of ["credit_limit", "credit_frozen", "freeze_reason", "past_due_grace_days"])
+        expect(archived).not.toHaveProperty(key);
+      expect(archived).toHaveProperty("default_term_code", "NET30");
+      // Credit editors still receive the values.
+      expect(await state("activate", credit)).toMatchObject({
+        creditFrozen: true,
+        pastDueGraceDays: 2,
+      });
     });
   });
 });

@@ -28,6 +28,13 @@ describe("API problem translation", () => {
     expect(out.message).toContain("Setting › Pajak");
     expect(out.settings_href).toBe("/setting/tax");
   });
+  it("sends a missing COD term and an invalid customer term to Setting > Termin & Kredit", () => {
+    for (const detail of ["PAYMENT_POLICY_REQUIRED", "PAYMENT_TERM_INVALID"]) {
+      const out = translateProblem({ detail });
+      expect(out.message).toContain("Setting › Termin & Kredit");
+      expect(out.settings_href).toBe("/setting/terms");
+    }
+  });
   it("explains tax master conflicts in business words", () => {
     for (const detail of [
       "TAX_DEFAULT_INVALID",

@@ -8,6 +8,7 @@ import {
   eligibleLots,
   lockCustomer,
 } from "./sales/transaction-controls";
+import { customerCreditOmit } from "./sales/customer-credit";
 import {
   assertPriceGrants,
   lineAmounts,
@@ -1854,7 +1855,8 @@ export class OtcPtpService {
   async invoiceCandidates(c: string) {
     const batches = await prisma.fulfillmentBatch.findMany({
       where: { companyId: c, state: "ALLOCATED", pickList: { state: "CHECKED" } },
-      include: { salesOrder: { include: { customer: true } }, pickList: { include: { lines: { include: { allocation: { include: { salesOrderLine: { include: { product: { include: { baseUom: true } }, Uom: true } } } } } } } } },
+      // The customer row is returned to invoice issuers: keep credit values out.
+      include: { salesOrder: { include: { customer: { omit: customerCreditOmit } } }, pickList: { include: { lines: { include: { allocation: { include: { salesOrderLine: { include: { product: { include: { baseUom: true } }, Uom: true } } } } } } } } },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100,
     });
     const ids = batches.map((b) => b.id);

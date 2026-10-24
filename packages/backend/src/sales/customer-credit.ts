@@ -4,6 +4,14 @@ import type { AuditService } from "../common/audit.service";
 
 type Tx = Prisma.TransactionClient;
 
+/** Prisma omit for nested/listed customer rows sent to readers without customer_credit.update. */
+export const customerCreditOmit = {
+  creditLimit: true,
+  creditFrozen: true,
+  freezeReason: true,
+  pastDueGraceDays: true,
+} as const;
+
 export type PaymentTerm = {
   code: string;
   label: string;
@@ -130,12 +138,10 @@ export async function resolveCustomerCredit(
   const frozen = pick("credit_frozen", current.creditFrozen) as boolean;
   const reason = (pick("freeze_reason", current.freezeReason) as string | null)?.trim() || null;
   const grace = pick("past_due_grace_days", current.pastDueGraceDays) as number | null;
-  const resolved = term ? await paymentTerm(tx, companyId, term) : null;
+  if (term) await paymentTerm(tx, companyId, term);
   if (frozen && !reason) throw new ConflictException("FREEZE_REASON_REQUIRED");
-  if (resolved?.kind === "TEMPO" && !limit)
-    throw new ConflictException("TOP_AND_CREDIT_LIMIT_REQUIRED");
-  if (resolved?.kind === "TEMPO" && grace === null)
-    throw new ConflictException("PAST_DUE_POLICY_REQUIRED");
+  // TOP/limit on the customer master are optional (fleksibel design): a TEMPO term needs neither
+  // a credit limit nor grace days; a customer without a limit is simply not limit-checked.
   return {
     creditLimit: limit === null ? null : new Prisma.Decimal(limit),
     creditFrozen: frozen,

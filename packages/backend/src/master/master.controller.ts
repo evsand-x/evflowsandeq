@@ -148,7 +148,7 @@ export class MasterController {
                         req.auth.user_id,
                         data,
                       );
-    return { data: serialize(created) };
+    return { data: customerResponse(req, created) };
   }
 
   @Get("master-data/workspace/:resource")
@@ -224,7 +224,9 @@ export class MasterController {
   @Get("master-data/customers/:id")
   @RequirePermissions("master_customer.read")
   async customerDetail(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    return { data: serialize(await customerDetail(req.auth, z.string().uuid().parse(id))) };
+    return {
+      data: customerResponse(req, await customerDetail(req.auth, z.string().uuid().parse(id))),
+    };
   }
 
   @Get("master-data/customers/:id/history")
@@ -252,7 +254,8 @@ export class MasterController {
       .strict()
       .parse(body);
     return {
-      data: serialize(
+      data: customerResponse(
+        req,
         await this.master.changeState(
           req.auth.company_id,
           req.auth.user_id,
@@ -279,16 +282,14 @@ export class MasterController {
     if (!input.success) throw new BadRequestException(input.error.flatten());
     assertCustomerCreditEdit(req.auth, input.data);
     return {
-      data: serialize(
-        redactCustomerCredit(
-          req.auth,
-          await this.master.updateCustomer(
-            req.auth.company_id,
-            req.auth.user_id,
-            id,
-            expectedVersion,
-            input.data,
-          ),
+      data: customerResponse(
+        req,
+        await this.master.updateCustomer(
+          req.auth.company_id,
+          req.auth.user_id,
+          id,
+          expectedVersion,
+          input.data,
         ),
       ),
     };
@@ -359,14 +360,18 @@ export class MasterController {
     const input = activateMasterSchema.safeParse(body ?? {});
     if (!input.success) throw new BadRequestException(input.error.flatten());
     return {
-      data: await this.master.changeState(
-        req.auth.company_id,
-        req.auth.user_id,
-        resource,
-        id,
-        expectedVersion,
-        "ACTIVE",
-        input.data.reason,
+      // Customer rows carry credit values: strip them for readers without customer_credit.update.
+      data: redactCustomerCredit(
+        req.auth,
+        await this.master.changeState(
+          req.auth.company_id,
+          req.auth.user_id,
+          resource,
+          id,
+          expectedVersion,
+          "ACTIVE",
+          input.data.reason,
+        ),
       ),
     };
   }
@@ -507,14 +512,18 @@ export class MasterController {
     const input = activateMasterSchema.safeParse(body ?? {});
     if (!input.success) throw new BadRequestException(input.error.flatten());
     return {
-      data: await this.master.changeState(
-        req.auth.company_id,
-        req.auth.user_id,
-        resource,
-        id,
-        expectedVersion,
-        "INACTIVE",
-        input.data.reason,
+      // Customer rows carry credit values: strip them for readers without customer_credit.update.
+      data: redactCustomerCredit(
+        req.auth,
+        await this.master.changeState(
+          req.auth.company_id,
+          req.auth.user_id,
+          resource,
+          id,
+          expectedVersion,
+          "INACTIVE",
+          input.data.reason,
+        ),
       ),
     };
   }
@@ -554,6 +563,19 @@ function parseVersion(value: string | undefined) {
   if (!Number.isInteger(version) || version < 1)
     throw new BadRequestException('Header If-Match wajib berisi versi, contoh: "1".');
   return version;
+}
+
+/**
+ * Single serializer for responses that may carry a customer row: credit values (limit, freeze,
+ * grace) are removed unless the caller holds customer_credit.update. Rows of other masters have
+ * none of these keys and pass through unchanged.
+ */
+function customerResponse(req: AuthenticatedRequest, value: unknown) {
+  return serialize(
+    value && typeof value === "object" && !Array.isArray(value)
+      ? redactCustomerCredit(req.auth, value as Record<string, unknown>)
+      : value,
+  );
 }
 
 function serialize(value: unknown): unknown {

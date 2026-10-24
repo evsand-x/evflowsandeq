@@ -26,6 +26,17 @@ import {
   roles,
 } from "./customer-types";
 const base = "/master-data/customers";
+/** Compares decimal strings without floating point ("2500.50" equals "2500.5"). */
+function sameDecimal(a: string | null, b: string | null) {
+  const norm = (v: string | null) =>
+    v === null
+      ? null
+      : v
+          .replace(/^0+(?=\d)/, "")
+          .replace(/(\.\d*?)0+$/, "$1")
+          .replace(/\.$/, "");
+  return norm(a) === norm(b);
+}
 const fields = [
   "name",
   "legal_name",
@@ -196,16 +207,36 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
         default_tax_invoice_code: credit.taxCode,
       };
       // Credit attributes go only with the update, and only for credit editors.
-      const creditPayload =
+      // Only changed credit keys are sent, so an ordinary edit does not re-validate stored credit.
+      const nextCredit = {
+        default_term_code: credit.term || null,
+        credit_limit: credit.limit.trim() || null,
+        credit_frozen: credit.frozen,
+        freeze_reason: credit.frozen ? credit.reason.trim() || null : null,
+        past_due_grace_days: credit.grace === "" ? null : Number(credit.grace),
+      };
+      const storedCredit: Record<keyof typeof nextCredit, unknown> = {
+        default_term_code: initial?.default_term_code ?? null,
+        credit_limit: initial?.credit_limit ?? null,
+        credit_frozen: initial?.credit_frozen ?? false,
+        freeze_reason: initial?.credit_frozen ? (initial.freeze_reason ?? null) : null,
+        past_due_grace_days: initial?.past_due_grace_days ?? null,
+      };
+      const creditPayload: Partial<typeof nextCredit> =
         initial && canCredit
-          ? {
-              default_term_code: credit.term || null,
-              credit_limit: credit.limit.trim() || null,
-              credit_frozen: credit.frozen,
-              freeze_reason: credit.frozen ? credit.reason.trim() || null : null,
-              past_due_grace_days: credit.grace === "" ? null : Number(credit.grace),
-            }
+          ? Object.fromEntries(
+              Object.entries(nextCredit).filter(([key, value]) =>
+                key === "credit_limit"
+                  ? !sameDecimal(value as string | null, storedCredit.credit_limit as string | null)
+                  : value !== storedCredit[key as keyof typeof nextCredit],
+              ),
+            )
           : {};
+      // A freeze always travels with its reason so the server can validate the pair.
+      if ("credit_frozen" in creditPayload || "freeze_reason" in creditPayload) {
+        creditPayload.credit_frozen = nextCredit.credit_frozen;
+        creditPayload.freeze_reason = nextCredit.freeze_reason;
+      }
       if (creditPayload.credit_limit && !/^\d{1,16}(\.\d{1,8})?$/.test(creditPayload.credit_limit))
         throw new Error("Limit kredit harus berupa angka tanpa pemisah ribuan, contoh 25000000.");
       if (credit.grace !== "" && !/^\d{1,4}$/.test(credit.grace))

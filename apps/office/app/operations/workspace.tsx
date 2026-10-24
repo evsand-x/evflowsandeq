@@ -177,7 +177,8 @@ export function ErrorBox({ message }: { message: string }) {
       "Harga acuan belum dikonfigurasi untuk produk, satuan, dan mata uang ini.",
     TAX_POLICY_REQUIRED:
       "Aturan pajak yang berlaku belum tersedia. Lengkapi konfigurasi sebelum submit.",
-    PAYMENT_POLICY_REQUIRED: "Kebijakan pembayaran pelanggan belum tersedia.",
+    PAYMENT_POLICY_REQUIRED:
+      "Daftar termin tidak memiliki termin COD untuk pelanggan tanpa termin bawaan. Periksa Setting › Termin & Kredit.",
     STOCK_NOT_ELIGIBLE:
       "Stok sudah tidak layak dikirim. Periksa mutu, kedaluwarsa, gudang dan locator.",
     SHIPMENT_DETAILS_REQUIRED: "Simpan pengemudi dan kendaraan sebelum dispatch.",
