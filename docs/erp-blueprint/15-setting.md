@@ -2,7 +2,7 @@
 
 ## Keputusan 24 Oktober 2026 — konsolidasi pengaturan
 
-Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Submenu Setting: Profil Perusahaan, Pengguna, Peran (termasuk batas diskon per peran dan per orang), Kebijakan Umum (zona waktu, tahun buku, mata uang dari data perusahaan; format angka), Penomoran Dokumen (IAM-06), Pajak (FIN-17), Termin & Kredit (daftar termin, mode kredit, ongkir bawaan), Jenis Potongan (FIN-18), Pemetaan Akun, Persetujuan (tahap 4). Setiap submenu memiliki izin sendiri (CFG-11). Kebijakan duplikat identitas perusahaan (`OPS-COMP-01..03`) dihentikan.
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Submenu Setting: Profil Perusahaan, Pengguna, Peran (termasuk batas diskon per peran dan per orang), Kebijakan Umum (zona waktu, tahun buku, mata uang dari data perusahaan; format angka), Penomoran Dokumen (IAM-06), Pajak (FIN-17), Termin & Kredit (daftar termin, mode kredit, ongkir bawaan), Jenis Potongan (FIN-18), Pemetaan Akun, Persetujuan (persetujuan sementara P2P CFG-12 sejak tahap 5; mesin umum tahap 4). Setiap submenu memiliki izin sendiri (CFG-11). Kebijakan duplikat identitas perusahaan (`OPS-COMP-01..03`) dihentikan.
 
 
 ## Keputusan 24 Oktober 2026 — Pengaturan terpusat
@@ -127,6 +127,8 @@ Finance menyusun atau merevisi draft, sistem memeriksa kelengkapan dan konflik t
 TOP Supplier/Vendor tidak diatur pada Kredit & Exposure pelanggan. TOP tersebut ditetapkan pada **Warehouse & Logistik → Pengadaan → PO Supplier/PO Vendor** atau kontrak/MOU terkait, dengan basis jatuh tempo yang eksplisit. Finance menggunakan snapshot PO/kontrak untuk AP, pencocokan dan pembayaran. Pengadaan tidak mengubah limit kredit pelanggan.
 
 ## 5. Pengaturan Persetujuan
+
+Keputusan 24 Oktober 2026 — persetujuan sementara P2P (CFG-12). Tahap 5 (P2P) dibangun sebelum mesin persetujuan umum. Sampai mesin umum aktif, Setting › Persetujuan menampilkan satu baris per jenis dokumen: PO (bawaan nonaktif), Pembayaran Supplier (bawaan aktif) dan Retur/Nota Debit Supplier (bawaan nonaktif). Setiap baris hanya berisi aktif/nonaktif; pemberi persetujuan adalah pemegang izin `purchase_order.approve`, `supplier_payment.approve` atau `supplier_return.approve`. Mengubah toggle diaudit dan hanya berlaku untuk pengajuan baru. Pengaju tidak menyetujui pengajuannya sendiri; tanpa pemegang izin, pengajuan dialihkan ke Admin Sistem. Persetujuan opname/penyesuaian dan pemusnahan wajib dan tidak ditampilkan sebagai toggle. Saat mesin umum (tahap 4) aktif, setiap toggle aktif dimigrasikan menjadi aturan setara dan pengajuan berjalan tetap pada statusnya.
 
 Policy approval memiliki jenis pengajuan, kondisi, scope, dasar nilai/mata uang, batas, tahap berurutan, mode any/all, pemberi persetujuan orang/peran/atasan langsung/atasan N tingkat/kepala departemen dari Struktur Organisasi, delegasi, self-approval, reminder, escalation, pemicu reapproval, effective date dan version. Self-approval default nonaktif; nilai awal reminder 4 jam kerja dan escalation 1 hari kerja dapat dikonfigurasi.
 

@@ -111,9 +111,45 @@ Temuan minor dicatat di ledger tahap 2 dan dikerjakan bila menyentuh bagian yang
 |---|---|
 | Dokumen | Perbarui README, 02, 06, 07, 10, 12, 14, 15, 40, AGENTS.md sesuai bagian 5 |
 | 2b — Konsolidasi Pengaturan | 5.1 (menu), 5.3 (Setting › Pajak, pajak bawaan dipakai SO/proforma/invoice), 5.4 bagian pengaturan (Jenis Potongan), Pemetaan Akun, Termin & Kredit, Kebijakan Umum, 5.5 batas diskon (peran/orang/produk), 5.6, 5.7, bagian 6 |
-| 3 — Alur SO sampai pembayaran | Harga otomatis dan pemeriksaan diskon di SO, kode faktur, Harga Khusus (pengajuan + persetujuan di Sales), termin di SO, ongkir, mode kredit, potongan dan bukti potong di Terima Pembayaran, retur |
+| 3 — Alur SO sampai pembayaran | Harga otomatis dan pemeriksaan diskon di SO, kode faktur, Harga Khusus (pengajuan + persetujuan di Sales), termin di SO, ongkir, mode kredit, potongan dan bukti potong di Terima Pembayaran, retur. Termasuk celah audit 7.1 nomor 3 dan 12 |
+| 5 — Pembelian sampai pembayaran (P2P) | Celah audit 7.1 nomor 1, 2, 7, 9, 10, 11, dengan keputusan 7.2 |
+| 6 — Gudang | Celah audit 7.1 nomor 4, 5, 6, 8, 13 |
+| 4 — Mesin persetujuan umum | Persetujuan per jenis dokumen (IAM-02/07); memindahkan persetujuan sementara tahap 5–6 ke mesin umum. Dikerjakan setelah tahap 6 (7.2 nomor 4) |
 
-Setiap tahap mendapat rencana implementasi sendiri dan diuji di route operasional dengan sesi dan izin nyata.
+Setiap tahap mendapat rencana implementasi sendiri dan diuji di route operasional dengan sesi dan izin nyata. Sebelum rencana tahap 5–6 dibuat, blueprint (02, 11, 12, 15) diperbarui sesuai keputusan 7.2.
+
+### 7.1 Celah alur O2C/P2P/Gudang (audit 24 Oktober 2026)
+
+Audit membandingkan kode dengan blueprint dan pola ERP open source (ERPNext, Odoo). Pola dipakai sebagai acuan desain, bukan sumber kode. Yang sudah sejalan: stok dari pergerakan per batch/lokasi dengan idempotency, alokasi FEFO/FIFO dari Setting, picking → checking → kirim → POD dengan stok transit, invoice dari qty POD, retur pelanggan ke karantina dengan pembalikan HPP, PR → PO dengan alokasi qty terlacak, pencocokan tagihan supplier dengan PO/GR.
+
+| # | Celah | Bukti | Aturan |
+|---|---|---|---|
+| 1 | Belum ada pembayaran supplier; sisa hutang hanya berubah lewat pembalikan/remediasi | `payableOpenItem` hanya dibuat di `postSupplierInvoice` | PTP-04, FIN-02/03 |
+| 2 | Belum ada retur ke supplier dan nota debit | Tidak ada model/command | PTP-02, FIN-02 |
+| 3 | Nota kredit tidak membalik PPN keluaran: nilai = qty × harga, dibatasi subtotal, `taxAmount` tetap 0 | `postCreditNote` | OTC-07, FIN-08 |
+| 4 | Pelepasan kualitas hanya mengganti status di tempat dan ditolak di locator karantina; stok retur tidak dapat dilepas dan nilai karantina tidak direklasifikasi | `operations.service.ts` `quality` | WH-03 |
+| 5 | Belum ada opname dan penyesuaian stok | Tidak ada | WH-05, OTC-13 |
+| 6 | Belum ada recall dan pemusnahan | Tidak ada | WH-07 |
+| 7 | Biaya per batch, bukan rata-rata bergerak; penerimaan ulang batch yang sama dengan harga berbeda tetap memakai biaya pertama | Upsert `stockLot` di `receivePurchaseOrder` hanya menambah qty | FIN-04 |
+| 8 | GR satu locator untuk semua baris; tidak memisah layak/karantina; qty kurang/rusak tidak dicatat | `i.locator_id` | PTP-07, dok 11 kriteria 4 |
+| 9 | PO tanpa persetujuan dan status konfirmasi; satu PO hanya dari satu PR; tanpa diskon, pajak, ongkir, termin dan `due_basis` | `createPurchaseOrder` langsung `OPEN` | PTP-05, dok 11 §2–3 |
+| 10 | Belum ada ongkir pembelian dan landed cost | Tidak ada | FIN-04, dok 11 kriteria 2 |
+| 11 | Jatuh tempo tagihan supplier diisi manual; toleransi harga 0 tertanam di kode; pembulatan Rp1 belum ada | `createSupplierInvoice` | PTP-03 |
+| 12 | Retur pelanggan langsung `RECEIVED` tanpa pengajuan/persetujuan; alasan satu per dokumen, bukan per baris dari Setting | `createCustomerReturn` | OTC-07 |
+| 13 | Belum ada pindah gudang/locator dan konsinyasi | `InventoryMovementKind` tanpa `TRANSFER`/`ADJUSTMENT` | WH-01, WH-06 |
+
+Penyesuaian untuk sisa tahap 2b agar tahap 5–6 tidak memerlukan migrasi ulang: Jenis Potongan memiliki penggunaan Penjualan/Pembelian, dan Pemetaan Akun memakai daftar jenis jurnal yang dapat ditambah (bayar hutang, retur pembelian, reklasifikasi karantina, penyesuaian stok, landed cost).
+
+### 7.2 Keputusan pengguna yang diperlukan
+
+Diputus pengguna 24 Oktober 2026:
+
+1. **Biaya stok rata-rata bergerak** per perusahaan + produk dalam satuan dasar (FIN-04). Batch tetap dilacak untuk FEFO/expiry/recall, tetapi nilainya memakai rata-rata. Kode biaya per batch diganti; database development di-seed ulang (production belum ada).
+2. **Retur ke supplier mendukung dua jalur:** retur barang (barang keluar dari gudang/karantina, lalu nota debit mengurangi hutang) dan klaim tanpa barang (nota debit saja untuk potongan harga atau kurang kirim yang sudah ditagih).
+3. **Pembayaran supplier:** satu pembayaran dapat dialokasikan ke beberapa tagihan supplier yang sama termasuk sebagian, uang muka ke supplier yang dialokasikan ke tagihan kemudian, dan persetujuan sebelum pembayaran dieksekusi. Potongan PPh 23 saat membayar tidak termasuk tahap 5.
+4. **Urutan: 3 → 5 → 6 → 4.** Tahap 5–6 dikerjakan sebelum mesin persetujuan umum. Persetujuan PO, pembayaran supplier dan retur supplier sementara memakai toggle per jenis dokumen di Setting › Persetujuan dengan izin `*.approve` (CFG-12; bawaan: pembayaran aktif, PO dan retur nonaktif); pemohon tidak boleh menyetujui pengajuannya sendiri. Persetujuan opname/penyesuaian dan pemusnahan wajib (WH-05/07) dan bukan toggle. Pada tahap 4 toggle dipindah ke mesin umum tanpa mengubah status dokumen.
+
+Keputusan pembangun: celah 3 (PPN nota kredit) ikut tahap 3, karena production belum ada dan data yang terdampak hanya data development.
 
 ## 8. Diserahkan kepada pembangun
 

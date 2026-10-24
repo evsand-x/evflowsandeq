@@ -678,8 +678,11 @@ Jika barang milik perusahaan dikembalikan ke supplier:
 | Sebelum invoice supplier diposting | 211003 GRNI | 113001/113002 Persediaan terkait |
 | Setelah invoice supplier diposting dan debit note/credit supplier diterima | 211001 Utang Supplier atau piutang/refund supplier | 113001/113002 Persediaan; pembalikan PPN Masukan bila berlaku |
 | Supplier mengganti barang tanpa perubahan tagihan | 112004 Piutang/Claim Supplier bila claim bernilai diperlukan | Persediaan yang dikirim kembali; penerimaan pengganti menutup akun claim |
+| Nota debit klaim tanpa barang keluar (potongan harga, kurang kirim yang sudah ditagih) — keputusan 24 Oktober 2026 | 211001 Utang Supplier, atau 112004 bila tagihan sudah lunas | Persediaan tersisa dan 511002 Penyesuaian HPP secara proporsional untuk potongan harga; GRNI/penyesuaian untuk kurang kirim; pembalikan PPN Masukan bila berlaku |
 
 Nilai retur memakai biaya yang dapat ditelusuri. Selisih harga atau nilai yang disengketakan tetap terlihat sebagai open exception sampai diselesaikan.
+
+Keputusan 24 Oktober 2026: retur ke supplier mendukung dua jalur. Retur barang dicatat Logistik (stock movement keluar dari locator layak atau karantina), lalu Finance menerbitkan nota debit tertaut retur itu. Klaim tanpa barang keluar hanya berupa nota debit. Nilai nota debit tidak melebihi sisa tagihan asal setelah nota debit sebelumnya; nota debit posted mengurangi outstanding AP. Persetujuan mengikuti CFG-12.
 
 ## 8. Pergerakan dan penyesuaian persediaan
 
@@ -772,7 +775,7 @@ Satu penerimaan dapat dialokasikan ke beberapa invoice pelanggan yang sama. Pemb
 | Biaya administrasi bank | 641009 Beban Administrasi Bank | Kas/Bank |
 | Transfer antar-rekening sendiri | Kas/Bank tujuan | Kas/Bank sumber |
 
-Persetujuan atau status sudah ditransfer belum mengurangi utang sampai pembayaran diposting. Referensi bank, tanggal nilai, bukti dan alokasi disimpan. Reversal pembayaran membuka kembali settlement dan open item secara atomik.
+Keputusan 24 Oktober 2026: satu pembayaran dapat dialokasikan ke beberapa tagihan supplier yang sama, termasuk sebagian; pembayaran tanpa tagihan menjadi Uang Muka Supplier yang dialokasikan kemudian. Bila persetujuan pembayaran aktif (CFG-12, bawaan aktif), pembayaran tidak dapat dieksekusi/diposting sebelum disetujui. Persetujuan atau status sudah ditransfer belum mengurangi utang sampai pembayaran diposting. Referensi bank, tanggal nilai, bukti dan alokasi disimpan. Reversal pembayaran membuka kembali settlement dan open item secara atomik.
 
 ## 12. Pajak
 
@@ -2117,7 +2120,7 @@ Untuk setiap produk, perusahaan, mata uang dan satuan dasar:
 
 `Nilai rata-rata baru = (Nilai stok sebelum + Nilai penerimaan yang dapat dikapitalisasi) / (Qty stok sebelum + Qty penerimaan layak dinilai)`
 
-HPP pengeluaran dihitung dengan rata-rata yang berlaku sebelum pergerakan. Setiap pergerakan menyimpan unit cost snapshot sehingga koreksi periode tidak mengubah transaksi historis secara diam-diam.
+HPP pengeluaran dihitung dengan rata-rata yang berlaku sebelum pergerakan. Keputusan 24 Oktober 2026: batch/lot tetap dilacak untuk FEFO/FIFO, expiry, recall dan karantina, tetapi nilai tidak dihitung per batch; seluruh batch produk yang sama memakai rata-rata yang sama. Setiap pergerakan menyimpan unit cost snapshot sehingga koreksi periode tidak mengubah transaksi historis secara diam-diam.
 
 Barang yang belum layak dijual, seperti karantina atau ditolak, tidak masuk available stock. Perlakuan nilainya mengikuti status: tetap dalam persediaan karantina, direklasifikasi, dikembalikan ke supplier, atau di-write-off dengan approval.
 
