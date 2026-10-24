@@ -1,7 +1,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { apiRequest } from "@/lib/api";
+import { ApiError, apiRequest } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -13,31 +13,46 @@ export function DiscountLimitField({
   kind,
   id,
   value,
+  version,
 }: {
   kind: "roles" | "users";
   id: string;
   value: string | null;
+  version?: number | undefined;
 }) {
   const { principal } = useSession();
   const canEdit = principal ? hasCompanyPermission(principal, "discount_limit.manage") : false;
   const [text, setText] = useState(value ?? "");
+  const [current, setCurrent] = useState(version);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const client = useQueryClient();
   useEffect(() => setText(value ?? ""), [value, id]);
+  useEffect(() => setCurrent(version), [version, id]);
   const normalized = text.trim().replace(/\.$/, "");
   const save = async () => {
     setSaving(true);
     setError("");
     try {
-      await apiRequest(`/settings/discount-limit/${kind}/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ discount_limit: normalized === "" ? null : normalized }),
-      });
+      const saved = await apiRequest<{ data: { version: number } }>(
+        `/settings/discount-limit/${kind}/${id}`,
+        {
+          method: "PATCH",
+          ...(current ? { version: current } : {}),
+          body: JSON.stringify({ discount_limit: normalized === "" ? null : normalized }),
+        },
+      );
+      setCurrent(saved.data.version);
       await client.invalidateQueries({ queryKey: ["setting"] });
       toast.success("Batas diskon disimpan");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(
+        e instanceof ApiError && e.status === 412
+          ? "Data baru saja diubah orang lain. Tutup lalu buka kembali untuk memuat ulang."
+          : e instanceof Error
+            ? e.message
+            : String(e),
+      );
     } finally {
       setSaving(false);
     }

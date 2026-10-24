@@ -18,6 +18,7 @@ export type Role = {
   description: string | null;
   active: boolean;
   discount_limit?: string | null;
+  version?: number;
   member_count: number;
   permissions: Grant[];
 };
@@ -28,6 +29,7 @@ export type User = {
   display_name: string;
   active: boolean;
   discount_limit?: string | null;
+  version?: number;
   last_active_at: string | null;
   roles: Pick<Role, "id" | "code" | "name">[];
   effective_permissions: Omit<Grant, "permission_id">[];

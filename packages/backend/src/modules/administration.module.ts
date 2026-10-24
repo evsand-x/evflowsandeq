@@ -8,7 +8,12 @@ import { IdentityModule } from "./identity.module";
 
 @Module({
   imports: [IdentityModule],
-  controllers: [AdministrationController, SettingsController, DeductionTypesController, DiscountLimitController],
+  controllers: [
+    AdministrationController,
+    SettingsController,
+    DeductionTypesController,
+    DiscountLimitController,
+  ],
   providers: [AdministrationService],
   exports: [AdministrationService],
 })

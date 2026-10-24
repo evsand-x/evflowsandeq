@@ -167,16 +167,16 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^[0-9]{1,3}([.][0-9]{1,4})?$"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           }
         },
         "working_start": {
           "type": "string",
-          "pattern": "^[0-9]{1,3}([.][0-9]{1,4})?$"
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
         },
         "cutoff": {
           "type": "string",
-          "pattern": "^[0-9]{1,3}([.][0-9]{1,4})?$"
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
         }
       }
     }

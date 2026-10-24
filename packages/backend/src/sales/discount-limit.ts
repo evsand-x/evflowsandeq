@@ -1,4 +1,8 @@
-import { NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  NotFoundException,
+  PreconditionFailedException,
+} from "@nestjs/common";
 import { Prisma, prisma } from "@evflow/database";
 import { AuditService } from "../common/audit.service";
 
@@ -31,9 +35,15 @@ export function effectiveDiscountLimit(input: {
 /** Normalises user input ("5", "5.5", null, "") to a validated percent, or null for "no limit". */
 export function parseDiscountLimit(value: string | null | undefined): Percent | null {
   if (value === null || value === undefined || value === "") return null;
-  if (!/^\d{1,3}(\.\d{1,4})?$/.test(value)) throw new RangeError("Batas diskon tidak valid.");
+  if (!/^\d{1,3}(\.\d{1,4})?$/.test(value))
+    throw new BadRequestException(
+      "Batas diskon harus berupa angka 0-100 dengan maksimal empat desimal.",
+    );
   const parsed = new Prisma.Decimal(value);
-  if (parsed.gt(maxDiscountLimit)) throw new RangeError("Batas diskon tidak valid.");
+  if (parsed.gt(maxDiscountLimit))
+    throw new BadRequestException(
+      "Batas diskon harus berupa angka 0-100 dengan maksimal empat desimal.",
+    );
   return parsed;
 }
 
@@ -94,17 +104,27 @@ export async function memberDiscountLimit(
   return limit === "UNLIMITED" ? limit : limit.toFixed(4);
 }
 
+/** Row version for If-Match: the row's updatedAt in epoch milliseconds. */
+export const rowVersion = (updatedAt: Date) => updatedAt.getTime();
+
+function assertVersion(updatedAt: Date, expected: number) {
+  if (rowVersion(updatedAt) !== expected)
+    throw new PreconditionFailedException("Data berubah atau sudah diubah orang lain.");
+}
+
 /** Sets (or clears with null) the discount limit of a role. Audited. */
 export async function setRoleDiscountLimit(
   companyId: string,
   actorId: string,
   roleId: string,
   value: string | null,
+  expectedVersion: number,
 ) {
   const limit = parseDiscountLimit(value);
   return prisma.$transaction(async (tx) => {
     const role = await tx.role.findFirst({ where: { id: roleId, companyId } });
     if (!role) throw new NotFoundException("Peran tidak ditemukan.");
+    assertVersion(role.updatedAt, expectedVersion);
     const updated = await tx.role.update({ where: { id: roleId }, data: { discountLimit: limit } });
     await new AuditService().recordWith(tx, {
       companyId,
@@ -115,7 +135,11 @@ export async function setRoleDiscountLimit(
       before: { discount_limit: discountLimitText(role.discountLimit) },
       after: { discount_limit: discountLimitText(updated.discountLimit) },
     });
-    return { id: roleId, discount_limit: discountLimitText(updated.discountLimit) };
+    return {
+      id: roleId,
+      discount_limit: discountLimitText(updated.discountLimit),
+      version: updated.updatedAt.getTime(),
+    };
   });
 }
 
@@ -125,6 +149,7 @@ export async function setUserDiscountLimit(
   actorId: string,
   userId: string,
   value: string | null,
+  expectedVersion: number,
 ) {
   const limit = parseDiscountLimit(value);
   return prisma.$transaction(async (tx) => {
@@ -133,6 +158,7 @@ export async function setUserDiscountLimit(
     });
     if (!membership || membership.deletedAt)
       throw new NotFoundException("Pengguna tidak ditemukan.");
+    assertVersion(membership.updatedAt, expectedVersion);
     const updated = await tx.companyMembership.update({
       where: { id: membership.id },
       data: { discountLimit: limit },
@@ -146,6 +172,10 @@ export async function setUserDiscountLimit(
       before: { discount_limit: discountLimitText(membership.discountLimit) },
       after: { discount_limit: discountLimitText(updated.discountLimit) },
     });
-    return { user_id: userId, discount_limit: discountLimitText(updated.discountLimit) };
+    return {
+      user_id: userId,
+      discount_limit: discountLimitText(updated.discountLimit),
+      version: updated.updatedAt.getTime(),
+    };
   });
 }

@@ -9,6 +9,7 @@ import { DiscountLimitController } from "../../packages/backend/src/sales/discou
 import { REQUIRED_PERMISSIONS } from "../../packages/backend/src/identity/permissions.decorator";
 import {
   memberDiscountLimit,
+  rowVersion,
   setRoleDiscountLimit,
   setUserDiscountLimit,
 } from "../../packages/backend/src/sales/discount-limit";
@@ -128,12 +129,64 @@ function request(c: string, actor: string, codes: string[], admin = false) {
 }
 
 describe("discount limit settings", () => {
-  it("guards the setters with discount_limit.manage and leaves /me open to members", () => {
-    const required = (method: keyof DiscountLimitController) =>
-      Reflect.getMetadata(REQUIRED_PERMISSIONS, DiscountLimitController.prototype[method]);
-    expect(required("role")).toEqual(["discount_limit.manage"]);
-    expect(required("user")).toEqual(["discount_limit.manage"]);
-    expect(required("mine")).toBeUndefined();
+  it("lets only Admin Sistem set role and person limits, even for a discount_limit.manage holder", async () => {
+    await inRollback(async ({ c, actor, roleId }) => {
+      const guardsOf = (method: "role" | "user") =>
+        Reflect.getMetadata("__guards__", DiscountLimitController.prototype[method]) as Array<
+          new () => { canActivate(context: unknown): boolean }
+        >;
+      const passes = (method: "role" | "user", admin: boolean) =>
+        guardsOf(method).every((Guard) =>
+          new Guard().canActivate({
+            switchToHttp: () => ({
+              getRequest: () => request(c, actor, ["discount_limit.manage"], admin),
+            }),
+          }),
+        );
+      for (const method of ["role", "user"] as const) {
+        expect(
+          Reflect.getMetadata(REQUIRED_PERMISSIONS, DiscountLimitController.prototype[method]),
+        ).toEqual(["discount_limit.manage"]);
+        expect(() => passes(method, false)).toThrowError(expect.objectContaining({ status: 403 }));
+        expect(passes(method, true)).toBe(true);
+      }
+      // /me stays open to every member
+      expect(
+        Reflect.getMetadata("__guards__", DiscountLimitController.prototype.mine),
+      ).toBeUndefined();
+      // admin path through the controller succeeds; stale or missing If-Match is rejected
+      const controller = new DiscountLimitController();
+      const admin = request(c, actor, [], true);
+      const version = rowVersion(
+        (await prisma.role.findUniqueOrThrow({ where: { id: roleId } })).updatedAt,
+      );
+      await expect(
+        controller.role(roleId, String(version - 1), { discount_limit: "5" }, admin),
+      ).rejects.toMatchObject({ status: 412 });
+      await expect(
+        controller.role(roleId, undefined, { discount_limit: "5" }, admin),
+      ).rejects.toMatchObject({
+        status: 400,
+      });
+      await expect(
+        controller.role(roleId, `"${version}"`, { discount_limit: "101" }, admin),
+      ).rejects.toMatchObject({
+        status: 400,
+      });
+      const saved = await controller.role(roleId, `"${version}"`, { discount_limit: "5" }, admin);
+      expect(saved.data.discount_limit).toBe("5.0000");
+      expect(saved.data.version).not.toBe(version);
+      const membership = await prisma.companyMembership.findFirstOrThrow({
+        where: { companyId: c, userId: actor },
+      });
+      const own = await controller.user(
+        actor,
+        String(rowVersion(membership.updatedAt)),
+        { discount_limit: "7" },
+        admin,
+      );
+      expect(own.data.discount_limit).toBe("7.0000");
+    });
   });
 
   it("resolves person, role, product cap and admin through /me", async () => {
@@ -141,16 +194,31 @@ describe("discount limit settings", () => {
       const me = (admin = false, product?: string) =>
         memberDiscountLimit(request(c, actor, [], admin).auth, product, admin);
       expect(await me()).toBe("0.0000");
-      await setRoleDiscountLimit(c, actor, roleId, "8.5");
+      const roleV = async () =>
+        rowVersion((await prisma.role.findUniqueOrThrow({ where: { id: roleId } })).updatedAt);
+      const userV = async () =>
+        rowVersion(
+          (
+            await prisma.companyMembership.findFirstOrThrow({
+              where: { companyId: c, userId: actor },
+            })
+          ).updatedAt,
+        );
+      await setRoleDiscountLimit(c, actor, roleId, "8.5", await roleV());
       expect(await me()).toBe("8.5000");
-      await setUserDiscountLimit(c, actor, actor, "2");
+      await setUserDiscountLimit(c, actor, actor, "2", await userV());
       expect(await me()).toBe("2.0000");
       await prisma.product.update({ where: { id: productId }, data: { discountLimit: "1.5" } });
       expect(await me(false, productId)).toBe("1.5000");
       expect(await me(true, productId)).toBe("UNLIMITED");
-      await setUserDiscountLimit(c, actor, actor, null);
+      await setUserDiscountLimit(c, actor, actor, null, await userV());
       expect(await me()).toBe("8.5000");
-      await expect(setRoleDiscountLimit(c, actor, roleId, "100.1")).rejects.toThrow();
+      await expect(
+        setRoleDiscountLimit(c, actor, roleId, "100.1", await roleV()),
+      ).rejects.toMatchObject({ status: 400 });
+      await expect(
+        setRoleDiscountLimit(c, actor, roleId, "5", (await roleV()) - 1),
+      ).rejects.toMatchObject({ status: 412 });
       expect(
         await prisma.auditEvent.count({
           where: { companyId: c, action: "role.discount_limit.updated" },

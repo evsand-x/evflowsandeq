@@ -393,6 +393,7 @@ export function UsersView() {
               kind="users"
               id={selected.user_id}
               value={selected.discount_limit ?? null}
+              version={selected.version}
             />
           ) : null}
           {selected ? <EffectivePanel roles={roles.data?.data ?? []} roleIds={roleIds} /> : null}
@@ -554,12 +555,7 @@ export function RolesView() {
   };
   const remove = async (role: Role) => {
     if (role.code === "ADMIN_SYSTEM") return;
-    if (
-      !window.confirm(
-        `Hapus peran ${role.name} dan lepaskan dari ${role.member_count} pengguna? Sesi mereka akan dicabut.`,
-      )
-    )
-      return;
+    if (!window.confirm(`Hapus peran ${role.name} dan lepaskan dari ${role.member_count} pengguna? Sesi mereka akan dicabut.`)) return;
     try {
       await apiRequest(`/roles/${role.id}`, { method: "DELETE" });
       await client.invalidateQueries({ queryKey: ["setting", "roles"] });
@@ -698,7 +694,12 @@ export function RoleFormDrawer({
             />
           </label>
           {selected ? (
-            <DiscountLimitField kind="roles" id={selected.id} value={selected.discount_limit ?? null} />
+            <DiscountLimitField
+              kind="roles"
+              id={selected.id}
+              value={selected.discount_limit ?? null}
+              version={selected.version}
+            />
           ) : null}
           {error && (
             <Alert variant="destructive">
@@ -794,17 +795,7 @@ export function RoleTable({
   );
 }
 
-export function AccessPage({
-  section,
-  roleId,
-}: {
-  section: "users" | "roles" | "matrix";
-  roleId?: string;
-}) {
-  if (section !== "matrix") return <AccessWorkspace section={section} />;
-  return (
-    <SettingShell matrix permission={["role.read", "permission.read"]}>
-      <PermissionMatrix selectedRoleId={roleId} />
-    </SettingShell>
-  );
+export function AccessPage({section,roleId}:{section:"users"|"roles"|"matrix";roleId?:string}) {
+ if(section!=="matrix")return <AccessWorkspace section={section}/>;
+ return <SettingShell matrix permission={["role.read","permission.read"]}><PermissionMatrix selectedRoleId={roleId}/></SettingShell>;
 }

@@ -9,7 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormFrame, PageNotice } from "@/components/web/page-frame";
 import { SelectionField } from "@/components/web/selection-field";
 import { apiRequest } from "@/lib/api";
-import { nullableText, useCan, useMasterKey, type MasterState } from "../master-shared";
+import {
+  nullableText,
+  useCan,
+  useMasterKey,
+  type MasterState,
+} from "../master-shared";
 import { base, type Product } from "./product-workspace";
 
 type Option = { id: string; code: string; name: string; state: MasterState };
@@ -81,23 +86,14 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
     if (values.name.trim().length < 2) found.name = "Nama produk wajib diisi.";
     if (!values.category_id) found.category_id = "Pilih kategori aktif.";
     if (!values.base_uom_id) found.base_uom_id = "Pilih satuan dasar aktif.";
-    if (
-      canDiscountLimit &&
-      values.discount_limit &&
-      !/^\d{1,3}([.,]\d{1,4})?$/.test(values.discount_limit)
-    )
+    if (canDiscountLimit && values.discount_limit && !/^\d{1,3}([.,]\d{1,4})?$/.test(values.discount_limit))
       found.discount_limit = "Isi persen 0-100, maksimal empat desimal.";
-    if (
-      canDiscountLimit &&
-      /^\d+([.,]\d+)?$/.test(values.discount_limit) &&
-      Number(values.discount_limit.replace(",", ".")) > 100
-    )
+    if (canDiscountLimit && /^\d+([.,]\d+)?$/.test(values.discount_limit) && Number(values.discount_limit.replace(",", ".")) > 100)
       found.discount_limit = "Batas diskon maksimal 100%.";
     if (values.shelf_life_days && !/^\d+$/.test(values.shelf_life_days))
       found.shelf_life_days = "Masa simpan berupa jumlah hari.";
     for (const field of ["min_temp", "max_temp"] as const)
-      if (values[field] && !/^-?\d+([.,]\d+)?$/.test(values[field]))
-        found[field] = "Isi angka suhu.";
+      if (values[field] && !/^-?\d+([.,]\d+)?$/.test(values[field])) found[field] = "Isi angka suhu.";
     setErrors(found);
     if (Object.keys(found).length) return;
     const storage = {
@@ -117,11 +113,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
       storage_profile: hasStorage ? storage : null,
       shelf_life_days: values.shelf_life_days ? Number(values.shelf_life_days) : null,
       ...(canDiscountLimit
-        ? {
-            discount_limit: values.discount_limit
-              ? values.discount_limit.replace(",", ".").replace(/\.$/, "")
-              : null,
-          }
+        ? { discount_limit: values.discount_limit ? values.discount_limit.replace(",", ".").replace(/\.$/, "") : null }
         : {}),
     };
     setBusy(true);
@@ -155,9 +147,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
       <label>
         {label}
         <Input value={current?.name ?? ""} disabled />
-        <span className="page-frame-subtitle">
-          Hanya dapat diganti selama produk berstatus Draf dan belum dipakai transaksi.
-        </span>
+        <span className="page-frame-subtitle">Hanya dapat diganti selama produk berstatus Draf dan belum dipakai transaksi.</span>
       </label>
     ) : query.data ? (
       <SelectionField
@@ -165,9 +155,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
         value={values[field] ? [values[field]] : []}
         options={[
           ...query.data.map((o) => ({ id: o.id, name: o.name, code: o.code })),
-          ...(current && !query.data.some((o) => o.id === current.id)
-            ? [{ id: current.id, name: current.name }]
-            : []),
+          ...(current && !query.data.some((o) => o.id === current.id) ? [{ id: current.id, name: current.name }] : []),
         ]}
         placeholder={`Pilih ${label.toLowerCase()}`}
         error={errors[field]}
@@ -205,8 +193,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
                 {duplicates.length > 0 && (
                   <div className="span-full">
                     <PageNotice>
-                      Nama mirip sudah terdaftar:{" "}
-                      {duplicates.map((d) => `${d.code} ${d.name}`).join(", ")}
+                      Nama mirip sudah terdaftar: {duplicates.map((d) => `${d.code} ${d.name}`).join(", ")}
                     </PageNotice>
                   </div>
                 )}
@@ -258,8 +245,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
                 {
                   id: "discount",
                   title: "Batas diskon",
-                  description:
-                    "Batas atas diskon produk ini. Batas efektif adalah yang terkecil antara batas orang dan batas produk; kosong berarti tidak ada batas produk.",
+                  description: "Batas atas diskon produk ini. Batas efektif adalah yang terkecil antara batas orang dan batas produk; kosong berarti tidak ada batas produk.",
                   content: (
                     <div className="page-frame-fields">
                       <label>
@@ -282,8 +268,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
           {
             id: "storage",
             title: "Penyimpanan & mutu",
-            description:
-              "Isi dari izin edar atau ketentuan produsen. Data yang belum lengkap menahan aktivasi, bukan diisi perkiraan.",
+            description: "Isi dari izin edar atau ketentuan produsen. Data yang belum lengkap menahan aktivasi, bukan diisi perkiraan.",
             content: (
               <div className="page-frame-fields">
                 <label>
@@ -294,9 +279,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
                     aria-invalid={!!errors.min_temp}
                     onChange={(e) => set("min_temp", e.target.value)}
                   />
-                  {errors.min_temp && (
-                    <span className="page-frame-field-error">{errors.min_temp}</span>
-                  )}
+                  {errors.min_temp && <span className="page-frame-field-error">{errors.min_temp}</span>}
                 </label>
                 <label>
                   Suhu maksimum (°C)
@@ -306,16 +289,11 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
                     aria-invalid={!!errors.max_temp}
                     onChange={(e) => set("max_temp", e.target.value)}
                   />
-                  {errors.max_temp && (
-                    <span className="page-frame-field-error">{errors.max_temp}</span>
-                  )}
+                  {errors.max_temp && <span className="page-frame-field-error">{errors.max_temp}</span>}
                 </label>
                 <label>
                   Batas kelembapan
-                  <Input
-                    value={values.humidity_limits}
-                    onChange={(e) => set("humidity_limits", e.target.value)}
-                  />
+                  <Input value={values.humidity_limits} onChange={(e) => set("humidity_limits", e.target.value)} />
                 </label>
                 <label>
                   Sumber ketentuan
@@ -327,10 +305,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
                 </label>
                 <label className="span-full">
                   Catatan penanganan *
-                  <Textarea
-                    value={values.storage_notes}
-                    onChange={(e) => set("storage_notes", e.target.value)}
-                  />
+                  <Textarea value={values.storage_notes} onChange={(e) => set("storage_notes", e.target.value)} />
                 </label>
               </div>
             ),
