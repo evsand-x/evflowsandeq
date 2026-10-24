@@ -164,4 +164,46 @@ describe("numbering settings revision", () => {
     const [y, m] = companyToday().split("-");
     expect(await next()).toBe(`SO-SSM.${y!.slice(2)}.${m}.0003`);
   });
+
+  it("prefix edit keeps the scheduled reset change", async () => {
+    await setRule("YEARLY");
+    const first = (await reviseNumbering(
+      companyId,
+      actorId,
+      "sales_order",
+      { prefix: "SO", year_format: "YYYY", digits: 4, reset_period: "MONTHLY" },
+      randomUUID(),
+    )) as { effective_from: string };
+    await reviseNumbering(
+      companyId,
+      actorId,
+      "sales_order",
+      { prefix: "SO-SSM", year_format: "YY", digits: 5, reset_period: "MONTHLY" },
+      randomUUID(),
+    );
+    const listed = (await listNumberingSettings(companyId)).find(
+      (r) => r.document_kind === "sales_order",
+    )!;
+    expect(listed.prefix).toBe("SO-SSM");
+    expect(listed.reset_period).toBe("YEARLY");
+    expect(listed.pending).toMatchObject({
+      prefix: "SO-SSM",
+      year_format: "YY",
+      digits: 5,
+      reset_period: "MONTHLY",
+      effective_from: first.effective_from,
+    });
+    // choosing the active period again cancels the schedule
+    await reviseNumbering(
+      companyId,
+      actorId,
+      "sales_order",
+      { prefix: "SO-SSM", year_format: "YY", digits: 5, reset_period: "YEARLY" },
+      randomUUID(),
+    );
+    const after = (await listNumberingSettings(companyId)).find(
+      (r) => r.document_kind === "sales_order",
+    )!;
+    expect(after.pending).toBeNull();
+  });
 });

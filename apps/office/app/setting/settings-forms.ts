@@ -44,3 +44,11 @@ export function previewDocumentNumber(
   const year = yearFormat === "YY" ? day.slice(2, 4) : day.slice(0, 4);
   return `${prefix}.${year}.${day.slice(5, 7)}.${next.padStart(digits, "0")}`;
 }
+
+/** The dialog starts from the scheduled reset period when one exists, so saving does not cancel it. */
+export function initialResetPeriod(row: {
+  reset_period: "YEARLY" | "MONTHLY" | null;
+  pending: { reset_period: "YEARLY" | "MONTHLY" } | null;
+}) {
+  return row.pending?.reset_period ?? row.reset_period ?? "MONTHLY";
+}

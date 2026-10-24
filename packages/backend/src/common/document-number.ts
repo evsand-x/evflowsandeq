@@ -178,9 +178,13 @@ export async function reviseNumbering(
     });
     if (String(counter?.nextValue ?? 1n).length > i.digits)
       throw new ConflictException("NUMBERING_DIGITS_TOO_SHORT");
-    // A reset change scheduled earlier is replaced by this request.
-    if (scheduled.length)
-      await tx.documentNumberRule.deleteMany({ where: { id: { in: scheduled.map((r) => r.id) } } });
+    // A scheduled reset change to the same target period is kept; any other one is replaced.
+    const kept = scheduled.find(
+      (r) => r.resetPeriod === i.reset_period && r.resetPeriod !== currentPeriod,
+    );
+    const dropped = scheduled.filter((r) => r !== kept);
+    if (dropped.length)
+      await tx.documentNumberRule.deleteMany({ where: { id: { in: dropped.map((r) => r.id) } } });
     const data = {
       prefix: i.prefix,
       yearFormat: i.year_format,
@@ -224,19 +228,21 @@ export async function reviseNumbering(
     }
     let result = row;
     if (row.resetPeriod !== i.reset_period) {
-      const from = new Date(nextPeriodStart(i.reset_period, day));
+      const from = kept?.effectiveFrom ?? new Date(nextPeriodStart(i.reset_period, day));
       await tx.documentNumberRule.update({ where: { id: row.id }, data: { effectiveTo: from } });
-      result = await tx.documentNumberRule.create({
-        data: {
-          companyId: c,
-          documentKind: kind,
-          ...data,
-          resetPeriod: i.reset_period,
-          effectiveFrom: from,
-          effectiveTo: openEnded,
-          createdById: a,
-        },
-      });
+      const pending = { ...data, resetPeriod: i.reset_period };
+      result = kept
+        ? await tx.documentNumberRule.update({ where: { id: kept.id }, data: pending })
+        : await tx.documentNumberRule.create({
+            data: {
+              companyId: c,
+              documentKind: kind,
+              ...pending,
+              effectiveFrom: from,
+              effectiveTo: openEnded,
+              createdById: a,
+            },
+          });
     }
     await new AuditService().recordWith(tx, {
       companyId: c,

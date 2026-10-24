@@ -103,13 +103,13 @@ export function translateProblem(problem: { detail?: string; message?: string } 
   if (detail === "NUMBERING_DIGITS_TOO_SHORT")
     return {
       message:
-        "Jumlah digit urutan lebih pendek dari nomor yang sedang berjalan. Tambah jumlah digit di Setting � Penomoran Dokumen.",
+        "Jumlah digit urutan lebih pendek dari nomor yang sedang berjalan. Tambah jumlah digit di Setting › Penomoran Dokumen.",
       settings_href: "/setting/numbering",
     };
   if (detail === "DOCUMENT_NUMBER_EXHAUSTED")
     return {
       message:
-        "Nomor dokumen sudah melewati jumlah digit yang diatur. Tambah jumlah digit di Setting � Penomoran Dokumen.",
+        "Nomor dokumen sudah melewati jumlah digit yang diatur. Tambah jumlah digit di Setting › Penomoran Dokumen.",
       settings_href: "/setting/numbering",
     };
   return { message: detail };

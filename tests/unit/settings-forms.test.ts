@@ -2,6 +2,7 @@ import { operationalPolicyCatalog } from "@evflow/database";
 import {
   policyFormValue,
   policyPayload,
+  initialResetPeriod,
   previewDocumentNumber,
 } from "../../apps/office/app/setting/settings-forms";
 
@@ -28,5 +29,11 @@ describe("settings form helpers", () => {
       "SO-SSM.2026.10.0003",
     );
     expect(previewDocumentNumber("SO-SSM", "YY", 4, "2026-10-24", "3")).toBe("SO-SSM.26.10.0003");
+  });
+  it("dialog starts from the scheduled reset period", () => {
+    expect(
+      initialResetPeriod({ reset_period: "YEARLY", pending: { reset_period: "MONTHLY" } }),
+    ).toBe("MONTHLY");
+    expect(initialResetPeriod({ reset_period: "YEARLY", pending: null })).toBe("YEARLY");
   });
 });

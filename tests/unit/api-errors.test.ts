@@ -15,4 +15,12 @@ describe("API problem translation", () => {
       message: "Profil telah berubah.",
     });
   });
+  it("translates digit errors with the Setting path and clean characters", () => {
+    for (const detail of ["NUMBERING_DIGITS_TOO_SHORT", "DOCUMENT_NUMBER_EXHAUSTED"]) {
+      const out = translateProblem({ detail });
+      expect(out.message).toContain("Setting › Penomoran Dokumen");
+      expect(out.message).not.toContain("�");
+      expect(out.settings_href).toBe("/setting/numbering");
+    }
+  });
 });

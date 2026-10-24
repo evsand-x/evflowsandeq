@@ -17,7 +17,7 @@ import { PageNotice } from "@/components/web/page-frame";
 import { apiRequest } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../../session-provider";
-import { previewDocumentNumber } from "../settings-forms";
+import { initialResetPeriod, previewDocumentNumber } from "../settings-forms";
 import { SettingFrame } from "../settings-ui";
 
 type Row = {
@@ -83,7 +83,7 @@ export default function NumberingPage() {
                         <span className="page-frame-subtitle block">
                           {row.reset_period ? resetLabel[row.reset_period] : ""}
                           {row.pending
-                            ? ` � ${resetLabel[row.pending.reset_period]} mulai ${row.pending.effective_from}`
+                            ? ` · ${resetLabel[row.pending.reset_period]} mulai ${row.pending.effective_from}`
                             : ""}
                         </span>
                       </>
@@ -116,7 +116,7 @@ function EditDialog({ row, onClose }: { row: Row; onClose: () => void }) {
   const [prefix, setPrefix] = useState(row.prefix ?? ""),
     [digits, setDigits] = useState(String(row.digits ?? 4)),
     [yearFormat, setYearFormat] = useState<"YYYY" | "YY">(row.year_format ?? "YYYY"),
-    [resetPeriod, setResetPeriod] = useState<"YEARLY" | "MONTHLY">(row.reset_period ?? "MONTHLY"),
+    [resetPeriod, setResetPeriod] = useState<"YEARLY" | "MONTHLY">(initialResetPeriod(row)),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   // One key per dialog so a double click or a retry cannot create two revisions.
@@ -204,7 +204,7 @@ function EditDialog({ row, onClose }: { row: Row; onClose: () => void }) {
           <p className="text-sm">
             Contoh nomor berikutnya:{" "}
             <strong>
-              {valid ? previewDocumentNumber(prefix, yearFormat, digitCount, today, next) : "�"}
+              {valid ? previewDocumentNumber(prefix, yearFormat, digitCount, today, next) : "—"}
             </strong>
           </p>
           {error && <PageNotice tone="error">{error}</PageNotice>}
