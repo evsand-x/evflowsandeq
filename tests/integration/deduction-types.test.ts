@@ -184,13 +184,64 @@ describe("deduction types", () => {
     });
   });
 
-  it("stale edit returns 412 and edits are audited", async () => {
+  it("edits a type whose account became inactive without changing the account", async () => {
     await inRollback(async ({ c, actor, accounts }) => {
       const row = await createDeductionType(
         c,
         actor,
-        input(accounts["1-10502"]!, { name: "Uji" }),
+        input(accounts["1-10502"]!, { name: "Lama" }),
       );
+      await prisma.financeAccount.update({
+        where: { id: accounts["1-10502"]! },
+        data: { active: false },
+      });
+      const next = await updateDeductionType(
+        c,
+        actor,
+        row.id,
+        1,
+        input(accounts["1-10502"]!, { name: "Lama diubah" }),
+      );
+      expect(next.name).toBe("Lama diubah");
+      // Moving to another inactive account is still refused.
+      await expect(
+        updateDeductionType(c, actor, row.id, 2, input(accounts["1-10502"]!, { name: "x" })),
+      ).resolves.toBeTruthy();
+      await prisma.financeAccount.update({
+        where: { id: accounts["8-80999"]! },
+        data: { active: false },
+      });
+      await expect(
+        updateDeductionType(c, actor, row.id, 3, input(accounts["8-80999"]!)),
+      ).rejects.toMatchObject({ status: 409 });
+    });
+  });
+
+  it("deactivates a type whose account became inactive", async () => {
+    await inRollback(async ({ c, actor, accounts }) => {
+      const row = await createDeductionType(
+        c,
+        actor,
+        input(accounts["1-10502"]!, { name: "Mati" }),
+      );
+      await prisma.financeAccount.update({
+        where: { id: accounts["1-10502"]! },
+        data: { active: false },
+      });
+      const next = await updateDeductionType(
+        c,
+        actor,
+        row.id,
+        1,
+        input(accounts["1-10502"]!, { name: "Mati", active: false }),
+      );
+      expect(next.active).toBe(false);
+    });
+  });
+
+  it("stale edit returns 412 and edits are audited", async () => {
+    await inRollback(async ({ c, actor, accounts }) => {
+      const row = await createDeductionType(c, actor, input(accounts["1-10502"]!, { name: "Uji" }));
       const next = await updateDeductionType(
         c,
         actor,
@@ -202,9 +253,7 @@ describe("deduction types", () => {
       await expect(
         updateDeductionType(c, actor, row.id, 1, input(accounts["1-10502"]!, { name: "Uji 3" })),
       ).rejects.toMatchObject({ status: 412 });
-      expect((await listActiveDeductionTypes(prisma, c)).map((r) => r.name)).not.toContain(
-        "Uji 2",
-      );
+      expect((await listActiveDeductionTypes(prisma, c)).map((r) => r.name)).not.toContain("Uji 2");
       const events = await prisma.auditEvent.findMany({
         where: { companyId: c, resourceType: "deduction_type", resourceId: row.id },
         orderBy: { occurredAt: "asc" },

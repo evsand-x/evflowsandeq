@@ -63,10 +63,15 @@ async function validate(
   companyId: string,
   data: z.infer<typeof deductionTypeInput>,
   excludeId?: string,
+  currentAccountId?: string,
 ) {
-  const account = await tx.financeAccount.findFirst({
-    where: { id: data.settle_account_id, companyId, accountType: "DETAIL", active: true },
-  });
+  // An unchanged account stays valid even if it was deactivated later, so the type remains editable.
+  const account =
+    currentAccountId === data.settle_account_id
+      ? true
+      : await tx.financeAccount.findFirst({
+          where: { id: data.settle_account_id, companyId, accountType: "DETAIL", active: true },
+        });
   if (!account)
     throw new ConflictException(
       "Akun penyelesaian harus akun rincian (detail) yang aktif pada perusahaan ini.",
@@ -131,7 +136,7 @@ export async function updateDeductionType(
     if (!before) throw new NotFoundException("Jenis potongan tidak ditemukan.");
     if (before.version !== expectedVersion)
       throw new PreconditionFailedException("Jenis potongan diubah orang lain. Muat ulang.");
-    await validate(tx, companyId, data, id);
+    await validate(tx, companyId, data, id, before.settleAccountId);
     const row = await tx.deductionType.update({
       where: { id },
       data: {
