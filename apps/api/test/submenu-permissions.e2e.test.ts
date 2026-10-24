@@ -168,7 +168,7 @@ describe("independent submenu HTTP permissions", () => {
       .send({})
       .expect(403);
   });
-  it("hides configuration sections without read permission", async () => {
+  it("mapping reader gets account options without account.read; other sections stay hidden", async () => {
     const accounts = vi
       .spyOn(prisma.financeAccount, "findMany")
       .mockResolvedValue([{ id: "a" }] as never);
@@ -183,12 +183,29 @@ describe("independent submenu HTTP permissions", () => {
         .get("/finance-controls/configuration")
         .set("x-permissions", "account_mapping.read")
         .expect(200);
-      expect(mapping.body.data).toEqual({ accounts: [], periods: [], profiles: [{ id: "f" }] });
+      expect(mapping.body.data).toEqual({
+        accounts: [],
+        account_options: [{ id: "a" }],
+        periods: [],
+        profiles: [{ id: "f" }],
+      });
+      expect(accounts).toHaveBeenCalledTimes(1);
+      expect(accounts).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ active: true, accountType: "DETAIL" }),
+          select: { id: true, code: true, name: true },
+        }),
+      );
       const chart = await request(app.getHttpServer())
         .get("/finance-controls/configuration")
         .set("x-permissions", "account.read")
         .expect(200);
-      expect(chart.body.data).toEqual({ accounts: [{ id: "a" }], periods: [], profiles: [] });
+      expect(chart.body.data).toEqual({
+        accounts: [{ id: "a" }],
+        account_options: [],
+        periods: [],
+        profiles: [],
+      });
       await request(app.getHttpServer())
         .get("/finance-controls/configuration")
         .set("x-permissions", "journal.read")

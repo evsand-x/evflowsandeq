@@ -461,7 +461,7 @@ export class FinanceControlsController {
     const mayPeriods = hasResourcePermission(r.auth, "finance_period.close");
     if (!mayProfiles && !mayAccounts && !mayPeriods)
       throw new ForbiddenException("Izin konfigurasi keuangan diperlukan.");
-    const [accounts, periods, profiles] = await Promise.all([
+    const [accounts, accountOptions, periods, profiles] = await Promise.all([
       mayAccounts
         ? prisma.financeAccount.findMany({
             where: { companyId },
@@ -477,6 +477,14 @@ export class FinanceControlsController {
             },
           })
         : [],
+      // Pickers for the mapping screen: active DETAIL accounts, id/code/name only.
+      mayProfiles
+        ? prisma.financeAccount.findMany({
+            where: { companyId, active: true, accountType: "DETAIL" },
+            orderBy: { code: "asc" },
+            select: { id: true, code: true, name: true },
+          })
+        : [],
       mayPeriods
         ? prisma.financePeriod.findMany({ where: { companyId }, orderBy: { startsOn: "desc" } })
         : [],
@@ -487,7 +495,7 @@ export class FinanceControlsController {
           })
         : [],
     ]);
-    return { data: { accounts, periods, profiles } };
+    return { data: { accounts, account_options: accountOptions, periods, profiles } };
   }
   @Post("configuration/:kind")
   async configure(

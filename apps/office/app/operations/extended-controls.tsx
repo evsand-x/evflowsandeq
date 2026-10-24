@@ -857,6 +857,7 @@ function StatementImport({ command, pending, can }: Props) {
 export function FinanceConfiguration({ command, pending, can }: Props) {
   const q = useData<{
     accounts: { id: string; code: string; name: string }[];
+    account_options: { id: string; code: string; name: string }[];
     periods: { id: string; startsOn: string; endsOn: string; state: string }[];
     profiles: { id: string; effectiveFrom: string; effectiveTo: string }[];
   }>("/finance-controls/configuration");
@@ -946,7 +947,7 @@ export function FinanceConfiguration({ command, pending, can }: Props) {
                 {text("currency", "Mata uang")}
                 <SelectionField
                   label="Akun GL bank"
-                  options={(q.data?.data.accounts ?? []).map((a) => ({
+                  options={(q.data?.data.account_options ?? []).map((a) => ({
                     id: a.id,
                     name: `${a.code} · ${a.name}`,
                   }))}
@@ -969,7 +970,7 @@ export function FinanceConfiguration({ command, pending, can }: Props) {
                   <SelectionField
                     key={k}
                     label={k}
-                    options={(q.data?.data.accounts ?? []).map((a) => ({
+                    options={(q.data?.data.account_options ?? []).map((a) => ({
                       id: a.id,
                       name: `${a.code} · ${a.name}`,
                     }))}
