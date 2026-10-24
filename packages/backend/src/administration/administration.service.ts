@@ -74,9 +74,25 @@ export class AdministrationService {
     return this.serializeCompany(updated);
   }
 
-  async listPolicies(companyId: string, group?: string) {
+  async getPolicyGroup(companyId: string, code: string) {
+    const policy = await prisma.systemPolicy.findUnique({
+      where: { companyId_code: { companyId, code } },
+      select: { policyGroup: true },
+    });
+    if (!policy) throw new NotFoundException("Policy tidak ditemukan.");
+    return policy.policyGroup;
+  }
+
+  async listPolicies(companyId: string, group?: string, allowedGroups?: string[]) {
     const policies = await prisma.systemPolicy.findMany({
-      where: { companyId, ...(group ? { policyGroup: group } : {}) },
+      where: {
+        companyId,
+        ...(group
+          ? { policyGroup: group }
+          : allowedGroups
+            ? { policyGroup: { in: allowedGroups } }
+            : {}),
+      },
       orderBy: [{ policyGroup: "asc" }, { code: "asc" }],
       include: {
         versions: {

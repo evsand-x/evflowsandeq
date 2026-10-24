@@ -27,7 +27,7 @@ export default function SettingHubPage() {
           label: "Kebijakan Operasional",
           description: "Zona waktu, format angka dan parameter lain.",
           href: "/setting/policies",
-          allowed: can("operational_policy.read"),
+          allowed: can("setting_general.read"),
         },
       ],
     },
@@ -55,7 +55,7 @@ export default function SettingHubPage() {
           label: "Termin, Ongkos Kirim & Kredit",
           description: "Daftar termin, ongkir bawaan dan cara memeriksa limit kredit.",
           href: "/setting/sales",
-          allowed: can("operational_policy.read"),
+          allowed: can("terms_credit.read"),
         },
         {
           label: "Pajak",

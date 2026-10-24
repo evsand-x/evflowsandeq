@@ -37,7 +37,7 @@ function display(value: unknown) {
 
 export default function PoliciesPage() {
   const { principal } = useSession();
-  const canEdit = principal ? hasCompanyPermission(principal, "operational_policy.update") : false;
+  const canEdit = principal ? hasCompanyPermission(principal, "setting_general.update") : false;
   const query = useQuery({
     queryKey: ["settings", "policies"],
     queryFn: async () =>
@@ -54,7 +54,7 @@ export default function PoliciesPage() {
     <SettingFrame
       title="Kebijakan Operasional"
       subtitle="Parameter bisnis yang dapat diubah. Perubahan berlaku untuk transaksi baru."
-      permission="operational_policy.read"
+      permission="setting_general.read"
     >
       {query.isError ? (
         <PageNotice tone="error" onRetry={() => void query.refetch()}>

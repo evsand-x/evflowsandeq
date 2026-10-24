@@ -49,7 +49,7 @@ function Choice({
 
 export default function SalesSettingsPage() {
   const { principal } = useSession();
-  const canEdit = principal ? hasCompanyPermission(principal, "operational_policy.update") : false;
+  const canEdit = principal ? hasCompanyPermission(principal, "terms_credit.update") : false;
   const terms = usePolicyForm<Term[]>("OPS-FLX-03"),
     freight = usePolicyForm<Freight>("OPS-FLX-04"),
     credit = usePolicyForm<string>("OPS-FLX-01"),
@@ -61,7 +61,7 @@ export default function SalesSettingsPage() {
     <SettingFrame
       title="Termin, Ongkos Kirim & Kredit"
       subtitle="Nilai bawaan untuk Sales Order baru. Pengguna tetap dapat mengubahnya di setiap SO."
-      permission="operational_policy.read"
+      permission="terms_credit.read"
     >
       <div className="setting-stack">
         <SettingSection

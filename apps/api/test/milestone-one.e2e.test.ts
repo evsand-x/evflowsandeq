@@ -21,8 +21,8 @@ describe("Milestone 1 identity and setting", () => {
   const realPermissionCodes = [
     "company_profile.read",
     "company_profile.update",
-    "operational_policy.read",
-    "operational_policy.update",
+    "setting_general.read",
+    "setting_general.update",
     "user.role.assign",
     "user.read",
     "user.update",

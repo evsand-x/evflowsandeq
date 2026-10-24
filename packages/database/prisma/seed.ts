@@ -174,6 +174,19 @@ async function main() {
     ["operational_policy.read", "operational_policy", "read"],
     ["operational_policy.update", "operational_policy", "update"],
     ["audit_event.read", "audit_event", "read"],
+    ["setting_general.read", "setting_general", "read"],
+    ["setting_general.update", "setting_general", "update"],
+    ["tax_setting.read", "tax_setting", "read"],
+    ["tax_setting.update", "tax_setting", "update"],
+    ["terms_credit.read", "terms_credit", "read"],
+    ["terms_credit.update", "terms_credit", "update"],
+    ["deduction_type.read", "deduction_type", "read"],
+    ["deduction_type.manage", "deduction_type", "manage"],
+    ["account_mapping.read", "account_mapping", "read"],
+    ["account_mapping.manage", "account_mapping", "manage"],
+    ["customer_credit.update", "customer_credit", "update"],
+    ["discount_limit.manage", "discount_limit", "manage"],
+    ["special_price.approve", "special_price", "approve"],
   ] as const;
 
   for (const [code, resource, action] of permissions) {

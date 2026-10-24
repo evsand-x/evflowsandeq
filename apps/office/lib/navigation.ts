@@ -166,8 +166,8 @@ export const settingPermissions: Record<string, string> = {
   "Profil Perusahaan": "company_profile.read",
   Pengguna: "user.read",
   Peran: "role.read",
-  "Kebijakan Operasional": "operational_policy.read",
-  "Termin, Ongkos Kirim & Kredit": "operational_policy.read",
+  "Kebijakan Operasional": "setting_general.read",
+  "Termin, Ongkos Kirim & Kredit": "terms_credit.read",
   "Pengaturan Persetujuan": "transaction_approval.manage",
   "Penomoran Dokumen": "numbering_rule.read",
 };

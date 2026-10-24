@@ -88,6 +88,8 @@ const resourceLabels: Record<string, [string, string, boolean?]> = {
   customer_return: ["Warehouse & Logistik", "Retur Pelanggan"],
   permission: ["Setting", "Daftar Hak Akses"],
   operational_policy: ["Setting", "Kebijakan Operasional"],
+  setting_general: ["Setting", "Kebijakan Operasional"],
+  terms_credit: ["Setting", "Termin, Ongkos Kirim & Kredit"],
   audit_event: ["Setting", "Audit"],
   crm_prospect: ["Sales & Marketing", "Prospek"],
   crm_contact: ["Sales & Marketing", "Kontak"],
