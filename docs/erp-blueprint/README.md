@@ -1,5 +1,19 @@
 # evflow — Blueprint ERP
 
+## Keputusan pengguna — 24 Oktober 2026: konsolidasi pengaturan
+
+Acuan: [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Melengkapi keputusan arah fleksibel di bawah:
+
+- **Satu menu, satu rumah.** Setiap menu berada di tepat satu modul; menu yang salah tempat dihapus. Semua pengaturan di Setting (Profil Perusahaan, Pengguna, Peran, Kebijakan Umum, Penomoran Dokumen, Pajak, Termin & Kredit, Jenis Potongan, Pemetaan Akun, Persetujuan); modul lain hanya transaksi dan data kerja. Halaman `/operations/controls` dihapus.
+- **Pengaturan umum, bukan per pasangan.** Pengaturan umum di Setting → atribut sederhana di master data bila memang berbeda → nilai di dokumen terisi otomatis dan dapat diganti pengguna berizin. Aturan per pelanggan × produk dihentikan.
+- **Pajak:** semua produk kena PPN; dokumen memakai pajak penjualan bawaan (tarif × faktor DPP, bawaan 12% × 11/12) dengan snapshot. Invoice memuat kode transaksi faktur (bawaan 01, bawaan pelanggan mis. RS Pemerintah 03).
+- **Potongan pembayaran:** Terima Pembayaran memuat baris potongan (jenis, nilai, akun, bukti). Jenis Potongan di Setting menentukan akun penyelesaian dan bukti (bukti potong atau SSP/NTPN). Nilai yang wajib bukti tetap piutang berstatus Menunggu bukti potong, dihitung dalam limit kredit, dan invoice baru lunas setelah bukti diunggah.
+- **Harga dan diskon:** harga otomatis = harga khusus pelanggan yang disetujui bila ada, selain itu harga jual umum; dapat diganti di SO. Batas diskon per peran, per orang (menggantikan peran) dan per produk (plafon); berlaku yang terkecil; melebihi batas tidak dapat disimpan. Harga khusus diajukan dan disetujui di Sales & Marketing.
+- **Persetujuan di tempat dokumen;** pengaturan umumnya di Setting. Dashboard hanya menautkan.
+- **Format nomor:** `Prefix.FormatTahun.FormatBulan.NomorUrut` (contoh `SO-SSM.2026.10.0001`), toggle reset bulanan/tahunan; perubahan mode reset berlaku periode berikutnya.
+- **Identitas perusahaan** (zona waktu, tahun buku, mata uang) hanya di data perusahaan; limit kredit, freeze dan toleransi menjadi atribut Master Data › Pelanggan.
+
+
 ## Keputusan pengguna — 24 Oktober 2026: aplikasi fleksibel dan mudah dipakai
 
 Acuan: [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Aplikasi dipakai sendiri oleh seluruh tim perusahaan dan harus terasa seperti ERP SaaS pada umumnya: langsung dapat dipakai, sedikit isian wajib, pengaturan terpusat. Keputusan ini menggantikan ketentuan lama yang bertentangan di seluruh blueprint:

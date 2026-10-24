@@ -1,5 +1,10 @@
 # Domain Setting
 
+## Keputusan 24 Oktober 2026 — konsolidasi pengaturan
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Submenu Setting: Profil Perusahaan, Pengguna, Peran (termasuk batas diskon per peran dan per orang), Kebijakan Umum (zona waktu, tahun buku, mata uang dari data perusahaan; format angka), Penomoran Dokumen (IAM-06), Pajak (FIN-17), Termin & Kredit (daftar termin, mode kredit, ongkir bawaan), Jenis Potongan (FIN-18), Pemetaan Akun, Persetujuan (tahap 4). Setiap submenu memiliki izin sendiri (CFG-11). Kebijakan duplikat identitas perusahaan (`OPS-COMP-01..03`) dihentikan.
+
+
 ## Keputusan 24 Oktober 2026 — Pengaturan terpusat
 
 Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Setting menjadi satu tempat untuk mengatur aplikasi seperti ERP SaaS pada umumnya. Semua parameter bisnis dapat diedit pengguna berizin, dan konfigurasi yang dibutuhkan transaksi tersedia sejak awal sebagai nilai bawaan (CFG-08). Profil Perusahaan (nama, alamat, kontak, NPWP, logo) diedit langsung (IAM-10). Hanya Rupiah; format angka diatur (CFG-09). Struktur Organisasi (IAM-12) dan mesin persetujuan umum (IAM-02/07) dikelola di sini. Peran dibuat bebas tanpa preset (IAM-13); Pengguna, Peran dan Hak Akses tetap khusus Admin Sistem untuk mencegah pengguna menaikkan haknya sendiri, sedangkan pengaturan lain memakai izin per submenu sehingga dapat didelegasikan. Menu yang belum berfungsi disembunyikan (CFG-10). Master pajak tetap di Finance → Pajak dan ditautkan dari Setting.
@@ -104,11 +109,11 @@ Kelompok policy: Perusahaan & Lokalisasi, Finance & Penagihan, Gudang & Pengadaa
 
 **Kebijakan Pelanggan Baru** bersifat opsional (default nonaktif): bila dinyalakan, menetapkan mode awal COD saat barang diterima atau Bayar sebelum Pengiriman beserta durasinya. Pengguna berwenang dapat menetapkan termin bawaan, limit kredit (opsional), tanggal efektif, toleransi dan status freeze/unlock pada kebijakan pelanggan tertentu. Nilai tersebut bukan atribut bebas yang mengubah saldo pada Master Data.
 
-TOP dan limit kredit pelanggan dikelola melalui **Finance → Kredit & TOP Pelanggan** dengan referensi pelanggan dan versi kebijakan. Setting menyediakan policy global/default, daftar termin dan mode kredit; Finance menjadi pemilik evaluasi fasilitas, exposure, past due dan keputusan kredit. Sales memilih termin pada SO; termin bawaan pelanggan hanya mengisi otomatis. SO dan invoice menyimpan snapshot TOP/limit/policy yang dipakai sehingga perubahan berikutnya tidak mengubah histori.
+Sejak konsolidasi 24 Oktober 2026, termin bawaan, limit kredit, freeze dan toleransi menjadi atribut **Master Data › Pelanggan** (izin kredit pelanggan). Ketentuan lama: TOP dan limit kredit pelanggan dikelola melalui Finance → Kredit & TOP Pelanggan dengan referensi pelanggan dan versi kebijakan. Setting menyediakan policy global/default, daftar termin dan mode kredit; Finance menjadi pemilik evaluasi fasilitas, exposure, past due dan keputusan kredit. Sales memilih termin pada SO; termin bawaan pelanggan hanya mengisi otomatis. SO dan invoice menyimpan snapshot TOP/limit/policy yang dipakai sehingga perubahan berikutnya tidak mengubah histori.
 
 #### Pengaturan fasilitas per pelanggan
 
-Alur layar: **Finance → Kredit & TOP Pelanggan → pilih pelanggan → Tambah/Revisi Fasilitas**. Form menampilkan identitas pelanggan dan histori versi, lalu menyediakan:
+Alur layar (digantikan konsolidasi 24 Oktober 2026: Master Data › Pelanggan › Kredit): Finance → Kredit & TOP Pelanggan → pilih pelanggan → Tambah/Revisi Fasilitas. Form menampilkan identitas pelanggan dan histori versi, lalu menyediakan:
 
 - mode pembayaran: COD, Prepay atau Tempo;
 - TOP dan dasar jatuh tempo;

@@ -1,5 +1,10 @@
 # Domain Finance
 
+## Keputusan 24 Oktober 2026 — pajak dan potongan
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md), FIN-17 dan FIN-18: daftar pajak dan pemetaan akun pindah ke Setting; Finance memuat Piutang (Invoice, Terima Pembayaran, bukti potong), Kas & Bank, Akuntansi (Daftar Akun, Jurnal) dan Faktur Pajak. Aturan pajak per pelanggan × produk dan WAPU/PPh per pelanggan dihentikan; menu Kredit & TOP Pelanggan dihapus.
+
+
 ## Keputusan 24 Oktober 2026 — termin, kredit dan ongkos kirim
 
 Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Hanya Rupiah. Termin dipilih pada SO dan diwarisi invoice; dapat diubah sebelum invoice diposting (OTC-17). Limit kredit opsional dengan mode Nonaktif/Peringatan/Blokir, default Peringatan; pengecualian mode Blokir diajukan melalui mesin persetujuan umum. Ongkos kirim penjualan: Ditanggung perusahaan (biaya kirim aktual ke akun COGS/biaya pengiriman, tidak ditagih) atau Dibebankan ke pelanggan dengan Sebelum PPN (masuk DPP) atau Sesudah PPN (tidak dikenai pajak); pilihan bawaan dan akun diatur di Setting tanpa akun tertanam di kode. Rekonsiliasi dapat memakai persetujuan bila aturannya aktif.

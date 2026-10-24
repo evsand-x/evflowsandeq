@@ -1,5 +1,10 @@
 # User Flow — lintas peran dan pengecualian
 
+## Keputusan 24 Oktober 2026 — konsolidasi
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Alur SO: pilih produk → harga otomatis (harga khusus pelanggan atau harga umum) → ubah harga/diskon dalam batas → pajak bawaan terisi → ajukan. Alur pembayaran: catat uang diterima → tambah baris potongan → potongan wajib bukti berstatus Menunggu bukti potong → unggah bukti → lunas. Harga khusus diajukan dan disetujui di Sales & Marketing pada halaman pengajuannya.
+
+
 ## Keputusan 24 Oktober 2026 — alur fleksibel
 
 Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Alur SO: Draft dengan isian minimal → Ajukan → validasi data/harga → persetujuan SO bila aturan aktif cocok (stok belum direservasi; antrean alokasi dihitung sejak disetujui) → kredit sesuai mode Nonaktif/Peringatan/Blokir → alokasi stok → dokumen pemenuhan → invoice → pembayaran atau retur. Mode Peringatan menampilkan peringatan tanpa menahan; mode Blokir menahan SO dan pengguna mengajukan pengecualian melalui mesin persetujuan umum. Termin dipilih di SO.

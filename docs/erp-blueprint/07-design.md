@@ -1,5 +1,10 @@
 # Design — web kantor dan aplikasi mobile sales/gudang
 
+## Keputusan 24 Oktober 2026 — konsolidasi
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Navigasi: setiap menu di satu modul; Setting berisi Profil Perusahaan, Pengguna, Peran, Kebijakan Umum, Penomoran Dokumen, Pajak, Termin & Kredit, Jenis Potongan, Pemetaan Akun. Form SO menampilkan "Diskon maks. untuk Anda" per baris. Form Terima Pembayaran memuat tabel Potongan. Dialog penomoran memuat prefix, format tahun, format bulan, panjang urut dan toggle reset bulanan/tahunan dengan pratinjau. Tombol persetujuan tampil di halaman dokumen.
+
+
 ## Keputusan 24 Oktober 2026 — kemudahan pakai
 
 Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Prinsip layar Office:
@@ -160,7 +165,7 @@ Dashboard Finance web pada implementasi historis: empat KPI, Antrean finance dan
    - Kartu Piutang, Aging, Tagihan
    - A/T Tagihan, Estimasi Penagihan
    - Saldo dan alokasi uang muka pelanggan pada detail pelanggan/invoice; tidak ada menu uang muka tersendiri
-2. **Kredit & TOP Pelanggan**
+2. **Kredit & TOP Pelanggan** — dihapus 24 Oktober 2026 (konsolidasi); limit/freeze/toleransi pindah ke Master Data › Pelanggan, termin dan mode kredit ke Setting › Termin & Kredit
    - Daftar fasilitas per pelanggan
    - Penetapan atau perubahan mode COD/Prepay/Tempo, TOP, limit kredit, tanggal efektif dan toleransi
    - Evaluasi Finance, histori versi, bukti, approval, freeze dan unlock
@@ -335,7 +340,7 @@ UOM, NIE, dan Harga Beli/Jual Acuan adalah bagian detail **Produk**, bukan menu 
    - Durasi evaluasi dan syarat perpindahan fasilitas
 6. **Kredit & Exposure**
    - Kebijakan global, exposure, past due, freeze dan unlock
-   - Fasilitas per pelanggan dikelola melalui **Finance → Kredit & TOP Pelanggan**
+   - Fasilitas per pelanggan dikelola sebagai atribut **Master Data › Pelanggan** (keputusan konsolidasi 24 Oktober 2026)
 7. **Pengaturan Persetujuan**
    - Aturan, Tahapan, Delegasi dan Riwayat
 8. **Template Cetak**

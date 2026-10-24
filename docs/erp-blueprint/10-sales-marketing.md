@@ -1,5 +1,10 @@
 # Domain Sales & Marketing
 
+## Keputusan 24 Oktober 2026 — harga dan diskon
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md) dan OTC-18/19: harga otomatis dari harga khusus pelanggan atau harga umum; batas diskon per peran/orang/produk; Harga Khusus diajukan dan disetujui di Penawaran & Harga. Ketentuan versi penawaran dan harga khusus lama yang bertentangan diganti keputusan ini.
+
+
 ## Keputusan 24 Oktober 2026 — Sales Order fleksibel
 
 Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md): isian SO minimal; termin dipilih pada SO dan diwarisi invoice (OTC-17); TOP/limit master opsional; kredit mengikuti mode Nonaktif/Peringatan/Blokir; ongkos kirim Ditanggung perusahaan atau Dibebankan ke pelanggan Sebelum/Sesudah PPN; persetujuan SO hanya bila aturan aktif, dijalankan sebelum kredit dan alokasi tanpa reservasi stok selama menunggu. Pengecualian kredit memakai mesin persetujuan umum. Ketentuan lama di bawah yang bertentangan diganti keputusan ini.

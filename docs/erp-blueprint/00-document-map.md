@@ -1,5 +1,8 @@
 # Peta Dokumen dan Sumber Kebenaran
 
+Keputusan konsolidasi 24 Oktober 2026 ([desain](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md)): satu menu satu rumah, pengaturan umum di Setting, aturan per pasangan dihentikan, persetujuan di tempat dokumen.
+
+
 Prioritas sumber: keputusan terbaru pengguna → register keputusan pada README →
 Requirements → dokumen domain pemilik aturan → User Flow/Design/Features → model teknis.
 
