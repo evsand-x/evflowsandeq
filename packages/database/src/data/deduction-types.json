@@ -1,0 +1,6 @@
+[
+  { "name": "PPN dipungut", "account_code": "2-20500", "proof_type": "SSP_NTPN", "proof_required": true },
+  { "name": "PPh 22", "account_code": "1-10502", "proof_type": "BUKTI_POTONG", "proof_required": true },
+  { "name": "PPh 23", "account_code": "1-10502", "proof_type": "BUKTI_POTONG", "proof_required": true },
+  { "name": "Biaya transfer", "account_code": "8-80999", "proof_type": "NONE", "proof_required": false }
+]

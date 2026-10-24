@@ -25,6 +25,8 @@ export {
   numberingDefaults,
   operationalPolicyCatalog,
   taxDefaults,
+  deductionTypeDefaults,
+  type DeductionTypeDefault,
   type NumberingDefault,
   type TaxDefault,
   type ChartAccountData,

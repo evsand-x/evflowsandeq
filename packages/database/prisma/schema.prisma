@@ -2283,3 +2283,19 @@ model FulfillmentDocument {
   @@unique([companyId, number])
   @@map("fulfillment_documents")
 }
+
+/** Setting > Jenis Potongan: what a customer may withhold from a payment and where it settles. */
+model DeductionType {
+  id              String   @id @default(uuid()) @db.Uuid
+  companyId       String   @map("company_id") @db.Uuid
+  name            String
+  settleAccountId String   @map("settle_account_id") @db.Uuid
+  proofType       String   @map("proof_type")
+  proofRequired   Boolean  @default(false) @map("proof_required")
+  active          Boolean  @default(true)
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  @@unique([companyId, name])
+  @@map("deduction_types")
+}

@@ -44,6 +44,18 @@ describe("navigation shows only working menus", () => {
     ).not.toContain("Pajak");
     expect(navigationMatrixRows([]).map((row) => row.path)).toContain("Setting › Pajak");
   });
+  it("opens Setting > Jenis Potongan only with deduction_type.read", () => {
+    expect(
+      visibleMenuItems(principal([], ["deduction_type.read"]), "Setting").map((i) => [
+        i.label,
+        i.href,
+      ]),
+    ).toEqual([["Jenis Potongan", "/setting/deductions"]]);
+    expect(
+      visibleMenuItems(principal([], ["tax_setting.read"]), "Setting").map((i) => i.label),
+    ).not.toContain("Jenis Potongan");
+    expect(navigationMatrixRows([]).map((row) => row.path)).toContain("Setting › Jenis Potongan");
+  });
   it("hides a module with no visible item", () => {
     expect(visibleModules(admin).map((m) => m.label)).not.toContain("HRIS");
     expect(visibleModules(admin).map((m) => m.label)).toContain("Setting");

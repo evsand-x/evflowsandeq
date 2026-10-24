@@ -92,6 +92,7 @@ const resourceLabels: Record<string, [string, string, boolean?]> = {
   terms_credit: ["Setting", "Termin & Kredit"],
   customer_credit: ["Master Data", "Kredit & Termin Pelanggan"],
   tax_setting: ["Setting", "Pajak"],
+  deduction_type: ["Setting", "Jenis Potongan"],
   audit_event: ["Setting", "Audit"],
   crm_prospect: ["Sales & Marketing", "Prospek"],
   crm_contact: ["Sales & Marketing", "Kontak"],

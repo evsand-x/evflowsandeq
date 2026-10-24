@@ -64,6 +64,7 @@ describe("company defaults provisioning", () => {
         policies_created: [],
         numbering_created: [],
         taxes_created: [],
+        deduction_types_created: [],
       });
     });
   });

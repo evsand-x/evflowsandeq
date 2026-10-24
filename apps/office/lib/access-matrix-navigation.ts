@@ -94,6 +94,7 @@ const navigation: Entry[] = [
   entry("Setting › Template Cetak"),
   entry("Setting › Penomoran Dokumen", "numbering_rule"),
   entry("Setting › Pajak", "tax_setting"),
+  entry("Setting › Jenis Potongan", "deduction_type"),
   entry("Setting › Daftar Referensi & Alasan"),
   entry("Setting › Periode & Closing", "finance_period"),
   entry("Setting › Impor/Ekspor & Arsip"),

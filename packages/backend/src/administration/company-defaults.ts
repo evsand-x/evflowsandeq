@@ -1,4 +1,10 @@
-import { numberingDefaults, operationalPolicyCatalog, taxDefaults, Prisma } from "@evflow/database";
+import {
+  deductionTypeDefaults,
+  numberingDefaults,
+  operationalPolicyCatalog,
+  taxDefaults,
+  Prisma,
+} from "@evflow/database";
 import { AuditService } from "../common/audit.service";
 
 export { numberingDefaults };
@@ -22,7 +28,7 @@ function companyDay(timezone: string, at: Date) {
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
 /**
- * Creates missing editable defaults (policies, numbering rules, default taxes); never changes
+ * Creates missing editable defaults (policies, numbering rules, default taxes, deduction types); never changes
  * existing ones. A default tax whose account is not in the imported chart is skipped, so the
  * documents that need it stay blocked until the tax is set in Setting > Pajak.
  */
@@ -126,14 +132,40 @@ export async function provisionCompanyDefaults(
     });
     taxes_created.push(definition.name);
   }
-  if (policies_created.length || numbering_created.length || taxes_created.length)
+  const deduction_types_created: string[] = [];
+  for (const definition of deductionTypeDefaults) {
+    const existing = await tx.deductionType.count({
+      where: { companyId, name: { equals: definition.name, mode: "insensitive" } },
+    });
+    if (existing) continue;
+    const account = await tx.financeAccount.findFirst({
+      where: { companyId, code: definition.account_code, active: true, accountType: "DETAIL" },
+    });
+    if (!account) continue;
+    await tx.deductionType.create({
+      data: {
+        companyId,
+        name: definition.name,
+        settleAccountId: account.id,
+        proofType: definition.proof_type,
+        proofRequired: definition.proof_required,
+      },
+    });
+    deduction_types_created.push(definition.name);
+  }
+  if (
+    policies_created.length ||
+    numbering_created.length ||
+    taxes_created.length ||
+    deduction_types_created.length
+  )
     await new AuditService().recordWith(tx, {
       companyId,
       actorId,
       action: "company_defaults.provisioned",
       resourceType: "company",
       resourceId: companyId,
-      after: { policies_created, numbering_created, taxes_created },
+      after: { policies_created, numbering_created, taxes_created, deduction_types_created },
     });
-  return { policies_created, numbering_created, taxes_created };
+  return { policies_created, numbering_created, taxes_created, deduction_types_created };
 }

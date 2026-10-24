@@ -64,6 +64,13 @@ export default function SettingHubPage() {
           href: "/setting/tax",
           allowed: can("tax_setting.read"),
         },
+        {
+          label: "Jenis Potongan",
+          description:
+            "Potongan yang boleh dipotong pelanggan dari pembayaran, akun penyelesaian dan buktinya.",
+          href: "/setting/deductions",
+          allowed: can("deduction_type.read"),
+        },
       ],
     },
     {
