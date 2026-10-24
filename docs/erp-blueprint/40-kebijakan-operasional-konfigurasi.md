@@ -5,7 +5,7 @@
 Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md): Kebijakan Operasional menjadi Kebijakan Umum di Setting. Termin, ongkir dan kredit dikelola di Setting › Termin & Kredit; `OPS-COMP-01..03` digantikan data perusahaan; `OPS-FLX-05` menjadi pola awal untuk jenis dokumen baru.
 
 
-Status: keputusan final. Dokumen ini menjadi sumber utama parameter bisnis lintas modul yang dapat diubah melalui **Setting → Kebijakan Operasional**. Nilai pada dokumen 39 dan dokumen domain menjadi nilai awal, bukan angka yang ditanam permanen dalam kode.
+Status: keputusan final. Dokumen ini menjadi sumber utama parameter bisnis lintas modul yang dapat diubah melalui **Setting → Kebijakan Umum**. Nilai pada dokumen 39 dan dokumen domain menjadi nilai awal, bukan angka yang ditanam permanen dalam kode.
 
 ## Nilai bawaan baru — keputusan 24 Oktober 2026
 
@@ -142,7 +142,7 @@ RPO/RTO, region hosting, versi runtime, minimum OS, backup encryption dan secret
 
 ## 10. Navigasi dan hak akses
 
-Menu **Setting → Kebijakan Operasional** memakai tab:
+Menu **Setting → Kebijakan Umum** memakai tab:
 
 1. Perusahaan & Lokalisasi;
 2. Finance & Penagihan;

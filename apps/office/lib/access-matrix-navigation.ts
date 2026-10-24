@@ -85,7 +85,7 @@ const navigation: Entry[] = [
   entry("Setting › Peran", "role"),
   entry("Setting › Peran › Matriks Hak Akses", "role_permission"),
   entry("Setting › Peran › Katalog Izin", "permission"),
-  entry("Setting › Kebijakan Operasional", "setting_general"),
+  entry("Setting › Kebijakan Umum", "setting_general"),
   entry("Setting › Termin, Ongkos Kirim & Kredit", "terms_credit"),
   entry("Setting › Kebijakan Pelanggan Baru", "customer.payment_policy"),
   entry("Setting › Kredit & Exposure"),

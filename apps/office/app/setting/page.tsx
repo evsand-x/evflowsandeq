@@ -24,9 +24,9 @@ export default function SettingHubPage() {
           allowed: can("company_profile.read"),
         },
         {
-          label: "Kebijakan Operasional",
-          description: "Zona waktu, format angka dan parameter lain.",
-          href: "/setting/policies",
+          label: "Kebijakan Umum",
+          description: "Zona waktu, tahun buku, format angka dan parameter umum lain.",
+          href: "/setting/general",
           allowed: can("setting_general.read"),
         },
       ],

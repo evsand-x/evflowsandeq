@@ -10,7 +10,7 @@ import { ApiError, apiRequest } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { preferencesKey } from "@/lib/settings";
 import { useSession } from "../../session-provider";
-import { SettingFrame } from "../settings-ui";
+import { SettingFrame, useVersionedDraft } from "../settings-ui";
 
 type Company = {
   name: string;
@@ -34,14 +34,16 @@ export default function CompanyProfilePage() {
     queryKey: ["settings", "company"],
     queryFn: async () => (await apiRequest<{ data: Company }>("/company-profile")).data,
   });
-  const [draft, setDraft] = useState<Values | null>(null),
-    [busy, setBusy] = useState(false),
+  const draft = useVersionedDraft<Values>(
+    query.data ? { version: query.data.version, value: toValues(query.data) } : undefined,
+  );
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [nameError, setNameError] = useState("");
-  const values = draft ?? (query.data ? toValues(query.data) : null);
+  const values = draft.value ?? null;
   const set = (field: keyof Values, value: string) => {
     if (!values) return;
-    setDraft({ ...values, [field]: value });
+    draft.set({ ...values, [field]: value });
     if (field === "name") setNameError("");
   };
   const save = async () => {
@@ -52,7 +54,7 @@ export default function CompanyProfilePage() {
     try {
       await apiRequest("/company-profile", {
         method: "PATCH",
-        version: query.data.version,
+        version: draft.version ?? query.data.version,
         body: JSON.stringify({
           name: values.name.trim(),
           ...Object.fromEntries(
@@ -60,7 +62,7 @@ export default function CompanyProfilePage() {
           ),
         }),
       });
-      setDraft(null);
+      draft.reset();
       await Promise.all([
         cache.invalidateQueries({ queryKey: ["settings", "company"] }),
         cache.invalidateQueries({ queryKey: preferencesKey }),
@@ -107,7 +109,7 @@ export default function CompanyProfilePage() {
       permission="company_profile.read"
       actions={
         canEdit && (
-          <Button disabled={!draft || busy} onClick={() => void save()}>
+          <Button disabled={!draft.dirty || busy} onClick={() => void save()}>
             {busy ? "Menyimpan…" : "Simpan"}
           </Button>
         )
@@ -117,7 +119,7 @@ export default function CompanyProfilePage() {
         <PageNotice
           tone="error"
           onRetry={() => {
-            setDraft(null);
+            draft.reset();
             setError("");
             void query.refetch();
           }}

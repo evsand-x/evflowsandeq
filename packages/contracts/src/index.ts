@@ -98,6 +98,11 @@ export const dashboardSummarySchema = z.object({
 });
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>["data"];
 
+const supportedTimeZones = new Set<string>([
+  "UTC",
+  ...(typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : []),
+]);
+
 export const companyProfileUpdateSchema = z
   .object({
     name: z.string().trim().min(2).max(200),
@@ -107,6 +112,12 @@ export const companyProfileUpdateSchema = z
     email: z.string().email().nullable().optional(),
     logo_object_key: z.string().trim().max(500).nullable().optional(),
     tax_identity: z.string().trim().max(100).nullable().optional(),
+    timezone: z
+      .string()
+      .refine((value) => supportedTimeZones.has(value), "Zona waktu tidak dikenal.")
+      .optional(),
+    fiscal_year_start_month: z.number().int().min(1).max(12).optional(),
+    fiscal_year_start_day: z.number().int().min(1).max(28).optional(),
   })
   .strict();
 

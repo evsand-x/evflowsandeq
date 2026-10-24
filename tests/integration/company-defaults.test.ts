@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@evflow/database";
-import { provisionCompanyDefaults } from "../../packages/backend/src/administration/company-defaults";
+import {
+  provisionCompanyDefaults,
+  visiblePolicyCodes,
+} from "../../packages/backend/src/administration/company-defaults";
 import { nextDocumentNumber } from "../../packages/backend/src/common/document-number";
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -127,6 +130,32 @@ describe("company defaults provisioning", () => {
       });
       expect(events).toHaveLength(1);
       expect(events[0]!.afterHash).not.toBeNull();
+    });
+  });
+});
+
+describe("retired catalog policies", () => {
+  it("hides policies removed from the catalog", async () => {
+    await inRollback(async (tx) => {
+      const { companyId, actorId } = await freshCompany(tx);
+      await provisionCompanyDefaults(tx, companyId, actorId, today);
+      const legacy = await tx.systemPolicy.create({
+        data: {
+          companyId,
+          code: "OPS-COMP-01",
+          name: "Zona waktu bisnis",
+          ownerDomain: "administration",
+          policyGroup: "company",
+          scope: "company",
+          valueType: "string",
+          validationSchema: {},
+          defaultValueSnapshot: "Asia/Makassar",
+        },
+      });
+      expect(legacy.code).toBe("OPS-COMP-01");
+      const visible = await visiblePolicyCodes(tx, companyId);
+      expect(visible).not.toContain("OPS-COMP-01");
+      expect(visible).toContain("OPS-FLX-03");
     });
   });
 });

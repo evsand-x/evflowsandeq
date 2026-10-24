@@ -1,59 +1,5 @@
 [
   {
-    "code": "OPS-COMP-01",
-    "name": "Zona waktu bisnis",
-    "group": "company",
-    "domain": "administration",
-    "type": "string",
-    "unit": "iana_timezone",
-    "default": "Asia/Makassar",
-    "schema": {
-      "type": "string",
-      "minLength": 3
-    }
-  },
-  {
-    "code": "OPS-COMP-02",
-    "name": "Awal tahun buku",
-    "group": "company",
-    "domain": "finance",
-    "type": "object",
-    "unit": "month_day",
-    "default": {
-      "month": 1,
-      "day": 1
-    },
-    "schema": {
-      "type": "object",
-      "required": ["month", "day"],
-      "properties": {
-        "month": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 12
-        },
-        "day": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 31
-        }
-      }
-    }
-  },
-  {
-    "code": "OPS-COMP-03",
-    "name": "Mata uang dasar",
-    "group": "company",
-    "domain": "finance",
-    "type": "string",
-    "unit": "iso_currency",
-    "default": "IDR",
-    "schema": {
-      "type": "string",
-      "pattern": "^[A-Z]{3}$"
-    }
-  },
-  {
     "code": "OPS-FIN-01",
     "name": "Dasar penentuan jatuh tempo tagihan pemasok",
     "group": "finance",
@@ -941,32 +887,6 @@
         "tax_position": {
           "type": "string",
           "enum": ["BEFORE_TAX", "AFTER_TAX"]
-        }
-      }
-    }
-  },
-  {
-    "code": "OPS-FLX-05",
-    "name": "Pola penomoran untuk jenis dokumen baru",
-    "group": "company",
-    "domain": "administration",
-    "type": "object",
-    "unit": null,
-    "default": {
-      "digits": 5,
-      "reset_yearly": true
-    },
-    "schema": {
-      "type": "object",
-      "required": ["digits", "reset_yearly"],
-      "properties": {
-        "digits": {
-          "type": "integer",
-          "minimum": 3,
-          "maximum": 10
-        },
-        "reset_yearly": {
-          "type": "boolean"
         }
       }
     }

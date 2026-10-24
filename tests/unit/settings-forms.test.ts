@@ -3,6 +3,7 @@ import {
   policyFormValue,
   policyPayload,
   initialResetPeriod,
+  lockDraft,
   previewDocumentNumber,
 } from "../../apps/office/app/setting/settings-forms";
 
@@ -35,5 +36,17 @@ describe("settings form helpers", () => {
       initialResetPeriod({ reset_period: "YEARLY", pending: { reset_period: "MONTHLY" } }),
     ).toBe("MONTHLY");
     expect(initialResetPeriod({ reset_period: "YEARLY", pending: null })).toBe("YEARLY");
+  });
+});
+
+describe("version-locked drafts", () => {
+  it("locks the version at edit start", () => {
+    const first = lockDraft(null, { version: 3, value: "a" }, "b");
+    expect(first).toEqual({ version: 3, value: "b" });
+    // someone else saved meanwhile: the source moved to v4, but the draft keeps v3
+    expect(lockDraft(first, { version: 4, value: "x" }, "c")).toEqual({ version: 3, value: "c" });
+  });
+  it("does nothing without a source", () => {
+    expect(lockDraft(null, undefined, "b")).toBeNull();
   });
 });

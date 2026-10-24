@@ -1,13 +1,19 @@
 "use client";
 import { useState, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { OfficePage, PageNotice } from "@/components/web/page-frame";
 import { ApiError, apiRequest } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
-import { policyFormValue, policyPayload, type SettingPolicy } from "./settings-forms";
+import {
+  lockDraft,
+  policyFormValue,
+  policyPayload,
+  type SettingPolicy,
+  type VersionedSource,
+} from "./settings-forms";
 import "./settings.css";
 
 /** Page frame for every Setting screen; the server still enforces each permission. */
@@ -43,6 +49,22 @@ export function SettingFrame({
   );
 }
 
+/**
+ * Editable copy of a server value. The version is locked on the first edit, so a save sent later
+ * carries the version the user started from and a concurrent change answers 412 instead of being
+ * overwritten.
+ */
+export function useVersionedDraft<T>(source: VersionedSource<T> | undefined) {
+  const [draft, setDraft] = useState<VersionedSource<T> | null>(null);
+  return {
+    value: draft?.value ?? source?.value,
+    version: draft?.version ?? source?.version,
+    dirty: !!draft,
+    set: (next: T) => setDraft((current) => lockDraft(current, source, next)),
+    reset: () => setDraft(null),
+  };
+}
+
 export const policyKey = (code: string) => ["settings", "policy", code] as const;
 
 export function usePolicy(code: string) {
@@ -57,18 +79,20 @@ export function usePolicy(code: string) {
  * Holds an editable copy of one policy value. A stale save (412) keeps the user's input and
  * offers a reload instead of overwriting someone else's change.
  */
-export function usePolicyForm<T>(code: string) {
+export function usePolicyForm<T>(code: string, onSaved?: (value: T) => void) {
   const query = usePolicy(code),
     cache = useQueryClient();
-  const [draft, setDraft] = useState<{ version: number; value: T } | null>(null),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [conflict, setConflict] = useState(false);
   const policy = query.data;
-  const value = draft?.value ?? (policy ? (policyFormValue(policy) as T) : undefined);
+  const draft = useVersionedDraft<T>(
+    policy ? { version: policy.latest_version_no, value: policyFormValue(policy) as T } : undefined,
+  );
+  const value = draft.value;
   const set = (next: T) => {
     if (!policy?.active_version) return;
-    setDraft({ version: draft?.version ?? policy.latest_version_no, value: next });
+    draft.set(next);
   };
   const save = async () => {
     if (!policy || value === undefined) return;
@@ -77,11 +101,12 @@ export function usePolicyForm<T>(code: string) {
     try {
       await apiRequest(`/operational-policies/${code}`, {
         method: "PATCH",
-        version: draft?.version ?? policy.latest_version_no,
+        version: draft.version ?? policy.latest_version_no,
         body: JSON.stringify(policyPayload(code, value)),
       });
-      setDraft(null);
+      draft.reset();
       setConflict(false);
+      onSaved?.(value);
       await cache.invalidateQueries({ queryKey: policyKey(code) });
       toast.success("Pengaturan disimpan");
     } catch (e) {
@@ -94,12 +119,12 @@ export function usePolicyForm<T>(code: string) {
     }
   };
   const reload = async () => {
-    setDraft(null);
+    draft.reset();
     setConflict(false);
     setError("");
     await cache.invalidateQueries({ queryKey: policyKey(code) });
   };
-  return { query, policy, value, set, save, reload, busy, error, conflict, dirty: !!draft };
+  return { query, policy, value, set, save, reload, busy, error, conflict, dirty: draft.dirty };
 }
 
 /** One titled settings block with its own save action and inline error. */
@@ -114,8 +139,8 @@ export function SettingSection({
   description: string;
   form: Pick<
     ReturnType<typeof usePolicyForm>,
-    "save" | "reload" | "busy" | "error" | "conflict" | "dirty" | "query"
-  >;
+    "save" | "reload" | "busy" | "error" | "conflict" | "dirty"
+  > & { query: Pick<UseQueryResult, "isError" | "isLoading" | "refetch"> };
   canEdit: boolean;
   children: ReactNode;
 }) {

@@ -1350,7 +1350,7 @@ Bucket awal:
 - 61–90 hari;
 - lebih dari 90 hari.
 
-Bucket dapat diubah melalui Setting → Kebijakan Operasional (OPS-FIN-08). Simpan langsung membuat versi otomatis; tanggal berlaku bersifat opsional. Past due berarti tanggal acuan melewati jatuh tempo dan outstanding masih positif. Invoice sengketa tetap terlihat di bucket aslinya dengan penanda sengketa; sistem tidak menyembunyikannya dari total tanpa kebijakan tertulis.
+Bucket dapat diubah melalui Setting → Kebijakan Umum (OPS-FIN-08). Simpan langsung membuat versi otomatis; tanggal berlaku bersifat opsional. Past due berarti tanggal acuan melewati jatuh tempo dan outstanding masih positif. Invoice sengketa tetap terlihat di bucket aslinya dengan penanda sengketa; sistem tidak menyembunyikannya dari total tanpa kebijakan tertulis.
 
 ## 4. Kartu Utang Supplier dan Vendor
 

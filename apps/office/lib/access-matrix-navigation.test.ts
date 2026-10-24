@@ -124,7 +124,7 @@ describe("permission matrix navigation", () => {
     const rows = navigationMatrixRows(catalog);
     // CFG-10: every working menu has a row; the combined sales settings page edits operational policies.
     const alias: Record<string, string> = {
-      "Setting › Termin, Ongkos Kirim & Kredit": "Setting › Kebijakan Operasional",
+      "Setting › Termin, Ongkos Kirim & Kredit": "Setting › Kebijakan Umum",
       // Same capability (customer.payment_policy) as the customer credit policy row.
       "Finance › Kredit & TOP Pelanggan": "Setting › Kebijakan Pelanggan Baru",
     };

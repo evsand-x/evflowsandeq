@@ -327,7 +327,7 @@ UOM, NIE, dan Harga Beli/Jual Acuan adalah bagian detail **Produk**, bukan menu 
 3. **Peran**
    - Kelompok hak akses dan penugasan beberapa peran pada satu pengguna
    - Detail peran: **Matriks Hak Akses** untuk resource, tindakan, scope, field sensitif dan tindakan khusus
-4. **Kebijakan Operasional**
+4. **Kebijakan Umum**
    - Perusahaan & Lokalisasi
    - Finance & Penagihan
    - Gudang & Pengadaan

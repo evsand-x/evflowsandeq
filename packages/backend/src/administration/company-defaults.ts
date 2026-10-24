@@ -3,6 +3,17 @@ import { AuditService } from "../common/audit.service";
 
 export { numberingDefaults };
 
+/** Policies outside the catalog (removed from the product) stay stored for audit but are never shown or served. */
+export const catalogPolicyCodes: string[] = operationalPolicyCatalog.map((policy) => policy.code);
+
+export async function visiblePolicyCodes(tx: Prisma.TransactionClient, companyId: string) {
+  const rows = await tx.systemPolicy.findMany({
+    where: { companyId, code: { in: catalogPolicyCodes } },
+    select: { code: true },
+  });
+  return rows.map((row) => row.code);
+}
+
 const openEnded = new Date("2999-12-31");
 
 function companyDay(timezone: string, at: Date) {

@@ -52,3 +52,18 @@ export function initialResetPeriod(row: {
 }) {
   return row.pending?.reset_period ?? row.reset_period ?? "MONTHLY";
 }
+
+export type VersionedSource<T> = { version: number; value: T };
+
+/**
+ * Next draft after an edit. The version is taken from the source on the first edit and kept after,
+ * so a save sent later still carries the version the user started from (stale saves get 412).
+ */
+export function lockDraft<T>(
+  draft: VersionedSource<T> | null,
+  source: VersionedSource<T> | undefined,
+  next: T,
+): VersionedSource<T> | null {
+  if (!source) return null;
+  return { version: draft?.version ?? source.version, value: next };
+}

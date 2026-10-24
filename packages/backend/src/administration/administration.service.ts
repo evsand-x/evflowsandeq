@@ -14,6 +14,7 @@ import {
   PreconditionFailedException,
 } from "@nestjs/common";
 import { AuditService } from "../common/audit.service";
+import { catalogPolicyCodes } from "./company-defaults";
 import { validatePolicyValue } from "./policy-validator";
 
 @Injectable()
@@ -38,6 +39,9 @@ export class AdministrationService {
       email?: string | null | undefined;
       logo_object_key?: string | null | undefined;
       tax_identity?: string | null | undefined;
+      timezone?: string | undefined;
+      fiscal_year_start_month?: number | undefined;
+      fiscal_year_start_day?: number | undefined;
     },
   ) {
     const before = await prisma.company.findUnique({ where: { id: companyId } });
@@ -53,6 +57,13 @@ export class AdministrationService {
           ...(input.email !== undefined ? { email: input.email } : {}),
           ...(input.logo_object_key !== undefined ? { logoObjectKey: input.logo_object_key } : {}),
           ...(input.tax_identity !== undefined ? { taxIdentity: input.tax_identity } : {}),
+          ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
+          ...(input.fiscal_year_start_month !== undefined
+            ? { fiscalYearStartMonth: input.fiscal_year_start_month }
+            : {}),
+          ...(input.fiscal_year_start_day !== undefined
+            ? { fiscalYearStartDay: input.fiscal_year_start_day }
+            : {}),
           profileVersion: { increment: 1 },
         },
       });
@@ -87,6 +98,7 @@ export class AdministrationService {
     const policies = await prisma.systemPolicy.findMany({
       where: {
         companyId,
+        code: { in: catalogPolicyCodes },
         ...(group
           ? { policyGroup: group }
           : allowedGroups
@@ -116,7 +128,8 @@ export class AdministrationService {
         },
       },
     });
-    if (!policy) throw new NotFoundException("Policy tidak ditemukan.");
+    if (!policy || !catalogPolicyCodes.includes(policy.code))
+      throw new NotFoundException("Policy tidak ditemukan.");
     return this.serializePolicy(policy);
   }
 
@@ -254,6 +267,10 @@ export class AdministrationService {
     email: string | null;
     logoObjectKey: string | null;
     taxIdentity: string | null;
+    baseCurrency: string;
+    timezone: string;
+    fiscalYearStartMonth: number;
+    fiscalYearStartDay: number;
     profileVersion: number;
     updatedAt: Date;
   }) {
@@ -266,6 +283,10 @@ export class AdministrationService {
       email: company.email,
       logo_object_key: company.logoObjectKey,
       tax_identity: company.taxIdentity,
+      base_currency: company.baseCurrency,
+      timezone: company.timezone,
+      fiscal_year_start_month: company.fiscalYearStartMonth,
+      fiscal_year_start_day: company.fiscalYearStartDay,
       version: company.profileVersion,
       updated_at: company.updatedAt.toISOString(),
     };

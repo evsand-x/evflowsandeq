@@ -71,7 +71,7 @@ Pengajuan insentif sales mengikuti aturan terpisah: diajukan paling lambat tangg
 | Uang makan | Rp35.000 per makan, maksimal 3 kali/hari | Aktual berbukti sesuai kegiatan | Tidak boleh diklaim dua kali dengan fasilitas makan yang ditanggung pihak lain |
 | Entertainment | Maksimal Rp250.000 per kegiatan | Maksimal Rp250.000 per kegiatan | Wajib tujuan, peserta, bukti dan approval sesuai policy |
 
-Nilai di atas menjadi nilai awal pada OPS-HR-01–05 dan dapat diubah melalui Setting → Kebijakan Operasional. Plafon bukan hak otomatis. Biaya di atas plafon aktif memerlukan alasan, bukti dan approval exception. Sistem tidak mengubah nilai plafon pada klaim historis ketika Setting diperbarui.
+Nilai di atas menjadi nilai awal pada OPS-HR-01–05 dan dapat diubah melalui Setting → Kebijakan Umum. Plafon bukan hak otomatis. Biaya di atas plafon aktif memerlukan alasan, bukti dan approval exception. Sistem tidak mengubah nilai plafon pada klaim historis ketika Setting diperbarui.
 
 ## 5. Kontrol dan larangan
 
