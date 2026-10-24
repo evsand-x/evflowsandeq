@@ -120,7 +120,8 @@ describe("independent submenu HTTP permissions", () => {
   });
   it("isolates all three tax menus and scopes their source reads", async () => {
     for (const [route, permission] of [
-      ["master", "tax_master.read"],
+      // The tax master lives in Setting > Pajak (tax_setting.*); faktur menus keep their own grants.
+      ["master", "tax_setting.read"],
       ["invoices/output", "tax_output.read"],
       ["invoices/input", "tax_input.read"],
     ]) {
@@ -142,11 +143,29 @@ describe("independent submenu HTTP permissions", () => {
       .get("/tax/invoices/input")
       .set("x-permissions", "tax_output.read")
       .expect(403);
-    await request(app.getHttpServer())
-      .post("/tax/master")
-      .set("x-permissions", "tax_master.read")
-      .send({})
-      .expect(403);
+    // Retired Finance tax master grants and faktur grants open nothing on the tax master.
+    for (const retired of [
+      "tax_master.read",
+      "tax_master.create",
+      "tax_master.update",
+      "tax_output.read",
+    ])
+      await request(app.getHttpServer())
+        .get("/tax/master")
+        .set("x-permissions", retired)
+        .expect(403);
+    for (const path of ["/tax/master", "/tax/master/00000000-0000-4000-8000-000000000001/default"])
+      for (const grant of ["tax_setting.read", "tax_master.create", "tax_master.update"])
+        await request(app.getHttpServer())
+          .post(path)
+          .set("x-permissions", grant)
+          .send({})
+          .expect(403);
+    for (const route of ["invoices/output", "invoices/input"])
+      await request(app.getHttpServer())
+        .get(`/tax/${route}`)
+        .set("x-permissions", "tax_setting.read")
+        .expect(403);
     await request(app.getHttpServer())
       .post("/tax/invoices/output/00000000-0000-4000-8000-000000000001")
       .set("x-permissions", "tax_input.update")
