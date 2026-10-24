@@ -146,7 +146,7 @@ function PolicyEditor({ policy, onDone }: { policy: SettingPolicy; onDone: () =>
     }
   };
   return (
-    <div className="web-form grid gap-2">
+    <div className="web-form setting-form grid gap-2">
       <strong>{policy.name}</strong>
       {policy.value_type === "boolean" ? (
         <label className="setting-inline">

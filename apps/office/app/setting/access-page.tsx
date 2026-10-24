@@ -546,7 +546,12 @@ export function RolesView() {
   };
   const remove = async (role: Role) => {
     if (role.code === "ADMIN_SYSTEM") return;
-    if (!window.confirm(`Hapus peran ${role.name} dan lepaskan dari ${role.member_count} pengguna? Sesi mereka akan dicabut.`)) return;
+    if (
+      !window.confirm(
+        `Hapus peran ${role.name} dan lepaskan dari ${role.member_count} pengguna? Sesi mereka akan dicabut.`,
+      )
+    )
+      return;
     try {
       await apiRequest(`/roles/${role.id}`, { method: "DELETE" });
       await client.invalidateQueries({ queryKey: ["setting", "roles"] });
@@ -778,7 +783,17 @@ export function RoleTable({
   );
 }
 
-export function AccessPage({section,roleId}:{section:"users"|"roles"|"matrix";roleId?:string}) {
- if(section!=="matrix")return <AccessWorkspace section={section}/>;
- return <SettingShell matrix permission={["role.read","permission.read"]}><PermissionMatrix selectedRoleId={roleId}/></SettingShell>;
+export function AccessPage({
+  section,
+  roleId,
+}: {
+  section: "users" | "roles" | "matrix";
+  roleId?: string;
+}) {
+  if (section !== "matrix") return <AccessWorkspace section={section} />;
+  return (
+    <SettingShell matrix permission={["role.read", "permission.read"]}>
+      <PermissionMatrix selectedRoleId={roleId} />
+    </SettingShell>
+  );
 }

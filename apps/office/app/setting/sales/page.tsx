@@ -70,7 +70,7 @@ export default function SalesSettingsPage() {
           form={terms}
           canEdit={canEdit}
         >
-          <div className="setting-terms web-form">
+          <div className="setting-terms web-form setting-form">
             {terms.value?.map((term, index) => (
               <div key={`${term.code}-${index}`} className="setting-term-row">
                 <label>
@@ -239,7 +239,7 @@ export default function SalesSettingsPage() {
           canEdit={canEdit}
         >
           {cod.value && (
-            <div className="setting-inline web-form">
+            <div className="setting-inline web-form setting-form">
               <label className="setting-inline">
                 <Switch
                   checked={cod.value.enabled}

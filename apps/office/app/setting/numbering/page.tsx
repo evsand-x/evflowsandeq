@@ -137,7 +137,7 @@ function EditDialog({ row, onClose }: { row: Row; onClose: () => void }) {
             Urutan nomor tetap berlanjut; nomor yang sudah terpakai tidak berubah.
           </DialogDescription>
         </DialogHeader>
-        <div className="web-form grid gap-3">
+        <div className="web-form setting-form grid gap-3">
           <label>
             Awalan *
             <Input
@@ -160,7 +160,7 @@ function EditDialog({ row, onClose }: { row: Row; onClose: () => void }) {
             <Checkbox checked={resetYearly} onCheckedChange={(v) => setResetYearly(v === true)} />
             Tampilkan tahun dan mulai urutan baru setiap tahun
           </label>
-          <p>
+          <p className="text-sm">
             Contoh nomor berikutnya:{" "}
             <strong>
               {valid ? previewDocumentNumber(prefix, digitCount, resetYearly, year, next) : "—"}

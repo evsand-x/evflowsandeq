@@ -202,7 +202,7 @@ async function main() {
       create: {
         companyId: company.id,
         code: roleCode,
-        name: `${roleCode} â€” DATA UJI FIKTIF`,
+        name: `${roleCode} — DATA UJI FIKTIF`,
       },
     });
 
@@ -353,8 +353,8 @@ async function main() {
     create: {
       companyId: company.id,
       code: "WH-UTAMA",
-      name: "Gudang Utama â€” DATA UJI FIKTIF",
-      normalizedName: "gudang utama â€” data uji fiktif",
+      name: "Gudang Utama — DATA UJI FIKTIF",
+      normalizedName: "gudang utama — data uji fiktif",
       timezone: company.timezone,
       state: "ACTIVE",
       createdById: user.id,
@@ -368,8 +368,8 @@ async function main() {
       companyId: company.id,
       warehouseId: warehouse.id,
       code: "STORAGE-A",
-      name: "Rak Penyimpanan A â€” DATA UJI FIKTIF",
-      normalizedName: "rak penyimpanan a â€” data uji fiktif",
+      name: "Rak Penyimpanan A — DATA UJI FIKTIF",
+      normalizedName: "rak penyimpanan a — data uji fiktif",
       locatorType: "STORAGE",
       state: "ACTIVE",
       createdById: user.id,

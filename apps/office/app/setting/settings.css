@@ -58,6 +58,7 @@
   gap: 8px;
 }
 .setting-choice {
+  font-size: var(--ev-font-size-sm);
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 4px 12px;
@@ -103,4 +104,28 @@
   .setting-term-row {
     grid-template-columns: 1fr 1fr;
   }
+}
+/* Labels outside .page-frame-fields (dialogs, setting rows) follow the same form standard. */
+.setting-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--ev-font-size-sm);
+  font-weight: 500;
+  min-width: 0;
+}
+.setting-form label.setting-inline {
+  flex-direction: row;
+  align-items: center;
+}
+.setting-form {
+  text-align: left;
+}
+.setting-form label {
+  align-items: stretch;
+  text-align: left;
+}
+.setting-term-row + .setting-term-row {
+  padding-top: 8px;
+  border-top: 1px solid var(--ev-color-border);
 }
