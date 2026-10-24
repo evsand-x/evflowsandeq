@@ -5,11 +5,14 @@ import {
   Get,
   Headers,
   Param,
+  Patch,
   Put,
   Req,
   UseGuards,
 } from "@nestjs/common";
+import { generalSettingsUpdateSchema } from "@evflow/contracts";
 import { prisma } from "@evflow/database";
+import { getGeneralSettings, updateGeneralSettings } from "./general-settings";
 import { AuthGuard } from "../identity/auth.guard";
 import { PermissionGuard } from "../identity/permission.guard";
 import { RequirePermissions } from "../identity/permissions.decorator";
@@ -46,6 +49,30 @@ export class SettingsController {
         logo_object_key: company.logoObjectKey,
         number_format: await activePolicyValue(company.id, "OPS-FLX-06"),
       },
+    };
+  }
+
+  @Get("general")
+  @RequirePermissions("setting_general.read")
+  async general(@Req() r: AuthenticatedRequest) {
+    return { data: await getGeneralSettings(r.auth.company_id) };
+  }
+
+  @Patch("general")
+  @RequirePermissions("setting_general.update")
+  async updateGeneral(
+    @Body() body: unknown,
+    @Headers("if-match") ifMatch: string | undefined,
+    @Req() r: AuthenticatedRequest,
+  ) {
+    const input = generalSettingsUpdateSchema.safeParse(body);
+    if (!input.success) throw new BadRequestException(input.error.flatten());
+    const normalized = ifMatch?.replace(/^W\//, "").replaceAll('"', "");
+    const version = normalized ? Number.parseInt(normalized, 10) : Number.NaN;
+    if (!Number.isInteger(version) || version < 1)
+      throw new BadRequestException('Header If-Match wajib berisi versi, contoh: "1".');
+    return {
+      data: await updateGeneralSettings(r.auth.company_id, r.auth.user_id, version, input.data),
     };
   }
 

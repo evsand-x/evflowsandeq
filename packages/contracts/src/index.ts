@@ -112,12 +112,17 @@ export const companyProfileUpdateSchema = z
     email: z.string().email().nullable().optional(),
     logo_object_key: z.string().trim().max(500).nullable().optional(),
     tax_identity: z.string().trim().max(100).nullable().optional(),
+  })
+  .strict();
+
+/** Timezone and fiscal year belong to Setting > Kebijakan Umum (setting_general), not the company profile. */
+export const generalSettingsUpdateSchema = z
+  .object({
     timezone: z
       .string()
-      .refine((value) => supportedTimeZones.has(value), "Zona waktu tidak dikenal.")
-      .optional(),
-    fiscal_year_start_month: z.number().int().min(1).max(12).optional(),
-    fiscal_year_start_day: z.number().int().min(1).max(28).optional(),
+      .refine((value) => supportedTimeZones.has(value), "Zona waktu tidak dikenal."),
+    fiscal_year_start_month: z.number().int().min(1).max(12),
+    fiscal_year_start_day: z.number().int().min(1).max(28),
   })
   .strict();
 

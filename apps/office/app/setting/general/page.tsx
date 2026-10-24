@@ -18,7 +18,6 @@ import type { SettingPolicy } from "../settings-forms";
 import { SettingFrame, SettingSection, usePolicyForm, useVersionedDraft } from "../settings-ui";
 
 type Company = {
-  name: string;
   base_currency: string;
   timezone: string;
   fiscal_year_start_month: number;
@@ -84,7 +83,7 @@ export default function GeneralSettingsPage() {
       permission="setting_general.read"
     >
       <div className="setting-stack">
-        {can("company_profile.read") && <FiscalSection canEdit={can("company_profile.update")} />}
+        <FiscalSection canEdit={can("setting_general.update")} />
         <NumberFormatSection canEdit={can("setting_general.update")} />
         <OtherPolicies canEdit={can("setting_general.update")} />
       </div>
@@ -96,8 +95,8 @@ function FiscalSection({ canEdit }: { canEdit: boolean }) {
   const cache = useQueryClient(),
     { reload } = useSession();
   const query = useQuery({
-    queryKey: ["settings", "company"],
-    queryFn: async () => (await apiRequest<{ data: Company }>("/company-profile")).data,
+    queryKey: ["settings", "general"],
+    queryFn: async () => (await apiRequest<{ data: Company }>("/settings/general")).data,
   });
   const company = query.data;
   const draft = useVersionedDraft<Fiscal>(
@@ -134,11 +133,10 @@ function FiscalSection({ canEdit }: { canEdit: boolean }) {
     setBusy(true);
     setError("");
     try {
-      await apiRequest("/company-profile", {
+      await apiRequest("/settings/general", {
         method: "PATCH",
         version: draft.version ?? company.version,
         body: JSON.stringify({
-          name: company.name,
           timezone: value.timezone,
           fiscal_year_start_month: Number(value.month),
           fiscal_year_start_day: day,
@@ -147,7 +145,7 @@ function FiscalSection({ canEdit }: { canEdit: boolean }) {
       draft.reset();
       setConflict(false);
       await Promise.all([
-        cache.invalidateQueries({ queryKey: ["settings", "company"] }),
+        cache.invalidateQueries({ queryKey: ["settings", "general"] }),
         cache.invalidateQueries({ queryKey: preferencesKey }),
       ]);
       await reload();
@@ -155,7 +153,7 @@ function FiscalSection({ canEdit }: { canEdit: boolean }) {
     } catch (e) {
       if (e instanceof ApiError && e.status === 412) {
         setConflict(true);
-        setError("Profil perusahaan baru saja diubah orang lain. Isian Anda belum disimpan.");
+        setError("Pengaturan ini baru saja diubah orang lain. Isian Anda belum disimpan.");
       } else setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);

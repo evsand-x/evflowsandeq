@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@evflow/database";
-import {
-  provisionCompanyDefaults,
-  visiblePolicyCodes,
-} from "../../packages/backend/src/administration/company-defaults";
+import { provisionCompanyDefaults } from "../../packages/backend/src/administration/company-defaults";
+import { AdministrationService } from "../../packages/backend/src/administration/administration.service";
 import { nextDocumentNumber } from "../../packages/backend/src/common/document-number";
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -136,12 +134,18 @@ describe("company defaults provisioning", () => {
 
 describe("retired catalog policies", () => {
   it("hides policies removed from the catalog", async () => {
-    await inRollback(async (tx) => {
-      const { companyId, actorId } = await freshCompany(tx);
-      await provisionCompanyDefaults(tx, companyId, actorId, today);
-      const legacy = await tx.systemPolicy.create({
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(new URL(process.env.DATABASE_URL!).hostname))
+      throw new Error("Local test database required");
+    // The service reads through the shared client, so this test commits and cleans up its own rows.
+    const company = await prisma.company.create({ data: { name: `Retired test ${randomUUID()}` } });
+    const user = await prisma.user.create({
+      data: { email: `retired-${randomUUID()}@evflow.local`, displayName: "R", passwordHash: "x" },
+    });
+    try {
+      await prisma.$transaction((tx) => provisionCompanyDefaults(tx, company.id, user.id, today));
+      await prisma.systemPolicy.create({
         data: {
-          companyId,
+          companyId: company.id,
           code: "OPS-COMP-01",
           name: "Zona waktu bisnis",
           ownerDomain: "administration",
@@ -152,10 +156,20 @@ describe("retired catalog policies", () => {
           defaultValueSnapshot: "Asia/Makassar",
         },
       });
-      expect(legacy.code).toBe("OPS-COMP-01");
-      const visible = await visiblePolicyCodes(tx, companyId);
-      expect(visible).not.toContain("OPS-COMP-01");
-      expect(visible).toContain("OPS-FLX-03");
-    });
+      const service = new AdministrationService({} as never);
+      const codes = (await service.listPolicies(company.id)).map((p) => p.code);
+      expect(codes).not.toContain("OPS-COMP-01");
+      expect(codes).toContain("OPS-FLX-03");
+      await expect(service.getPolicy(company.id, "OPS-COMP-01")).rejects.toMatchObject({
+        status: 404,
+      });
+    } finally {
+      await prisma.auditEvent.deleteMany({ where: { companyId: company.id } });
+      await prisma.policyVersion.deleteMany({ where: { policy: { companyId: company.id } } });
+      await prisma.systemPolicy.deleteMany({ where: { companyId: company.id } });
+      await prisma.documentNumberRule.deleteMany({ where: { companyId: company.id } });
+      await prisma.company.delete({ where: { id: company.id } });
+      await prisma.user.delete({ where: { id: user.id } });
+    }
   });
 });
