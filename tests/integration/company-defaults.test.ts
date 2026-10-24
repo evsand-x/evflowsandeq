@@ -63,6 +63,7 @@ describe("company defaults provisioning", () => {
       expect(await provisionCompanyDefaults(tx, companyId, actorId, today)).toEqual({
         policies_created: [],
         numbering_created: [],
+        taxes_created: [],
       });
     });
   });

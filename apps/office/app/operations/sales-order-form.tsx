@@ -34,7 +34,6 @@ type DraftLine = {
   product_id: string;
   quantity: string;
   unit_price: string;
-  tax_master_id?: string;
 };
 type Options = {
   currency: string;
@@ -193,9 +192,6 @@ export function SalesOrderForm({
       product_id: l.productId,
       quantity: l.orderedQuantity,
       unit_price: l.unitPrice,
-      ...(l.taxSnapshot?.operational_tax_id
-        ? { tax_master_id: l.taxSnapshot.operational_tax_id }
-        : {}),
     })) ?? [{ key: "first", product_id: "", quantity: "", unit_price: "" }],
   );
   const lookup = useQuery({
@@ -207,9 +203,15 @@ export function SalesOrderForm({
   const taxes = useQuery({
     queryKey: ["tax-options", principal?.company_id, principal?.user_id, principal?.permissions],
     queryFn: () =>
-      apiRequest<{ data: { id: string; name: string; percentage: string }[] }>(
-        "/tax/options?usage=SALES",
-      ),
+      apiRequest<{
+        data: {
+          id: string;
+          name: string;
+          percentage: string;
+          dppFactor: string;
+          isDefaultSales: boolean;
+        }[];
+      }>("/tax/options?usage=SALES"),
     enabled: !!principal,
   });
   const selected = options?.customers.find((c) => c.id === customer);
@@ -223,12 +225,21 @@ export function SalesOrderForm({
   const total = values.every((v) => v !== null)
     ? values.reduce<Decimal>((sum, v) => sum.add(v!), new D(0))
     : undefined;
-  // PPN di sini perkiraan dari tarif yang dipilih; nilai final ditetapkan server saat evaluasi.
-  const taxRate = (id?: string) => taxes.data?.data.find((t) => t.id === id)?.percentage;
+  // Every line carries the default sales tax (PPN x DPP factor). This is an estimate; the server
+  // sets the final amount and keeps the tax snapshot when the order is evaluated.
+  const defaultTax = taxes.data?.data.find((t) => t.isDefaultSales);
   const tax =
-    total && lines.every((l) => l.tax_master_id && taxRate(l.tax_master_id))
-      ? lines.reduce(
-          (sum, l, i) => sum.add(values[i]!.mul(taxRate(l.tax_master_id)!).div(100)),
+    total && defaultTax
+      ? values.reduce<Decimal>(
+          (sum, v) =>
+            sum.add(
+              v!
+                .mul(defaultTax.dppFactor)
+                .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+                .mul(defaultTax.percentage)
+                .div(100)
+                .toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+            ),
           new D(0),
         )
       : undefined;
@@ -331,23 +342,6 @@ export function SalesOrderForm({
       ),
     },
     {
-      id: "tax",
-      header: "PPN",
-      cell: ({ row }) => (
-        <SelectionField
-          hideLabel
-          label={`PPN baris ${row.index + 1}`}
-          value={row.original.tax_master_id ? [row.original.tax_master_id] : []}
-          options={(taxes.data?.data ?? []).map((t) => ({
-            id: t.id,
-            name: `${t.name} (${t.percentage}%)`,
-          }))}
-          onChange={(v) => change(row.original.key, "tax_master_id", v[0] ?? "")}
-          placeholder="Pilih pajak"
-        />
-      ),
-    },
-    {
       id: "net",
       header: "Subtotal",
       cell: ({ row }) => {
@@ -385,9 +379,6 @@ export function SalesOrderForm({
     basis: "PER_SHIPMENT",
     estimate: freightAmount.trim() || "0",
     tax_mode: freightTaxable ? "TAXABLE" : "NON_TAXABLE",
-    ...(initial?.freightTermsSnapshot?.tax_rule_id
-      ? { tax_rule_id: initial.freightTermsSnapshot.tax_rule_id }
-      : {}),
   });
   const save = async (submitAfter: boolean) => {
     setLocalError("");
@@ -416,7 +407,6 @@ export function SalesOrderForm({
             line_id: l.line_id,
             quantity: l.quantity,
             unit_price: l.unit_price,
-            ...(l.tax_master_id ? { tax_master_id: l.tax_master_id } : {}),
           })),
         }
       : {
@@ -427,11 +417,10 @@ export function SalesOrderForm({
           currency,
           notes,
           ...(freightEnabled ? { freight: freightPayload() } : {}),
-          lines: lines.map(({ product_id, quantity, unit_price, tax_master_id }) => ({
+          lines: lines.map(({ product_id, quantity, unit_price }) => ({
             product_id,
             quantity,
             unit_price,
-            ...(tax_master_id ? { tax_master_id } : {}),
           })),
         };
     try {
@@ -563,7 +552,7 @@ export function SalesOrderForm({
             id="so-lines"
             no={3}
             title="Barang"
-            description="Isi jumlah dan harga satuan; PPN dipilih dari aturan pajak yang berlaku. Gunakan titik untuk desimal."
+            description="Isi jumlah dan harga satuan; PPN memakai pajak penjualan bawaan dari Setting › Pajak. Gunakan titik untuk desimal."
             action={
               !initial && (
                 <Button
@@ -685,9 +674,17 @@ export function SalesOrderForm({
                 <dd>{total ? amount(total.toString(), currency) : "—"}</dd>
               </div>
               <div>
-                <dt>PPN (perkiraan)</dt>
+                <dt>
+                  {defaultTax
+                    ? `PPN ${defaultTax.percentage}%${new D(defaultTax.dppFactor).eq(1) ? "" : " × DPP"} (perkiraan)`
+                    : "PPN (perkiraan)"}
+                </dt>
                 <dd>
-                  {tax ? amount(tax.toDecimalPlaces(2).toString(), currency) : "Pilih pajak tiap baris"}
+                  {tax
+                    ? amount(tax.toDecimalPlaces(2).toString(), currency)
+                    : taxes.isSuccess && !defaultTax
+                      ? "Pajak penjualan bawaan belum diatur"
+                      : "—"}
                 </dd>
               </div>
               <div className="so-sums-total">

@@ -18,13 +18,11 @@ type Options = {
 };
 const permissions = {
   credit: "customer.payment_policy.manage",
-  tax: "sales_tax_rule.manage",
   approval: "transaction_approval.manage",
   quality: "inventory.quality.decide",
 };
 const labels = {
   credit: "Kredit & TOP",
-  tax: "Aturan pajak",
   approval: "Pengaturan Persetujuan",
   quality: "Kelayakan stok",
 };
@@ -116,22 +114,6 @@ function ControlForm({
             effective_from: new Date(value("from")).toISOString(),
           };
         }
-        if (kind === "tax") {
-          path = "/operations/tax-rules";
-          body = {
-            customer_id: value("customer"),
-            product_id: value("product"),
-            name: value("name"),
-            legal_reference: value("legal"),
-            taxable_event: value("taxable_event"),
-            rate: value("rate"),
-            dpp_factor: value("factor"),
-            decimal_places: Number(value("precision")),
-            rounding: value("rounding"),
-            effective_from: new Date(value("from")).toISOString(),
-            effective_to: new Date(value("to")).toISOString(),
-          };
-        }
         if (kind === "approval") {
           path = "/operations/approval-policies";
           body = {
@@ -160,7 +142,7 @@ function ControlForm({
         <CardContent>
           <FieldGroup>
             {query.error && <Notice>{String(query.error)}</Notice>}
-            {["credit", "tax"].includes(kind) &&
+            {kind === "credit" &&
               selection("customer", "Pelanggan", query.data?.data.customers ?? [])}
             {kind === "credit" && (
               <>
@@ -186,34 +168,6 @@ function ControlForm({
                   />
                 </Field>
                 {value("frozen") === "true" && text("reason", "Alasan freeze")}
-              </>
-            )}
-            {kind === "tax" && (
-              <>
-                {selection("product", "Produk", query.data?.data.products ?? [])}
-                {text("name", "Nama aturan")}
-                {text("legal", "Dasar hukum / referensi resmi")}
-                <SelectionField
-                  label="Saat pajak terutang"
-                  value={value("taxable_event") ? [value("taxable_event")] : []}
-                  onChange={(v) => change("taxable_event", v[0] ?? "")}
-                  options={[
-                    { id: "POD", name: "Penerimaan barang (POD)" },
-                    { id: "ADVANCE", name: "Uang muka, sisa pada POD" },
-                  ]}
-                />
-                {text("rate", "Tarif sebagai pecahan (bukan persen)")}
-                {text("factor", "Faktor DPP")}
-                {text("precision", "Digit desimal", "number")}
-                <Field>
-                  <FieldLabel>Pembulatan</FieldLabel>
-                  <Choice
-                    label="Pembulatan"
-                    value={value("rounding")}
-                    onChange={(v) => change("rounding", v)}
-                    options={{ HALF_UP: "Half up", HALF_EVEN: "Half even", DOWN: "Down" }}
-                  />
-                </Field>
               </>
             )}
             {kind === "approval" && (
@@ -317,7 +271,7 @@ function ControlForm({
               </>
             )}
             {kind !== "quality" && text("from", "Berlaku mulai", "datetime-local")}
-            {["tax", "approval"].includes(kind) && text("to", "Berlaku sampai", "datetime-local")}
+            {kind === "approval" && text("to", "Berlaku sampai", "datetime-local")}
             <Button type="submit" disabled={pending || query.isPending}>
               Simpan keputusan
             </Button>

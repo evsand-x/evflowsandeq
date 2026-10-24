@@ -5,6 +5,9 @@ import {
   initialResetPeriod,
   lockDraft,
   previewDocumentNumber,
+  effectiveTaxPercent,
+  taxPayload,
+  canBeDefault,
 } from "../../apps/office/app/setting/settings-forms";
 
 const terms = operationalPolicyCatalog.find((p) => p.code === "OPS-FLX-03")!;
@@ -48,5 +51,53 @@ describe("version-locked drafts", () => {
   });
   it("does nothing without a source", () => {
     expect(lockDraft(null, undefined, "b")).toBeNull();
+  });
+});
+
+describe("tax setting helpers", () => {
+  it("shows the effective PPN of rate x DPP factor", () => {
+    expect(effectiveTaxPercent("12", "0.9166666667")).toBe("11");
+    expect(effectiveTaxPercent("11", "1")).toBe("11");
+    expect(effectiveTaxPercent("2", "1")).toBe("2");
+    expect(effectiveTaxPercent("", "1")).toBeNull();
+  });
+  it("builds the tax payload with decimal strings and a dot separator", () => {
+    expect(
+      taxPayload(
+        {
+          name: " PPN Penjualan ",
+          kind: "PPN",
+          usage: "SALES",
+          effect: "ADD",
+          account_id: "a",
+          percentage: "12,5",
+          dpp_factor: "0,9166666667",
+          decimal_places: "2",
+          rounding: "HALF_UP",
+          active: true,
+        },
+        "2026-10-24T00:00:00.000Z",
+      ),
+    ).toEqual({
+      name: "PPN Penjualan",
+      kind: "PPN",
+      usage: "SALES",
+      effect: "ADD",
+      account_id: "a",
+      percentage: "12.5",
+      dpp_factor: "0.9166666667",
+      decimal_places: 2,
+      rounding: "HALF_UP",
+      active: true,
+      effective_from: "2026-10-24T00:00:00.000Z",
+    });
+  });
+  it("offers a default only to an active added tax usable for that direction", () => {
+    const tax = { usage: "SALES", effect: "ADD", active: true };
+    expect(canBeDefault(tax, "SALES")).toBe(true);
+    expect(canBeDefault(tax, "PURCHASE")).toBe(false);
+    expect(canBeDefault({ ...tax, usage: "BOTH" }, "PURCHASE")).toBe(true);
+    expect(canBeDefault({ ...tax, effect: "DEDUCT" }, "SALES")).toBe(false);
+    expect(canBeDefault({ ...tax, active: false }, "SALES")).toBe(false);
   });
 });

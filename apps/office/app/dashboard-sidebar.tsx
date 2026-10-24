@@ -555,7 +555,6 @@ export function DashboardSidebar({
                             "Kredit & TOP Pelanggan": "customer.payment_policy.manage",
                             "Pengaturan Persetujuan": "transaction_approval.manage",
                             "Kredit & Exposure": "customer.payment_policy.manage",
-                            Pajak: "sales_tax_rule.manage",
                             Persediaan: "inventory.quality.decide",
                           } as Record<string, string>
                         )[item];

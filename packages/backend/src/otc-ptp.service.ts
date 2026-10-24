@@ -16,58 +16,22 @@ import { postAdvanceTax, consumeAdvanceTax } from "./finance/advance-tax";
 import { issueDocument, requireEvidence } from "./sales/document-controls";
 import { reservationExpiry } from "./sales/reservation-controls";
 import { nextDocumentNumber } from "./common/document-number";
-import { operationalTaxSnapshot, calculateOperationalTax } from "./finance/operational-tax";
+import {
+  operationalTaxSnapshot,
+  calculateOperationalTax,
+  defaultSalesTaxOn,
+} from "./finance/operational-tax";
 type Tx = Prisma.TransactionClient;
 const d = (v: string | Prisma.Decimal) => new Prisma.Decimal(v);
 type FreightTaxMode = "NON_TAXABLE" | "TAXABLE";
 @Injectable()
 export class OtcPtpService {
   constructor(@Inject(AuditService) private readonly audit: AuditService) {}
-  private async freightTax(
-    tx: Tx,
-    companyId: string,
-    customerId: string,
-    amount: Prisma.Decimal,
-    mode: FreightTaxMode,
-    ruleId?: string,
-  ) {
+  /** Taxable freight carries the default sales tax (PPN); its snapshot is kept on the document. */
+  private async freightTax(tx: Tx, companyId: string, amount: Prisma.Decimal, mode: FreightTaxMode) {
     if (mode === "NON_TAXABLE") return { amount: d("0"), snapshot: null };
-    const now = new Date();
-    const rule = await tx.salesTaxRule.findFirst({
-      where: {
-        ...(ruleId ? { id: ruleId } : {}),
-        companyId,
-        customerId,
-        state: "ACTIVE",
-        effectiveFrom: { lte: now },
-        effectiveTo: { gt: now },
-      },
-      orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
-    });
-    if (!rule) throw new ConflictException("FREIGHT_TAX_RULE_INVALID");
-    const rounding = (
-      {
-        HALF_UP: Prisma.Decimal.ROUND_HALF_UP,
-        HALF_EVEN: Prisma.Decimal.ROUND_HALF_EVEN,
-        DOWN: Prisma.Decimal.ROUND_DOWN,
-      } as Record<string, Prisma.Decimal.Rounding>
-    )[rule.rounding];
-    if (rounding === undefined) throw new ConflictException("FREIGHT_TAX_ROUNDING_REQUIRED");
-    const dpp = amount.mul(rule.dppFactor).toDecimalPlaces(rule.decimalPlaces, rounding);
-    const tax = dpp.mul(rule.rate).toDecimalPlaces(rule.decimalPlaces, rounding);
-    return {
-      amount: tax,
-      snapshot: {
-        rule_id: rule.id,
-        name: rule.name,
-        legal_reference: rule.legalReference,
-        rate: rule.rate.toString(),
-        dpp_factor: rule.dppFactor.toString(),
-        decimal_places: rule.decimalPlaces,
-        rounding: rule.rounding,
-        taxable_event: rule.taxableEvent,
-      },
-    };
+    const { tax, snapshot } = await defaultSalesTaxOn(tx, companyId, amount);
+    return { amount: tax, snapshot };
   }
   private async lockPickBatch(tx: Tx, c: string, id: string) {
     const ref = await tx.pickList.findFirst({
@@ -202,14 +166,7 @@ export class OtcPtpService {
       if (products !== new Set(i.lines.map((x: any) => x.product_id)).size)
         throw new ConflictException("ORDER_PRODUCT_INVALID");
       if (i.freight?.tax_mode === "TAXABLE")
-        await this.freightTax(
-          tx,
-          c,
-          cust.id,
-          d(i.freight.estimate),
-          "TAXABLE",
-          i.freight.tax_rule_id,
-        );
+        await this.freightTax(tx, c, d(i.freight.estimate), "TAXABLE");
       const masterSnapshots = await Promise.all(
         i.lines.map(async (line: any) =>
           line.tax_master_id
@@ -238,7 +195,6 @@ export class OtcPtpService {
                 basis: i.freight.basis,
                 estimate: i.freight.estimate,
                 tax_mode: i.freight.tax_mode,
-                tax_rule_id: i.freight.tax_rule_id ?? null,
               }
             : Prisma.DbNull,
           lines: {

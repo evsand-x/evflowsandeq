@@ -7,6 +7,7 @@ import { transactionCommand } from "../common/transaction-command";
 import { AuditService } from "../common/audit.service";
 import { issueDocument } from "./document-controls";
 import { lineAmounts, assertPriceGrants } from "./pricing-controls";
+import { defaultSalesTaxOn } from "../finance/operational-tax";
 import { lockCustomer, assertDispatchLots } from "./transaction-controls";
 
 type Tx = Prisma.TransactionClient;
@@ -132,48 +133,14 @@ async function latest(tx: Tx, companyId: string, batchId: string) {
 export async function freightValues(
   tx: Tx,
   companyId: string,
-  customerId: string,
-  input: { amount: string; tax_mode: "NON_TAXABLE" | "TAXABLE"; tax_rule_id?: string | undefined },
+  input: { amount: string; tax_mode: "NON_TAXABLE" | "TAXABLE" },
 ) {
   const amount = new Prisma.Decimal(input.amount);
   if (input.tax_mode === "NON_TAXABLE")
     return { amount, tax: new Prisma.Decimal(0), snapshot: null };
-  const rule = await tx.salesTaxRule.findFirst({
-    where: {
-      ...(input.tax_rule_id ? { id: input.tax_rule_id } : {}),
-      companyId,
-      customerId,
-      state: "ACTIVE",
-      effectiveFrom: { lte: new Date() },
-      effectiveTo: { gt: new Date() },
-    },
-    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
-  });
-  if (!rule) throw new ConflictException("FREIGHT_TAX_RULE_INVALID");
-  const rounding = (
-    {
-      HALF_UP: Prisma.Decimal.ROUND_HALF_UP,
-      HALF_EVEN: Prisma.Decimal.ROUND_HALF_EVEN,
-      DOWN: Prisma.Decimal.ROUND_DOWN,
-    } as Record<string, Prisma.Decimal.Rounding>
-  )[rule.rounding];
-  if (rounding === undefined) throw new ConflictException("FREIGHT_TAX_ROUNDING_REQUIRED");
-  const dpp = amount.mul(rule.dppFactor).toDecimalPlaces(rule.decimalPlaces, rounding);
-  const tax = dpp.mul(rule.rate).toDecimalPlaces(rule.decimalPlaces, rounding);
-  return {
-    amount,
-    tax,
-    snapshot: {
-      rule_id: rule.id,
-      name: rule.name,
-      legal_reference: rule.legalReference,
-      rate: rule.rate.toString(),
-      dpp_factor: rule.dppFactor.toString(),
-      decimal_places: rule.decimalPlaces,
-      rounding: rule.rounding,
-      taxable_event: rule.taxableEvent,
-    },
-  };
+  // Taxable freight uses the default sales tax; per-customer rules are no longer read.
+  const { tax, snapshot } = await defaultSalesTaxOn(tx, companyId, amount);
+  return { amount, tax, snapshot };
 }
 
 async function lockedSource(tx: Tx, c: string, id: string) {
@@ -224,7 +191,7 @@ export function previewProforma(c: string, id: string, body: unknown = {}) {
     const document = await latest(tx, c, id);
     let snapshot = current.snapshot;
     if (input.freight) {
-      const values = await freightValues(tx, c, current.batch.salesOrder.customerId, input.freight);
+      const values = await freightValues(tx, c, input.freight);
       const tax = new Prisma.Decimal(snapshot.tax).sub(snapshot.freight.tax).add(values.tax);
       snapshot = {
         ...snapshot,
@@ -265,12 +232,7 @@ export function issueProforma(c: string, a: string, id: string, body: unknown, k
           "Alokasi atau nilai berubah. Muat ulang pratinjau sebelum menerbitkan.",
         );
       if (input.freight) {
-        const values = await freightValues(
-          tx,
-          c,
-          current.batch.salesOrder.customerId,
-          input.freight,
-        );
+        const values = await freightValues(tx, c, input.freight);
         await tx.fulfillmentBatch.update({
           where: { id },
           data: {

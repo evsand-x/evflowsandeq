@@ -1,4 +1,4 @@
-import { numberingDefaults, operationalPolicyCatalog, type Prisma } from "@evflow/database";
+import { numberingDefaults, operationalPolicyCatalog, taxDefaults, Prisma } from "@evflow/database";
 import { AuditService } from "../common/audit.service";
 
 export { numberingDefaults };
@@ -19,7 +19,13 @@ function companyDay(timezone: string, at: Date) {
   );
 }
 
-/** Creates missing editable defaults (policies, numbering rules); never changes existing ones. */
+const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+
+/**
+ * Creates missing editable defaults (policies, numbering rules, default taxes); never changes
+ * existing ones. A default tax whose account is not in the imported chart is skipped, so the
+ * documents that need it stay blocked until the tax is set in Setting > Pajak.
+ */
 export async function provisionCompanyDefaults(
   tx: Prisma.TransactionClient,
   companyId: string,
@@ -84,14 +90,50 @@ export async function provisionCompanyDefaults(
     });
     numbering_created.push(rule.document_kind);
   }
-  if (policies_created.length || numbering_created.length)
+  const taxes_created: string[] = [];
+  for (const definition of taxDefaults) {
+    const column = definition.default_for === "SALES" ? "isDefaultSales" : "isDefaultPurchase";
+    const existing = await tx.operationalTax.count({
+      where: { companyId, name: { equals: definition.name, mode: "insensitive" } },
+    });
+    if (existing) continue;
+    const account = await tx.financeAccount.findFirst({
+      where: { companyId, code: definition.account_code, active: true, accountType: "DETAIL" },
+    });
+    if (!account) continue;
+    const hasDefault =
+      definition.default_for !== null &&
+      (await tx.operationalTax.count({ where: { companyId, [column]: true } })) > 0;
+    const row = await tx.operationalTax.create({
+      data: {
+        companyId,
+        name: definition.name,
+        kind: definition.kind,
+        usage: definition.usage,
+        effect: definition.effect,
+        accountId: account.id,
+        percentage: new Prisma.Decimal(definition.percentage),
+        dppFactor: new Prisma.Decimal(definition.dpp_factor),
+        decimalPlaces: definition.decimal_places,
+        rounding: definition.rounding,
+        active: true,
+        effectiveFrom: today,
+        ...(definition.default_for && !hasDefault ? { [column]: true } : {}),
+      },
+    });
+    await tx.operationalTaxRevision.create({
+      data: { companyId, taxId: row.id, version: row.version, snapshot: json(row), actorId },
+    });
+    taxes_created.push(definition.name);
+  }
+  if (policies_created.length || numbering_created.length || taxes_created.length)
     await new AuditService().recordWith(tx, {
       companyId,
       actorId,
       action: "company_defaults.provisioned",
       resourceType: "company",
       resourceId: companyId,
-      after: { policies_created, numbering_created },
+      after: { policies_created, numbering_created, taxes_created },
     });
-  return { policies_created, numbering_created };
+  return { policies_created, numbering_created, taxes_created };
 }

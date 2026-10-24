@@ -24,7 +24,9 @@ export {
   chartOfAccounts,
   numberingDefaults,
   operationalPolicyCatalog,
+  taxDefaults,
   type NumberingDefault,
+  type TaxDefault,
   type ChartAccountData,
   type PolicyCatalogEntry,
 } from "./defaults";

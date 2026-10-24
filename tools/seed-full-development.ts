@@ -7,11 +7,6 @@ import { AuditService } from "../packages/backend/src/common/audit.service";
 import { OtcPtpService } from "../packages/backend/src/otc-ptp.service";
 import { OperationsService } from "../packages/backend/src/sales/operations.service";
 import { AdministrationService } from "../packages/backend/src/administration/administration.service";
-import {
-  requestTaxRuleAction,
-  postTaxRuleAction,
-} from "../packages/backend/src/finance/tax-rule-lifecycle";
-import { decideFinancialRequest } from "../packages/backend/src/finance/remediation";
 import { CrmService } from "../packages/backend/src/crm/crm.service";
 import {
   financeConfigure,
@@ -282,47 +277,7 @@ async function main() {
         past_due_grace_days: 0,
         effective_from: from,
       });
-    const taxRule = await ops.tax(
-      c,
-      a,
-      {
-        customer_id: customer.id,
-        product_id: product.id,
-        name: "Pajak Simulasi 11%",
-        legal_reference: "DATA UJI FIKTIF - bukan tarif pajak resmi",
-        rate: "0.11",
-        dpp_factor: "1",
-        decimal_places: 2,
-        rounding: "HALF_UP",
-        effective_from: from,
-        effective_to: "2099-01-01",
-      },
-      key(`tax-${scenario.code}`),
-    );
-    const actualTax = await prisma.salesTaxRule.findUniqueOrThrow({ where: { id: taxRule.id } });
-    if (actualTax.state === "DRAFT") {
-      const request = await requestTaxRuleAction(
-        c,
-        a,
-        {
-          rule_id: taxRule.id,
-          rule_kind: "SALES",
-          action: "ACTIVATE",
-          reason: "Aktivasi aturan DATA UJI FIKTIF",
-          evidence_id: evidence.TAX,
-        },
-        key(`tax-request-${scenario.code}`),
-      );
-      await decideFinancialRequest(
-        c,
-        approver.id,
-        request.id,
-        "TAX_RULE_CHANGE",
-        { decision: "APPROVED", reason: "Persetujuan simulasi oleh aktor uji terpisah" },
-        key(`tax-approve-${scenario.code}`),
-      );
-      await postTaxRuleAction(c, a, request.id, key(`tax-post-${scenario.code}`));
-    }
+    // Sales lines use the default sales tax provisioned with the company defaults.
     const contact = await crm.createContact(
       c,
       a,

@@ -139,21 +139,33 @@ beforeAll(async () => {
       createdById: actor,
     },
   });
-  await prisma.salesTaxRule.create({
+  // Lines and taxable freight use the company default sales tax (synthetic 11%, DPP factor 1).
+  const taxAccount = await prisma.financeAccount.create({
+    data: { companyId: c, code: "TEST-PPN", name: "Synthetic PPN", category: "LIABILITY" },
+  });
+  const tax = await prisma.operationalTax.create({
     data: {
       companyId: c,
-      customerId,
-      productId,
       name: "TEST",
-      state: "ACTIVE",
-      legalReference: "SYNTHETIC TEST",
-      rate: "0.11",
+      kind: "PPN",
+      usage: "SALES",
+      effect: "ADD",
+      accountId: taxAccount.id,
+      percentage: "11",
       dppFactor: "1",
       decimalPlaces: 2,
       rounding: "HALF_UP",
       effectiveFrom: new Date("2020-01-01"),
-      effectiveTo: new Date("2099-01-01"),
-      createdById: actor,
+      isDefaultSales: true,
+    },
+  });
+  await prisma.operationalTaxRevision.create({
+    data: {
+      companyId: c,
+      taxId: tax.id,
+      version: tax.version,
+      snapshot: JSON.parse(JSON.stringify(tax)),
+      actorId: actor,
     },
   });
   await service.setPaymentPolicy(c, actor, customerId, {
@@ -373,11 +385,11 @@ it("previews freight replacement and VAT without persisting, then issues the sam
       previewProforma(c, b.id, { freight: { ...freight, amount: "-1" } }),
     ),
   ).rejects.toThrow();
-  await expect(
-    Promise.resolve().then(() =>
-      previewProforma(c, b.id, { freight: { ...freight, tax_rule_id: randomUUID() } }),
-    ),
-  ).rejects.toThrow("FREIGHT_TAX_RULE_INVALID");
+  // A legacy freight tax rule id is ignored: taxable freight always uses the default sales tax.
+  const legacy = await previewProforma(c, b.id, {
+    freight: { ...freight, tax_rule_id: randomUUID() },
+  });
+  expect(legacy.snapshot.tax).toBe("17.6");
   const issued = await issueProforma(
     c,
     actor,
@@ -447,7 +459,9 @@ afterAll(async () => {
   await prisma.stockLot.deleteMany({ where: { companyId: c } });
   await prisma.transactionEvidence.deleteMany({ where: { companyId: c } });
   await prisma.customerPaymentPolicy.deleteMany({ where: { companyId: c } });
-  await prisma.salesTaxRule.deleteMany({ where: { companyId: c } });
+  await prisma.operationalTaxRevision.deleteMany({ where: { companyId: c } });
+  await prisma.operationalTax.deleteMany({ where: { companyId: c } });
+  await prisma.financeAccount.deleteMany({ where: { companyId: c } });
   await prisma.productReferencePrice.deleteMany({ where: { companyId: c } });
   await prisma.policyVersion.deleteMany({ where: { policy: { companyId: c } } });
   await prisma.systemPolicy.deleteMany({ where: { companyId: c } });

@@ -11,6 +11,7 @@ const freightTermsSchema = z
     basis: z.literal("PER_SHIPMENT"),
     estimate: nonNegativeDecimal,
     tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
+    /** Ignored: taxable freight always uses the default sales tax. Kept for older clients. */
     tax_rule_id: z.string().uuid().optional(),
   })
   .strict();
@@ -61,6 +62,7 @@ export const shipmentSchema = z
       .object({
         amount: nonNegativeDecimal,
         tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
+        /** Ignored: taxable freight always uses the default sales tax. Kept for older clients. */
         tax_rule_id: z.string().uuid().optional(),
       })
       .strict()

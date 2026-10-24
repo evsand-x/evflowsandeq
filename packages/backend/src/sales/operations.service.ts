@@ -20,85 +20,11 @@ import {
 } from "./order-list-filters";
 import { proformaKinds, proformaStatus } from "./proforma";
 import { lineAmounts } from "./pricing-controls";
+import { defaultSalesTaxOn } from "../finance/operational-tax";
 
 @Injectable()
 export class OperationsService {
   constructor(@Inject(AuditService) private readonly audit: AuditService) {}
-  async tax(
-    c: string,
-    a: string,
-    i: {
-      customer_id: string;
-      product_id: string;
-      name: string;
-      legal_reference: string;
-      taxable_event?: "POD" | "ADVANCE" | undefined;
-      rate: string;
-      dpp_factor: string;
-      decimal_places: number;
-      rounding: string;
-      effective_from: string;
-      effective_to: string;
-    },
-    key: string,
-  ) {
-    return transactionCommand(c, a, "tax-rules/create", key, i, async (tx) => {
-      await tx.$queryRaw`SELECT id FROM companies WHERE id=${c}::uuid FOR UPDATE`;
-      const from = new Date(i.effective_from),
-        to = new Date(i.effective_to),
-        rate = new Prisma.Decimal(i.rate),
-        factor = new Prisma.Decimal(i.dpp_factor);
-      if (to <= from || rate.gt(1) || factor.lte(0))
-        throw new ConflictException("TAX_POLICY_INVALID");
-      if (
-        !(await tx.customer.findFirst({
-          where: { id: i.customer_id, companyId: c, state: "ACTIVE" },
-        })) ||
-        !(await tx.product.findFirst({
-          where: { id: i.product_id, companyId: c, state: "ACTIVE" },
-        }))
-      )
-        throw new NotFoundException();
-      if (
-        await tx.salesTaxRule.count({
-          where: {
-            companyId: c,
-            customerId: i.customer_id,
-            productId: i.product_id,
-            effectiveFrom: { lt: to },
-            effectiveTo: { gt: from },
-          },
-        })
-      )
-        throw new ConflictException("TAX_POLICY_OVERLAP");
-      const rule = await tx.salesTaxRule.create({
-        data: {
-          companyId: c,
-          customerId: i.customer_id,
-          productId: i.product_id,
-          name: i.name,
-          legalReference: i.legal_reference,
-          taxableEvent: i.taxable_event ?? "POD",
-          rate,
-          dppFactor: factor,
-          decimalPlaces: i.decimal_places,
-          rounding: i.rounding,
-          effectiveFrom: from,
-          effectiveTo: to,
-          createdById: a,
-        },
-      });
-      await this.audit.recordWith(tx, {
-        companyId: c,
-        actorId: a,
-        action: "sales_tax_rule.created",
-        resourceType: "sales_tax_rule",
-        resourceId: rule.id,
-        after: rule,
-      });
-      return rule;
-    });
-  }
   async approvalPolicy(
     c: string,
     a: string,
@@ -284,50 +210,20 @@ export class OperationsService {
         payer?: string;
         basis?: string;
         tax_mode?: "NON_TAXABLE" | "TAXABLE";
-        tax_rule_id?: string;
       };
       const freight = input.freight ?? {
         amount: order.freightEstimate?.toString() ?? "0",
         tax_mode: terms.tax_mode ?? "NON_TAXABLE",
-        tax_rule_id: terms.tax_rule_id,
       };
       const amount = new Prisma.Decimal(freight.amount);
       if (amount.lt(0)) throw new ConflictException("FREIGHT_AMOUNT_INVALID");
       let taxAmount = new Prisma.Decimal(0);
       let taxSnapshot: Prisma.JsonValue | null = null;
       if (freight.tax_mode === "TAXABLE") {
-        const rule = await tx.salesTaxRule.findFirst({
-          where: {
-            ...(freight.tax_rule_id ? { id: freight.tax_rule_id } : {}),
-            companyId: c,
-            customerId: order.customerId,
-            state: "ACTIVE",
-            effectiveFrom: { lte: new Date() },
-            effectiveTo: { gt: new Date() },
-          },
-          orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
-        });
-        if (!rule) throw new ConflictException("FREIGHT_TAX_RULE_INVALID");
-        const rounding = (
-          {
-            HALF_UP: Prisma.Decimal.ROUND_HALF_UP,
-            HALF_EVEN: Prisma.Decimal.ROUND_HALF_EVEN,
-            DOWN: Prisma.Decimal.ROUND_DOWN,
-          } as Record<string, Prisma.Decimal.Rounding>
-        )[rule.rounding];
-        if (rounding === undefined) throw new ConflictException("FREIGHT_TAX_ROUNDING_REQUIRED");
-        const dpp = amount.mul(rule.dppFactor).toDecimalPlaces(rule.decimalPlaces, rounding);
-        taxAmount = dpp.mul(rule.rate).toDecimalPlaces(rule.decimalPlaces, rounding);
-        taxSnapshot = {
-          rule_id: rule.id,
-          name: rule.name,
-          legal_reference: rule.legalReference,
-          rate: rule.rate.toString(),
-          dpp_factor: rule.dppFactor.toString(),
-          decimal_places: rule.decimalPlaces,
-          rounding: rule.rounding,
-          taxable_event: rule.taxableEvent,
-        };
+        // Taxable freight uses the default sales tax; per-customer rules are no longer read.
+        const freightTax = await defaultSalesTaxOn(tx, c, amount);
+        taxAmount = freightTax.tax;
+        taxSnapshot = freightTax.snapshot;
       }
       const after = await tx.fulfillmentBatch.update({
         where: { id },
@@ -880,19 +776,7 @@ export class OperationsService {
       where: { companyId: c, batchId: id, kind: { in: ["PICKING", "PACKING", "SURAT_JALAN"] } },
       select: { id: true, kind: true, number: true, issuedAt: true, snapshot: true },
     });
-    const freightTaxRules = await prisma.salesTaxRule.findMany({
-      where: {
-        companyId: c,
-        customerId: row.salesOrder.customerId,
-        state: "ACTIVE",
-        effectiveFrom: { lte: new Date() },
-        effectiveTo: { gt: new Date() },
-      },
-      select: { id: true, name: true, rate: true },
-      orderBy: { name: "asc" },
-      take: 250,
-    });
-    return { ...row, documents, freightTaxRules };
+    return { ...row, documents };
   }
   async invoice(c: string, id: string) {
     const row = await prisma.salesInvoice.findFirst({
@@ -986,7 +870,7 @@ export class OperationsService {
     };
   }
   async lookups(c: string) {
-    const [customers, products, taxRules] = await Promise.all([
+    const [customers, products] = await Promise.all([
       prisma.customer.findMany({
         where: { companyId: c, state: "ACTIVE" },
         select: {
@@ -1010,17 +894,6 @@ export class OperationsService {
         orderBy: { name: "asc" },
         take: 250,
       }),
-      prisma.salesTaxRule.findMany({
-        where: {
-          companyId: c,
-          state: "ACTIVE",
-          effectiveFrom: { lte: new Date() },
-          effectiveTo: { gt: new Date() },
-        },
-        select: { id: true, name: true, rate: true },
-        orderBy: { name: "asc" },
-        take: 250,
-      }),
     ]);
     const company = await prisma.company.findUniqueOrThrow({
       where: { id: c },
@@ -1029,7 +902,6 @@ export class OperationsService {
     return {
       customers,
       products,
-      taxRules,
       currency: company.baseCurrency,
       timezone: company.timezone,
     };

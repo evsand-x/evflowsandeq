@@ -1,7 +1,7 @@
 import { ConflictException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
 import { validException } from "./exception-controls";
-import { operationalTaxSnapshot } from "../finance/operational-tax";
+import { defaultSalesTaxSnapshot, operationalTaxSnapshot } from "../finance/operational-tax";
 
 export type TaxSnapshot = {
   rule_id: string;
@@ -100,31 +100,21 @@ export async function priceOrder(
       !priceGrants.some((g) => g.amountLimit.gte(line.unitPrice.mul(line.orderedQuantity)))
     )
       throw new ConflictException("PRICE_EXCEPTION_APPROVAL_REQUIRED");
+    // Every product carries PPN: a line uses the company default sales tax unless an explicit
+    // master tax was recorded on it. The per customer x product SalesTaxRule is no longer read.
     const selected = line.taxSnapshot as { operational_tax_id?: string } | null;
-    const masterSnapshot = selected?.operational_tax_id
-      ? await operationalTaxSnapshot(
-          tx,
-          companyId,
-          selected.operational_tax_id,
-          new Date(),
-          "SALES",
-        )
-      : null;
-    const taxes = masterSnapshot
-      ? []
-      : await tx.salesTaxRule.findMany({
-          where: {
-            state: "ACTIVE",
+    const taxSnapshot = selected?.operational_tax_id
+      ? {
+          ...(await operationalTaxSnapshot(
+            tx,
             companyId,
-            customerId,
-            productId: product.id,
-            effectiveFrom: { lte: now },
-            effectiveTo: { gt: now },
-          },
-        });
-    if (!masterSnapshot && taxes.length !== 1)
-      throw new ConflictException(taxes.length ? "TAX_POLICY_CONFLICT" : "TAX_POLICY_REQUIRED");
-    const rule = taxes[0]!;
+            selected.operational_tax_id,
+            now,
+            "SALES",
+          )),
+          operational_tax_id: selected.operational_tax_id,
+        }
+      : await defaultSalesTaxSnapshot(tx, companyId, now);
     await tx.salesOrderLine.update({
       where: { id: line.id },
       data: {
@@ -140,18 +130,7 @@ export async function priceOrder(
               ?.id ?? null,
           effective_from: prices[0]!.effectiveFrom.toISOString(),
         },
-        taxSnapshot: masterSnapshot
-          ? { ...masterSnapshot, operational_tax_id: selected!.operational_tax_id! }
-          : {
-              rule_id: rule.id,
-              name: rule.name,
-              legal_reference: rule.legalReference,
-              rate: rule.rate.toString(),
-              dpp_factor: rule.dppFactor.toString(),
-              decimal_places: rule.decimalPlaces,
-              rounding: rule.rounding,
-              taxable_event: rule.taxableEvent,
-            },
+        taxSnapshot,
       },
     });
   }

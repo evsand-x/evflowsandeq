@@ -59,9 +59,9 @@ export default function SettingHubPage() {
         },
         {
           label: "Pajak",
-          description: "Daftar dan aturan pajak di Finance.",
-          href: "/operations/controls",
-          allowed: can("sales_tax_rule.manage"),
+          description: "Daftar pajak, PPN penjualan bawaan dan pajak pembelian bawaan.",
+          href: "/setting/tax",
+          allowed: can("tax_setting.read"),
         },
       ],
     },

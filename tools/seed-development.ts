@@ -222,30 +222,7 @@ async function main() {
         top_days: 0,
         effective_from: "2026-01-01",
       });
-    for (const product of products) {
-      if (
-        !(await prisma.salesTaxRule.findFirst({
-          where: { companyId: c, customerId: customer.id, productId: product.id },
-        }))
-      )
-        await ops.tax(
-          c,
-          a,
-          {
-            customer_id: customer.id,
-            product_id: product.id,
-            name: "PPN CONTOH DEV 11%",
-            legal_reference: "DATA UJI FIKTIF - bukan ketentuan pajak resmi",
-            rate: "0.11",
-            dpp_factor: "1",
-            decimal_places: 2,
-            rounding: "HALF_UP",
-            effective_from: "2026-01-01",
-            effective_to: "2099-01-01",
-          },
-          `dev-seed-tax-${code}-${product.code}`,
-        );
-    }
+    // Sales lines use the default sales tax provisioned with the company defaults.
     const reference = `DEV-SP-${index + 1}`;
     let order = await prisma.salesOrder.findFirst({
       where: { companyId: c, customerReference: reference },

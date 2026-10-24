@@ -141,20 +141,33 @@ beforeAll(async () => {
       createdById: actor,
     },
   });
-  await prisma.salesTaxRule.create({
+  // Every line uses the company default sales tax (synthetic 10%, DPP factor 1).
+  const taxAccount = await prisma.financeAccount.create({
+    data: { companyId: c, code: "TEST-PPN", name: "Synthetic PPN", category: "LIABILITY" },
+  });
+  const tax = await prisma.operationalTax.create({
     data: {
       companyId: c,
-      customerId,
-      productId,
       name: "Synthetic test only",
-      legalReference: "TEST-NOT-A-TAX-SETTING",
-      rate: "0.1",
+      kind: "PPN",
+      usage: "SALES",
+      effect: "ADD",
+      accountId: taxAccount.id,
+      percentage: "10",
       dppFactor: "1",
       decimalPlaces: 2,
       rounding: "HALF_UP",
       effectiveFrom: new Date("2020-01-01"),
-      effectiveTo: new Date("2099-01-01"),
-      createdById: actor,
+      isDefaultSales: true,
+    },
+  });
+  await prisma.operationalTaxRevision.create({
+    data: {
+      companyId: c,
+      taxId: tax.id,
+      version: tax.version,
+      snapshot: JSON.parse(JSON.stringify(tax)),
+      actorId: actor,
     },
   });
 });
@@ -227,9 +240,10 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await cleanTransactions();
+  await prisma.operationalTaxRevision.deleteMany({ where: { companyId: c } });
+  await prisma.operationalTax.deleteMany({ where: { companyId: c } });
   await cleanFinanceConfiguration(c);
   await prisma.transactionEvidence.deleteMany({ where: { companyId: c } });
-  await prisma.salesTaxRule.deleteMany({ where: { companyId: c } });
   await prisma.productReferencePrice.deleteMany({ where: { companyId: c } });
   await prisma.customerPaymentPolicy.deleteMany({ where: { companyId: c } });
   await prisma.auditEvent.deleteMany({ where: { companyId: c } });
@@ -263,14 +277,12 @@ it("reserves repeated product lines cumulatively and excludes expired/hold lots"
 });
 
 it("recognizes configured advance tax once and keeps official evidence separate from commercial invoices", async () => {
-  await prisma.salesTaxRule.updateMany({
-    where: { companyId: c },
-    data: { taxableEvent: "ADVANCE" },
-  });
-  try {
+  {
     await lot("2");
     const so = await order(["2"]);
     await service.submitSalesOrder(c, actor, so.id, randomUUID());
+    // The default tax snapshot is taxed on POD; mark this order's lines as taxed on advance.
+    await prisma.$executeRaw`UPDATE sales_order_lines SET tax_snapshot = jsonb_set(tax_snapshot, '{taxable_event}', '"ADVANCE"') WHERE sales_order_id=${so.id}::uuid`;
     const batch = await prisma.fulfillmentBatch.findFirstOrThrow({
       where: { salesOrderId: so.id },
       include: { pickList: { include: { lines: true } }, allocations: true },
@@ -342,11 +354,6 @@ it("recognizes configured advance tax once and keeps official evidence separate 
     });
     expect(tax._sum.credit?.toString()).toBe("2");
     expect((await reconcileGl(c)).balanced).toBe(true);
-  } finally {
-    await prisma.salesTaxRule.updateMany({
-      where: { companyId: c },
-      data: { taxableEvent: "POD" },
-    });
   }
 });
 
@@ -994,19 +1001,21 @@ it("blocks price mismatch, missing tax and frozen customer with no reservation s
   await expect(service.submitSalesOrder(c, actor, wrong.id, randomUUID())).rejects.toThrow(
     "PRICE_EXCEPTION_APPROVAL_REQUIRED",
   );
-  const rule = await prisma.salesTaxRule.findFirstOrThrow({ where: { companyId: c } });
-  await prisma.salesTaxRule.update({
-    where: { id: rule.id },
-    data: { effectiveTo: new Date("2021-01-01") },
+  await prisma.operationalTax.updateMany({
+    where: { companyId: c },
+    data: { isDefaultSales: false },
   });
   const so = await order(["1"]);
-  await expect(service.submitSalesOrder(c, actor, so.id, randomUUID())).rejects.toThrow(
-    "TAX_POLICY_REQUIRED",
-  );
-  await prisma.salesTaxRule.update({
-    where: { id: rule.id },
-    data: { effectiveTo: new Date("2099-01-01") },
-  });
+  try {
+    await expect(service.submitSalesOrder(c, actor, so.id, randomUUID())).rejects.toThrow(
+      "DEFAULT_SALES_TAX_REQUIRED",
+    );
+  } finally {
+    await prisma.operationalTax.updateMany({
+      where: { companyId: c },
+      data: { isDefaultSales: true },
+    });
+  }
   await prisma.customerPaymentPolicy.updateMany({
     where: { companyId: c },
     data: { frozen: true },
@@ -1336,7 +1345,6 @@ it("quarantines POD returns, balances transit, blocks overdue until invoice is p
   expect(journal.reduce((sum, l) => sum + Number(l.debit) - Number(l.credit), 0)).toBe(0);
 });
 it("outbound UI draft persists with revision and rejects invalid checking", async () => {
-  await prisma.salesTaxRule.updateMany({ where: { companyId: c }, data: { state: "ACTIVE" } });
   await prisma.documentNumberRule.createMany({ data: ["sales_order", "fulfillment", "document_PICKING", "document_PACKING", "document_PROFORMA"].map(documentKind => ({ companyId: c, documentKind, prefix: `${documentKind}-`, digits: 6, resetPeriod: "YEARLY", effectiveFrom: new Date("2020-01-01"), effectiveTo: new Date("2099-01-01"), createdById: actor })) });
   await lot("2");
   const so = await order(["2"]);

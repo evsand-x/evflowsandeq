@@ -92,6 +92,7 @@ const navigation: Entry[] = [
   entry("Setting › Pengaturan Persetujuan", "transaction_approval"),
   entry("Setting › Template Cetak"),
   entry("Setting › Penomoran Dokumen", "numbering_rule"),
+  entry("Setting › Pajak", "tax_setting"),
   entry("Setting › Daftar Referensi & Alasan"),
   entry("Setting › Periode & Closing", "finance_period"),
   entry("Setting › Impor/Ekspor & Arsip"),

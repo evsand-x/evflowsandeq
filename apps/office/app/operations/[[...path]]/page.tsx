@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { ProformaWorkspace } from "../proforma";
 import { OperationsWorkspace } from "../workspace";
 import { SalesOrderWorkspace } from "../sales-order";
@@ -15,7 +16,9 @@ export default async function Page({
   const path = (await params).path ?? ["orders"];
   const query = await searchParams;
   if (path[0] === "accounts") return <AccountsWorkspace key={path.join("/")} path={path} />;
-  if (["tax-rules", "tax-documents", "tax-input"].includes(path[0] ?? ""))
+  // The tax master moved to Setting > Pajak; old links land there.
+  if (path[0] === "tax-rules") redirect("/setting/tax");
+  if (["tax-documents", "tax-input"].includes(path[0] ?? ""))
     return <TaxWorkspace key={path.join("/")} path={path} />;
   if (["pick-slips", "warehouse", "returns"].includes(path[0] ?? ""))
     return (

@@ -129,20 +129,33 @@ async function main() {
       createdById: a,
     },
   });
-  await prisma.salesTaxRule.create({
+  // Sales lines use the company default sales tax (fictional 10%, DPP factor 1).
+  const taxAccount = await prisma.financeAccount.create({
+    data: { companyId: c, code: "UAT-PPN", name: "PPN uji fiktif", category: "LIABILITY" },
+  });
+  const tax = await prisma.operationalTax.create({
     data: {
       companyId: c,
-      productId: product.id,
-      customerId: customer.id,
       name: "Pajak uji fiktif",
-      legalReference: "TEST ONLY — NOT A REAL TAX RATE",
-      rate: "0.1",
+      kind: "PPN",
+      usage: "SALES",
+      effect: "ADD",
+      accountId: taxAccount.id,
+      percentage: "10",
       dppFactor: "1",
       decimalPlaces: 2,
       rounding: "HALF_UP",
       effectiveFrom: new Date("2020-01-01"),
-      effectiveTo: new Date("2099-01-01"),
-      createdById: a,
+      isDefaultSales: true,
+    },
+  });
+  await prisma.operationalTaxRevision.create({
+    data: {
+      companyId: c,
+      taxId: tax.id,
+      version: tax.version,
+      snapshot: JSON.parse(JSON.stringify(tax)),
+      actorId: a,
     },
   });
   await prisma.stockLot.create({

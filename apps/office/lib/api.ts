@@ -112,5 +112,22 @@ export function translateProblem(problem: { detail?: string; message?: string } 
         "Nomor dokumen sudah melewati jumlah digit yang diatur. Tambah jumlah digit di Setting › Penomoran Dokumen.",
       settings_href: "/setting/numbering",
     };
+  if (detail === "DEFAULT_SALES_TAX_REQUIRED")
+    return {
+      message:
+        "Pajak penjualan bawaan belum diatur. Tandai satu pajak sebagai bawaan penjualan di Setting › Pajak.",
+      settings_href: "/setting/tax",
+    };
+  const taxMessages: Record<string, string> = {
+    TAX_DEFAULT_INVALID:
+      "Pajak bawaan harus aktif, ditambahkan ke transaksi, dan berlaku untuk penggunaan tersebut.",
+    TAX_DEFAULT_REQUIRED_ACTIVE:
+      "Pajak bawaan tidak dapat dinonaktifkan. Jadikan pajak lain sebagai bawaan terlebih dahulu.",
+    TAX_VERSION_CONFLICT:
+      "Pajak ini baru saja diubah orang lain. Muat ulang lalu ulangi perubahan.",
+    TAX_NAME_EXISTS: "Nama pajak sudah dipakai. Gunakan nama lain.",
+    TAX_ACCOUNT_INVALID: "Akun pajak harus akun rincian yang aktif.",
+  };
+  if (taxMessages[detail]) return { message: taxMessages[detail] };
   return { message: detail };
 }

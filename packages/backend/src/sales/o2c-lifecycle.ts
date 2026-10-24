@@ -366,10 +366,9 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
       throw new ConflictException("REVISION_LINES_REQUIRED");
     await requireEvidence(tx, c, input.evidence_id, "SALES_ORDER");
     if (input.freight) {
-      await freightValues(tx, c, order.customerId, {
+      await freightValues(tx, c, {
         amount: input.freight.estimate,
         tax_mode: input.freight.tax_mode,
-        tax_rule_id: input.freight.tax_rule_id,
       });
     }
     for (const line of input.lines) {

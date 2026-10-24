@@ -1,4 +1,5 @@
 // Pure helpers for the Setting pages; no React so they stay unit-testable.
+import Decimal from "decimal.js";
 export type PolicyLike = { code: string; active_version: { value: unknown } | null };
 
 export type SettingPolicy = PolicyLike & {
@@ -66,4 +67,51 @@ export function lockDraft<T>(
 ): VersionedSource<T> | null {
   if (!source) return null;
   return { version: draft?.version ?? source.version, value: next };
+}
+
+export type TaxDraft = {
+  name: string;
+  kind: string;
+  usage: string;
+  effect: string;
+  account_id: string;
+  percentage: string;
+  dpp_factor: string;
+  decimal_places: string;
+  rounding: string;
+  active: boolean;
+};
+
+const decimalText = (value: string) => value.trim().replace(",", ".");
+
+/** Effective tax share of the price, e.g. 12% x 11/12 = 11%; null while the input is incomplete. */
+export function effectiveTaxPercent(percentage: string, factor: string): string | null {
+  const rate = decimalText(percentage),
+    dpp = decimalText(factor);
+  if (!/^\d+(\.\d+)?$/.test(rate) || !/^\d+(\.\d+)?$/.test(dpp)) return null;
+  return new Decimal(rate).mul(dpp).toDecimalPlaces(4).toString();
+}
+
+export function taxPayload(draft: TaxDraft, effectiveFrom: string) {
+  return {
+    name: draft.name.trim(),
+    kind: draft.kind,
+    usage: draft.usage,
+    effect: draft.effect,
+    account_id: draft.account_id,
+    percentage: decimalText(draft.percentage),
+    dpp_factor: decimalText(draft.dpp_factor),
+    decimal_places: Number(draft.decimal_places),
+    rounding: draft.rounding,
+    active: draft.active,
+    effective_from: effectiveFrom,
+  };
+}
+
+/** Mirrors the server rule; the server still decides. */
+export function canBeDefault(
+  tax: { usage: string; effect: string; active: boolean },
+  usage: "SALES" | "PURCHASE",
+) {
+  return tax.active && tax.effect === "ADD" && (tax.usage === "BOTH" || tax.usage === usage);
 }

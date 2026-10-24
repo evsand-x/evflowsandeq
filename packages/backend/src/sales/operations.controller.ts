@@ -436,12 +436,11 @@ export class OperationsController {
   }
   @Get("control-options/:kind")
   async controlOptions(@Param("kind") kind: string, @Req() req: AuthenticatedRequest) {
-    const type = z.enum(["credit", "tax", "approval", "quality"]).parse(kind);
+    const type = z.enum(["credit", "approval", "quality"]).parse(kind);
     allowed(
       req,
       {
         credit: "customer.payment_policy.manage",
-        tax: "sales_tax_rule.manage",
         approval: "transaction_approval.manage",
         quality: "inventory.quality.decide",
       }[type],
@@ -477,31 +476,6 @@ export class OperationsController {
         },
       };
     return { data: await this.service.lookups(c) };
-  }
-  @Post("tax-rules")
-  @RequirePermissions("sales_tax_rule.manage")
-  async tax(
-    @Body() body: unknown,
-    @Req() req: AuthenticatedRequest,
-    @Headers("idempotency-key") k: string | undefined,
-  ) {
-    const i = z
-      .object({
-        customer_id: z.string().uuid(),
-        product_id: z.string().uuid(),
-        name: z.string().min(1).max(200),
-        legal_reference: z.string().min(1).max(500),
-        taxable_event: z.enum(["POD", "ADVANCE"]).optional(),
-        rate: z.string().regex(/^\d+(\.\d{1,8})?$/),
-        dpp_factor: z.string().regex(/^\d+(\.\d{1,8})?$/),
-        decimal_places: z.number().int().min(0).max(8),
-        rounding: z.enum(["HALF_UP", "HALF_EVEN", "DOWN"]),
-        effective_from: z.string().datetime(),
-        effective_to: z.string().datetime(),
-      })
-      .strict()
-      .parse(body);
-    return { data: await this.service.tax(req.auth.company_id, req.auth.user_id, i, key(k)) };
   }
   @Post("approval-policies")
   @RequirePermissions("transaction_approval.manage")

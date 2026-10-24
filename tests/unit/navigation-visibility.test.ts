@@ -32,6 +32,18 @@ describe("navigation shows only working menus", () => {
       visibleMenuItems(principal([], ["numbering_rule.read"]), "Setting").map((i) => i.label),
     ).toEqual(["Penomoran Dokumen"]);
   });
+  it("opens Setting > Pajak only with its own tax_setting grant", () => {
+    expect(
+      visibleMenuItems(principal([], ["tax_setting.read"]), "Setting").map((i) => [
+        i.label,
+        i.href,
+      ]),
+    ).toEqual([["Pajak", "/setting/tax"]]);
+    expect(
+      visibleMenuItems(principal([], ["setting_general.read"]), "Setting").map((i) => i.label),
+    ).not.toContain("Pajak");
+    expect(navigationMatrixRows([]).map((row) => row.path)).toContain("Setting › Pajak");
+  });
   it("hides a module with no visible item", () => {
     expect(visibleModules(admin).map((m) => m.label)).not.toContain("HRIS");
     expect(visibleModules(admin).map((m) => m.label)).toContain("Setting");

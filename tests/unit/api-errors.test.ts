@@ -23,4 +23,19 @@ describe("API problem translation", () => {
       expect(out.settings_href).toBe("/setting/numbering");
     }
   });
+  it("sends a missing default sales tax to Setting > Pajak", () => {
+    const out = translateProblem({ detail: "DEFAULT_SALES_TAX_REQUIRED" });
+    expect(out.message).toContain("Setting › Pajak");
+    expect(out.settings_href).toBe("/setting/tax");
+  });
+  it("explains tax master conflicts in business words", () => {
+    for (const detail of [
+      "TAX_DEFAULT_INVALID",
+      "TAX_DEFAULT_REQUIRED_ACTIVE",
+      "TAX_VERSION_CONFLICT",
+      "TAX_NAME_EXISTS",
+      "TAX_ACCOUNT_INVALID",
+    ])
+      expect(translateProblem({ detail }).message).not.toMatch(/^[A-Z_]+$/);
+  });
 });

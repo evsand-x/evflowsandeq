@@ -441,7 +441,6 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     (configuring
       ? [
           "customer.payment_policy.manage",
-          "sales_tax_rule.manage",
           "transaction_approval.manage",
           "inventory.quality.decide",
         ].some(can)

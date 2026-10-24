@@ -107,6 +107,7 @@ export const moduleNavigation = [
       "Pengaturan Persetujuan",
       "Template Cetak",
       "Penomoran Dokumen",
+      "Pajak",
       "Daftar Referensi & Alasan",
       "Periode & Closing",
       "Impor/Ekspor & Arsip",
@@ -158,6 +159,7 @@ export const menuRoutes: Record<string, Record<string, string>> = {
     "Termin, Ongkos Kirim & Kredit": "/setting/sales",
     "Pengaturan Persetujuan": "/operations/controls",
     "Penomoran Dokumen": "/setting/numbering",
+    Pajak: "/setting/tax",
   },
 };
 
@@ -170,6 +172,7 @@ export const settingPermissions: Record<string, string> = {
   "Termin, Ongkos Kirim & Kredit": "terms_credit.read",
   "Pengaturan Persetujuan": "transaction_approval.manage",
   "Penomoran Dokumen": "numbering_rule.read",
+  Pajak: "tax_setting.read",
 };
 
 export function isMenuAvailable(module: string, item: string) {

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "PPN Penjualan",
+    "kind": "PPN",
+    "usage": "SALES",
+    "effect": "ADD",
+    "account_code": "2-20500",
+    "percentage": "12",
+    "dpp_factor": "0.9166666667",
+    "decimal_places": 2,
+    "rounding": "HALF_UP",
+    "default_for": "SALES"
+  },
+  {
+    "name": "PPN Masukan",
+    "kind": "PPN",
+    "usage": "PURCHASE",
+    "effect": "ADD",
+    "account_code": "1-10500",
+    "percentage": "12",
+    "dpp_factor": "0.9166666667",
+    "decimal_places": 2,
+    "rounding": "HALF_UP",
+    "default_for": "PURCHASE"
+  }
+]

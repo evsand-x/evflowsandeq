@@ -19,7 +19,7 @@ import { PermissionGuard } from "../identity/permission.guard";
 import { RequirePermissions } from "../identity/permissions.decorator";
 import { RequireResourcePermission } from "../identity/resource-permissions";
 import type { AuthenticatedRequest } from "../identity/auth.types";
-import { saveTax, parsed, recordTaxInvoice } from "./operational-tax";
+import { saveTax, parsed, recordTaxInvoice, setDefaultTax } from "./operational-tax";
 import { hasResourcePermission } from "../identity/resource-permissions";
 import { ForbiddenException } from "@nestjs/common";
 const querySchema = z
@@ -45,7 +45,7 @@ export class OperationalTaxController {
         "sales_order.create",
         "sales_order.update",
         "supplier_invoice.create",
-        "tax_master.read",
+        "tax_setting.read",
       ].some((code) => hasResourcePermission(r.auth, code))
     )
       throw new ForbiddenException();
@@ -57,13 +57,23 @@ export class OperationalTaxController {
           effectiveFrom: { lte: new Date() },
           ...(usage ? { usage: { in: [usage, "BOTH"] } } : {}),
         },
-        select: { id: true, name: true, kind: true, effect: true, percentage: true, usage: true },
+        select: {
+          id: true,
+          name: true,
+          kind: true,
+          effect: true,
+          percentage: true,
+          dppFactor: true,
+          usage: true,
+          isDefaultSales: true,
+          isDefaultPurchase: true,
+        },
         orderBy: { name: "asc" },
       }),
     };
   }
   @Get("master")
-  @RequirePermissions("tax_master.read")
+  @RequirePermissions("tax_setting.read")
   async list(@Query() input: unknown, @Req() r: AuthenticatedRequest) {
     const { q, page } = parsed(querySchema, input);
     const where = {
@@ -82,7 +92,7 @@ export class OperationalTaxController {
     return { data, total };
   }
   @Get("accounts")
-  @RequirePermissions("tax_master.read")
+  @RequirePermissions("tax_setting.read")
   async accounts(@Req() r: AuthenticatedRequest) {
     return {
       data: await prisma.financeAccount.findMany({
@@ -93,7 +103,7 @@ export class OperationalTaxController {
     };
   }
   @Get("master/:id")
-  @RequirePermissions("tax_master.read")
+  @RequirePermissions("tax_setting.read")
   async detail(@Param("id") id: string, @Req() r: AuthenticatedRequest) {
     const data = await prisma.operationalTax.findFirst({
       where: { id: uuid(id), companyId: r.auth.company_id },
@@ -108,7 +118,7 @@ export class OperationalTaxController {
     };
   }
   @Post("master")
-  @RequirePermissions("tax_master.create")
+  @RequirePermissions("tax_setting.update")
   async create(
     @Body() body: unknown,
     @Req() r: AuthenticatedRequest,
@@ -117,7 +127,7 @@ export class OperationalTaxController {
     return { data: await saveTax(r.auth.company_id, r.auth.user_id, body, commandKey(key)) };
   }
   @Patch("master/:id")
-  @RequirePermissions("tax_master.update")
+  @RequirePermissions("tax_setting.update")
   async update(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -134,6 +144,29 @@ export class OperationalTaxController {
         commandKey(key),
         uuid(id),
         Number(version!.slice(1, -1)),
+      ),
+    };
+  }
+  /** Marks the tax as the company default for sales or purchases (Setting > Pajak). */
+  @Post("master/:id/default")
+  @RequirePermissions("tax_setting.update")
+  async setDefault(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() r: AuthenticatedRequest,
+    @Headers("idempotency-key") key?: string,
+    @Headers("if-match") version?: string,
+  ) {
+    if (!/^"[1-9]\d*"$/.test(version ?? "")) throw new BadRequestException("If-Match versi wajib.");
+    const { usage } = parsed(z.object({ usage: z.enum(["SALES", "PURCHASE"]) }).strict(), body);
+    return {
+      data: await setDefaultTax(
+        r.auth.company_id,
+        r.auth.user_id,
+        uuid(id),
+        usage,
+        Number(version!.slice(1, -1)),
+        commandKey(key),
       ),
     };
   }

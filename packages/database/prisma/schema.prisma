@@ -2030,6 +2030,9 @@ model OperationalTax {
   effect String
   accountId String @map("account_id") @db.Uuid
   percentage Decimal @db.Decimal(12,8)
+  dppFactor Decimal @default(1) @map("dpp_factor") @db.Decimal(24,10)
+  isDefaultSales Boolean @default(false) @map("is_default_sales")
+  isDefaultPurchase Boolean @default(false) @map("is_default_purchase")
   decimalPlaces Int @map("decimal_places")
   rounding String
   active Boolean @default(true)
