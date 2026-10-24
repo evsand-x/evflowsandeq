@@ -4,6 +4,8 @@
 
 Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Setting menjadi satu tempat untuk mengatur aplikasi seperti ERP SaaS pada umumnya. Semua parameter bisnis dapat diedit pengguna berizin, dan konfigurasi yang dibutuhkan transaksi tersedia sejak awal sebagai nilai bawaan (CFG-08). Profil Perusahaan (nama, alamat, kontak, NPWP, logo) diedit langsung (IAM-10). Hanya Rupiah; format angka diatur (CFG-09). Struktur Organisasi (IAM-12) dan mesin persetujuan umum (IAM-02/07) dikelola di sini. Peran dibuat bebas tanpa preset (IAM-13); Pengguna, Peran dan Hak Akses tetap khusus Admin Sistem untuk mencegah pengguna menaikkan haknya sendiri, sedangkan pengaturan lain memakai izin per submenu sehingga dapat didelegasikan. Menu yang belum berfungsi disembunyikan (CFG-10). Master pajak tetap di Finance → Pajak dan ditautkan dari Setting.
 
+**Implementasi tahap 2 (24 Oktober 2026):** hub `/setting`, Profil Perusahaan (`/setting/company`), Penomoran Dokumen (`/setting/numbering`), Termin, Ongkos Kirim & Kredit (`/setting/sales`, kebijakan `OPS-FLX-01..04`) dan Kebijakan Operasional (`/setting/policies`). Navigasi menampilkan Kebijakan Pelanggan Baru dan Kredit & Exposure sebagai satu entri "Termin, Ongkos Kirim & Kredit"; matriks izin tetap memisahkan capability-nya. Nilai bawaan dan 156 akun dibuat oleh provisioning idempotent. Bukti: [catatan implementasi](../development/setting-hub-2026-10-24.md).
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Matriks menampilkan Finance → Akuntansi → Akun dengan izin independen account.read, account.create, account.update, account.import. Admin Sistem tetap penuh dalam perusahaan aktif; grant peran biasa lama tidak diperluas otomatis. Mapping jurnal dan akun pajak tetap konfigurasi Finance berbasis ID akun, bukan hardcode kode sumber. Kode pada migrasi lokal hanya data konfigurasi pengguna. Riwayat audit mencatat impor, pemetaan dan penonaktifan akun uji.
@@ -64,6 +66,8 @@ Status: sumber domain kanonis untuk pengaturan lintas ERP. Setting mengatur iden
 6. Termin & Ongkos Kirim
 7. Kebijakan Pelanggan Baru (opsional)
 8. Kredit & Exposure (mode Nonaktif/Peringatan/Blokir)
+
+Butir 6–8 tampil di navigasi sebagai satu halaman "Termin, Ongkos Kirim & Kredit".
 9. Pengaturan Persetujuan
 10. Template Cetak
 11. Penomoran Dokumen

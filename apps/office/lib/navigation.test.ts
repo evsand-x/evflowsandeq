@@ -1,6 +1,11 @@
 import type { AuthPrincipal } from "@evflow/contracts";
 import { describe, expect, it } from "vitest";
-import { moduleNavigation, visibleDashboardViews, visibleModules } from "./navigation";
+import {
+  isMenuAvailable,
+  moduleNavigation,
+  visibleDashboardViews,
+  visibleModules,
+} from "./navigation";
 
 const companyId = "00000000-0000-4000-8000-000000000001";
 const principal: AuthPrincipal = {
@@ -39,8 +44,11 @@ describe("permission-aware Dashboard navigation", () => {
       roles: [{ code: "ADMIN_SYSTEM", name: "Admin Sistem" }],
       permissions: [{ code: "role.read", scope_type: "company", scope_id: null }],
     };
+    // CFG-10: modules without any working submenu (HRIS today) stay hidden even for admins.
     expect(visibleModules(roleAdmin).map((module) => module.label)).toEqual(
-      moduleNavigation.map((module) => module.label),
+      moduleNavigation
+        .filter((module) => module.items.some((item) => isMenuAvailable(module.label, item)))
+        .map((module) => module.label),
     );
   });
   it("hides access management even when a nonadministrator holds IAM grants", () => {
@@ -103,7 +111,6 @@ describe("permission-aware Dashboard navigation", () => {
       "Sales & Marketing",
       "Warehouse & Logistik",
       "Finance",
-      "HRIS",
       "Master Data",
       "Setting",
     ]);

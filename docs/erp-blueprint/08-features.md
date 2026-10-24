@@ -5,7 +5,7 @@
 Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md), urutan berikut didahulukan:
 
 1. Revisi dokumen panduan (selesai 24 Oktober 2026).
-2. Pengaturan terpusat dan nilai bawaan (CFG-08/09/10, IAM-10).
+2. Pengaturan terpusat dan nilai bawaan (CFG-08/09/10, IAM-10) — selesai 24 Oktober 2026, [rencana](../superpowers/plans/2026-10-24-pengaturan-terpusat.md), [bukti](../development/setting-hub-2026-10-24.md).
 3. Alur SO → pengiriman → invoice → pembayaran/retur yang ringan (OTC-01/02/03/17, FIN-12).
 4. Peran & Hak Akses yang lebih mudah (IAM-13), Struktur Organisasi (IAM-12) dan mesin persetujuan umum (IAM-02/07), dipasang ke SO lebih dulu.
 5. Pengajuan karyawan: permintaan biaya, perjalanan dinas, entertain, call plan harian, cuti.

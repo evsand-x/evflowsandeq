@@ -9,7 +9,7 @@ import {
   visibleMatrixTree,
   toggleMatrixBranch,
 } from "./access-matrix-navigation";
-import { moduleNavigation } from "./navigation";
+import { isMenuAvailable, moduleNavigation } from "./navigation";
 import type { Permission } from "./iam";
 
 const permission = (resource: string, action: string): Permission => ({
@@ -122,15 +122,20 @@ describe("permission matrix navigation", () => {
       permission("unmapped_feature", "read"),
     ];
     const rows = navigationMatrixRows(catalog);
+    // CFG-10: every working menu has a row; the combined sales settings page edits operational policies.
+    const alias: Record<string, string> = {
+      "Setting › Termin, Ongkos Kirim & Kredit": "Setting › Kebijakan Operasional",
+      // Same capability (customer.payment_policy) as the customer credit policy row.
+      "Finance › Kredit & TOP Pelanggan": "Setting › Kebijakan Pelanggan Baru",
+    };
     for (const module of moduleNavigation)
-      for (const item of module.items)
-        expect(
-          rows.some(
-            (row) =>
-              row.path === `${module.label} › ${item}` ||
-              row.path.startsWith(`${module.label} › ${item} ›`),
-          ),
-        ).toBe(true);
+      for (const item of module.items.filter((i) => isMenuAvailable(module.label, i))) {
+        const path = alias[`${module.label} › ${item}`] ?? `${module.label} › ${item}`;
+        expect(rows.some((row) => row.path === path || row.path.startsWith(`${path} ›`))).toBe(
+          true,
+        );
+      }
+    expect(rows.every((row) => row.resource)).toBe(true);
     expect(rows.find((row) => row.path.endsWith("Pesanan Pelanggan › Sales Order"))?.items).toEqual(
       [catalog[0]],
     );

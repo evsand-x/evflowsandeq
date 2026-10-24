@@ -7,7 +7,8 @@ Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-
 - **Struktur organisasi:** departemen, jabatan dan karyawan dengan `manager_employee_id`; `user_id` pada karyawan opsional dan unik. Siklus atasan ditolak constraint/validasi.
 - **Mesin persetujuan umum:** registri jenis dokumen, aturan berversi per jenis (kondisi, tahap berurutan, sumber pemberi persetujuan: atasan langsung/atasan N tingkat/kepala departemen/orang/peran, cukup satu/semua), instance pengajuan yang menautkan dokumen sumber dan versinya, serta keputusan per tahap dengan pelaksana sebenarnya. Data unlock/exception SO lama dimigrasikan ke struktur ini.
 - **Penjualan:** daftar termin; termin snapshot pada SO dan invoice; mode kredit perusahaan; pilihan ongkir pada SO/proforma/invoice (ditanggung perusahaan atau dibebankan ke pelanggan, posisi sebelum/sesudah PPN) beserta akun konfigurasi. TOP/limit pada kebijakan pelanggan menjadi nullable.
-- **Nilai bawaan:** baris konfigurasi bawaan (penomoran per jenis, termin, mode kredit, ongkir, format angka) dibuat idempotent saat perusahaan disiapkan.
+- **Nilai bawaan:** baris konfigurasi bawaan (penomoran per jenis, termin, mode kredit, ongkir, format angka) dibuat idempotent saat perusahaan disiapkan. Implementasi tahap 2 memakai `system_policies`/`policy_versions` (`OPS-FLX-01..08`) dan `document_number_rules`; data sumber di `packages/database/src/data/`.
+- **Riwayat migration:** `verify_win_lost` dipindah ke `20260930115000` agar berjalan setelah tabel yang diubahnya; `20261024100000_restore_line_relation_columns` menambah kolom `uomId`/`prospectNeedId` yang sudah ada di schema. Database baru kini dapat dibangun dari migration.
 
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
