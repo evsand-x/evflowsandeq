@@ -238,6 +238,15 @@ export const createRayonSchema = createReferenceMasterSchema.extend({
   coverage_notes: z.string().trim().max(1000).nullable().optional(),
 });
 
+/** Discount limit in percent as a decimal string (0-100, up to 4 decimals); null clears the limit. */
+export const discountLimitSchema = z
+  .string()
+  .regex(/^\d{1,3}(\.\d{1,4})?$/, "Batas diskon harus berupa angka 0-100.")
+  .refine((value) => Number(value) <= 100, "Batas diskon maksimal 100%.")
+  .nullable();
+
+export const discountLimitUpdateSchema = z.object({ discount_limit: discountLimitSchema }).strict();
+
 export const createProductSchema = z
   .object({
     name: z.string().trim().min(2).max(200),
@@ -261,6 +270,7 @@ export const createProductSchema = z
       .default("IDR"),
     permit_issued_on: z.string().date().nullable().optional(),
     permit_expires_on: z.string().date().nullable().optional(),
+    discount_limit: discountLimitSchema.optional(),
   })
   .strict();
 

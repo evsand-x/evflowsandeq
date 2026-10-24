@@ -1,6 +1,7 @@
 import { prisma, type Prisma } from "@evflow/database";
 import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { AuditService } from "../common/audit.service";
+import { discountLimitText } from "../sales/discount-limit";
 import { hashPassword } from "./password";
 
 async function keepCompanyAdministrator(
@@ -120,6 +121,7 @@ export class AccessService {
         email: membership.user.email,
         display_name: membership.user.displayName,
         active: membership.active && membership.user.active,
+        discount_limit: discountLimitText(membership.discountLimit),
         last_active_at: membership.sessions[0]?.lastSeenAt.toISOString() ?? null,
         roles: membership.userRoles.map((item) => ({
           id: item.role.id,
@@ -410,6 +412,7 @@ export class AccessService {
       name: role.name,
       description: role.description,
       active: role.active,
+      discount_limit: discountLimitText(role.discountLimit),
       member_count: role._count.userRoles,
       permissions: role.rolePermissions.map((grant) => ({
         permission_id: grant.permissionId,

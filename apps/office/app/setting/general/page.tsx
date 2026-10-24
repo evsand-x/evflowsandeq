@@ -63,7 +63,7 @@ const groups: Record<string, string> = {
 };
 const scalar = ["string", "integer", "decimal", "boolean"];
 /** Sales terms live on the sales page; number format has its own editor above. */
-const elsewhere = new Set(["OPS-FLX-01", "OPS-FLX-02", "OPS-FLX-03", "OPS-FLX-04", "OPS-FLX-06"]);
+const elsewhere = new Set(["OPS-FLX-01", "OPS-FLX-02", "OPS-FLX-03", "OPS-FLX-04", "OPS-FLX-06", "OPS-FLX-09"]);
 
 function display(value: unknown) {
   if (value === true) return "Ya";

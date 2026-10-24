@@ -16,6 +16,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
+import { DiscountLimitField } from "./discount-limit-field";
 import {
   Select,
   SelectContent,
@@ -387,6 +388,13 @@ export function UsersView() {
               ))}
             </div>
           </div>
+          {selected ? (
+            <DiscountLimitField
+              kind="users"
+              id={selected.user_id}
+              value={selected.discount_limit ?? null}
+            />
+          ) : null}
           {selected ? <EffectivePanel roles={roles.data?.data ?? []} roleIds={roleIds} /> : null}
           {error ? (
             <Alert variant="destructive">
@@ -546,7 +554,12 @@ export function RolesView() {
   };
   const remove = async (role: Role) => {
     if (role.code === "ADMIN_SYSTEM") return;
-    if (!window.confirm(`Hapus peran ${role.name} dan lepaskan dari ${role.member_count} pengguna? Sesi mereka akan dicabut.`)) return;
+    if (
+      !window.confirm(
+        `Hapus peran ${role.name} dan lepaskan dari ${role.member_count} pengguna? Sesi mereka akan dicabut.`,
+      )
+    )
+      return;
     try {
       await apiRequest(`/roles/${role.id}`, { method: "DELETE" });
       await client.invalidateQueries({ queryKey: ["setting", "roles"] });
@@ -684,6 +697,9 @@ export function RoleFormDrawer({
               className="h-9 rounded-sm"
             />
           </label>
+          {selected ? (
+            <DiscountLimitField kind="roles" id={selected.id} value={selected.discount_limit ?? null} />
+          ) : null}
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
@@ -778,7 +794,17 @@ export function RoleTable({
   );
 }
 
-export function AccessPage({section,roleId}:{section:"users"|"roles"|"matrix";roleId?:string}) {
- if(section!=="matrix")return <AccessWorkspace section={section}/>;
- return <SettingShell matrix permission={["role.read","permission.read"]}><PermissionMatrix selectedRoleId={roleId}/></SettingShell>;
+export function AccessPage({
+  section,
+  roleId,
+}: {
+  section: "users" | "roles" | "matrix";
+  roleId?: string;
+}) {
+  if (section !== "matrix") return <AccessWorkspace section={section} />;
+  return (
+    <SettingShell matrix permission={["role.read", "permission.read"]}>
+      <PermissionMatrix selectedRoleId={roleId} />
+    </SettingShell>
+  );
 }

@@ -53,7 +53,8 @@ export default function TermsCreditSettingsPage() {
   const terms = usePolicyForm<Term[]>("OPS-FLX-03"),
     freight = usePolicyForm<Freight>("OPS-FLX-04"),
     credit = usePolicyForm<string>("OPS-FLX-01"),
-    cod = usePolicyForm<NewCustomerCod>("OPS-FLX-02");
+    cod = usePolicyForm<NewCustomerCod>("OPS-FLX-02"),
+    discount = usePolicyForm<string | null>("OPS-FLX-09");
   const updateTerm = (index: number, patch: Partial<Term>) =>
     terms.value &&
     terms.set(terms.value.map((term, i) => (i === index ? { ...term, ...patch } : term)));
@@ -278,6 +279,31 @@ export default function TermsCreditSettingsPage() {
                   />
                 </>
               )}
+            </div>
+          )}
+        </SettingSection>
+        <SettingSection
+          title="Batas diskon bawaan"
+          description="Batas diskon penjualan (persen) bagi pengguna yang tidak punya batas sendiri maupun batas peran. Kosong berarti tanpa diskon. Batas per peran, per orang dan per produk diatur di Pengguna, Peran dan Master Data › Produk."
+          form={discount}
+          canEdit={canEdit}
+        >
+          {discount.policy?.active_version && (
+            <div className="setting-inline web-form setting-form">
+              <label>
+                Batas diskon (%)
+                <Input
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={discount.value ?? ""}
+                  disabled={!canEdit}
+                  onChange={(e) => {
+                    const next = e.target.value.trim();
+                    if (next === "" || /^\d{0,3}([.,]\d{0,4})?$/.test(next))
+                      discount.set(next === "" ? null : next.replace(",", "."));
+                  }}
+                />
+              </label>
             </div>
           )}
         </SettingSection>

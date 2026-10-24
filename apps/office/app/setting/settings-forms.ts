@@ -32,6 +32,10 @@ export function policyPayload(code: string, form: unknown): { value: unknown } {
       },
     };
   }
+  if (code === "OPS-FLX-09") {
+    const text = typeof form === "string" ? form.trim().replace(/\.$/, "") : "";
+    return { value: text === "" ? null : text };
+  }
   return { value: form };
 }
 

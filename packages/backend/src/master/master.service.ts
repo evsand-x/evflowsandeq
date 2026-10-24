@@ -7,6 +7,7 @@ import {
   PreconditionFailedException,
 } from "@nestjs/common";
 import { AuditService } from "../common/audit.service";
+import { parseDiscountLimit } from "../sales/discount-limit";
 import {
   customerCreditOmit,
   recordCreditChange,
@@ -218,6 +219,9 @@ export class MasterService {
           storageNotes: nullable(input.storage_notes),
           storageProfile: jsonOrNull(input.storage_profile),
           shelfLifeDays: input.shelf_life_days == null ? null : Number(input.shelf_life_days),
+          ...(input.discount_limit !== undefined
+            ? { discountLimit: parseDiscountLimit(input.discount_limit as string | null) }
+            : {}),
           createdById: actorId,
           updatedById: actorId,
           uoms: {
@@ -379,6 +383,9 @@ export class MasterService {
           storageNotes: nullable(input.storage_notes),
           storageProfile: jsonOrNull(input.storage_profile),
           shelfLifeDays: input.shelf_life_days == null ? null : Number(input.shelf_life_days),
+          ...(input.discount_limit !== undefined
+            ? { discountLimit: parseDiscountLimit(input.discount_limit as string | null) }
+            : {}),
           version: { increment: 1 },
           updatedById: actorId,
         },

@@ -101,7 +101,7 @@ function validateNode(
     if (schema.pattern && !new RegExp(schema.pattern).test(value)) {
       issues.push({ field, message: "Format nilai tidak valid." });
     }
-    if (schema.type === "decimal") {
+    if (types.includes("decimal")) {
       if (!/^-?\d+(\.\d+)?$/.test(value)) {
         issues.push({ field, message: "Nilai decimal harus dikirim sebagai string." });
       } else {

@@ -48,6 +48,7 @@ export type Registration = {
 export type Product = {
   id: string;
   code: string;
+  discount_limit?: string | null;
   name: string;
   category: Ref;
   base_uom: Ref;

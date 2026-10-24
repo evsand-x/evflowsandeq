@@ -1,6 +1,7 @@
 import { RequireResourcePermission } from "../identity/resource-permissions";
 import {
   assertCustomerCreditEdit,
+  customerAllowed,
   customerPage,
   customerDetail,
   customerHistory,
@@ -47,6 +48,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   Inject,
@@ -63,6 +65,16 @@ import { PermissionGuard } from "../identity/permission.guard";
 import { RequirePermissions } from "../identity/permissions.decorator";
 import { MasterService } from "./master.service";
 import { paymentTerms } from "../sales/customer-credit";
+import { DISCOUNT_LIMIT_PERMISSION } from "../sales/discount-limit";
+import type { AuthPrincipal } from "@evflow/contracts";
+
+/** Backend authority: the product discount cap needs discount_limit.manage on top of the product permission. */
+function assertDiscountLimitEdit(auth: AuthPrincipal, input: object) {
+  if ("discount_limit" in input && !customerAllowed(auth, DISCOUNT_LIMIT_PERMISSION))
+    throw new ForbiddenException(
+      "Izin batas diskon diperlukan untuk mengubah batas diskon produk.",
+    );
+}
 
 @Controller()
 @UseGuards(AuthGuard, PermissionGuard)
@@ -120,6 +132,7 @@ export class MasterController {
     const result = parseCreate(resource, body);
     if (!result) throw new BadRequestException("Data master tidak valid.");
     const data = result.schema.parse(body);
+    if (resource === "products") assertDiscountLimitEdit(req.auth, data);
     const created =
       resource === "product-categories" ||
       resource === "uoms" ||
@@ -407,6 +420,7 @@ export class MasterController {
   ) {
     const input = updateProductSchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
+    assertDiscountLimitEdit(req.auth, input.data);
     return {
       data: serialize(
         await this.master.updateProduct(req.auth.company_id, req.auth.user_id, id, input.data),

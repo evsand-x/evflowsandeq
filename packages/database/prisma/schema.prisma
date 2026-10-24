@@ -208,6 +208,7 @@ model CompanyMembership {
   companyId String        @map("company_id") @db.Uuid
   userId    String        @map("user_id") @db.Uuid
   active    Boolean       @default(true)
+  discountLimit Decimal?  @map("discount_limit") @db.Decimal(7, 4)
   deletedAt DateTime?     @map("deleted_at") @db.Timestamptz(6)
   createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -229,6 +230,7 @@ model Role {
   name            String
   description     String?
   active          Boolean          @default(true)
+  discountLimit   Decimal?         @map("discount_limit") @db.Decimal(7, 4)
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
   company         Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
@@ -464,6 +466,7 @@ model Product {
   storageNotes         String?                 @map("storage_notes")
   storageProfile       Json?                   @map("storage_profile")
   shelfLifeDays        Int?                    @map("shelf_life_days")
+  discountLimit        Decimal?                @map("discount_limit") @db.Decimal(7, 4)
   storageVerifiedAt    DateTime?               @map("storage_verified_at") @db.Timestamptz(6)
   storageVerifiedById  String?                 @map("storage_verified_by_id") @db.Uuid
   state                MasterRecordState       @default(DRAFT)

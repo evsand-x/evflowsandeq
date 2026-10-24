@@ -1,5 +1,5 @@
 import { assertDevelopmentSeed } from "./dev-seed-guard";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { randomBytes, scrypt as scryptCallback } from "node:crypto";
 import { promisify } from "node:util";
 import policyCatalog from "../src/data/operational-policies.json";
@@ -261,7 +261,7 @@ async function main() {
         valueType: definition.type,
         unit: definition.unit,
         validationSchema: definition.schema,
-        defaultValueSnapshot: definition.default,
+        defaultValueSnapshot: definition.default ?? Prisma.JsonNull,
       },
       create: {
         companyId: company.id,
@@ -273,7 +273,7 @@ async function main() {
         valueType: definition.type,
         unit: definition.unit,
         validationSchema: definition.schema,
-        defaultValueSnapshot: definition.default,
+        defaultValueSnapshot: definition.default ?? Prisma.JsonNull,
       },
     });
 
@@ -283,7 +283,7 @@ async function main() {
         data: {
           policyId: policy.id,
           versionNo: 1,
-          valueSnapshot: definition.default,
+          valueSnapshot: definition.default ?? Prisma.JsonNull,
           state: "ACTIVE",
           savedById: user.id,
         },

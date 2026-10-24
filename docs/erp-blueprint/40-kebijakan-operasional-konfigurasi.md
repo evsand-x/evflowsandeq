@@ -21,6 +21,7 @@ Nilai berikut dibuat otomatis saat perusahaan disiapkan (CFG-08) dan dapat diedi
 | OPS-FLX-06 | Format angka | Rupiah, pemisah ribuan titik, desimal koma | Jumlah desimal tampilan dan pembulatan |
 | OPS-FLX-07 | Persetujuan SO | Tidak ada aturan aktif | Aturan per kondisi pada Pengaturan Persetujuan |
 | OPS-FLX-08 | Persetujuan dokumen sendiri | Nonaktif | Izinkan eksplisit per jenis dokumen |
+| OPS-FLX-09 | Batas diskon bawaan perusahaan | Kosong (0%) | Persen 0-100; berlaku bila orang dan peran tidak punya batas. Batas per peran, per orang, dan batas produk (terkecil menang); Admin Sistem tanpa batas |
 
 ## 1. Prinsip penggunaan
 
