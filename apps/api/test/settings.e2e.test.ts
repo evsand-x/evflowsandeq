@@ -46,7 +46,7 @@ describe("settings HTTP authorization", () => {
       .put("/settings/numbering/sales_order")
       .set("x-test-access", "read")
       .set("idempotency-key", randomUUID())
-      .send({ prefix: "PJ-", digits: 5, reset_yearly: true })
+      .send({ prefix: "PJ", year_format: "YYYY", digits: 5, reset_period: "YEARLY" })
       .expect(403);
   });
   it("rejects unknown kind", async () => {
@@ -54,14 +54,14 @@ describe("settings HTTP authorization", () => {
       .put("/settings/numbering/not_a_kind")
       .set("x-test-access", "manage")
       .set("idempotency-key", randomUUID())
-      .send({ prefix: "PJ-", digits: 5, reset_yearly: true })
+      .send({ prefix: "PJ", year_format: "YYYY", digits: 5, reset_period: "YEARLY" })
       .expect(404);
   });
   it("requires an idempotency key", async () => {
     await request(app.getHttpServer())
       .put("/settings/numbering/sales_order")
       .set("x-test-access", "manage")
-      .send({ prefix: "PJ-", digits: 5, reset_yearly: true })
+      .send({ prefix: "PJ", year_format: "YYYY", digits: 5, reset_period: "YEARLY" })
       .expect(400);
   });
   it("lists numbering for readers", async () => {

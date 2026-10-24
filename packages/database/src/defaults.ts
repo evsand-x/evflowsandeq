@@ -39,7 +39,8 @@ export type NumberingDefault = {
   label: string;
   prefix: string;
   digits: number;
-  reset_yearly: boolean;
+  year_format: "YYYY" | "YY";
+  reset_period: "YEARLY" | "MONTHLY";
 };
 
 export const numberingDefaults = numberingFile as NumberingDefault[];

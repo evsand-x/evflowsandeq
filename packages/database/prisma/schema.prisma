@@ -2144,7 +2144,8 @@ model DocumentNumberRule {
   documentKind String @map("document_kind")
   prefix String
   digits Int
-  resetYearly Boolean @map("reset_yearly")
+  yearFormat String @default("YYYY") @map("year_format")
+  resetPeriod String @default("YEARLY") @map("reset_period")
   effectiveFrom DateTime @map("effective_from") @db.Date
   effectiveTo DateTime @map("effective_to") @db.Date
   createdById String @map("created_by_id") @db.Uuid

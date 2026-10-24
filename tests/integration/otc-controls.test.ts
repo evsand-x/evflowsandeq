@@ -1337,7 +1337,7 @@ it("quarantines POD returns, balances transit, blocks overdue until invoice is p
 });
 it("outbound UI draft persists with revision and rejects invalid checking", async () => {
   await prisma.salesTaxRule.updateMany({ where: { companyId: c }, data: { state: "ACTIVE" } });
-  await prisma.documentNumberRule.createMany({ data: ["sales_order", "fulfillment", "document_PICKING", "document_PACKING", "document_PROFORMA"].map(documentKind => ({ companyId: c, documentKind, prefix: `${documentKind}-`, digits: 6, resetYearly: true, effectiveFrom: new Date("2020-01-01"), effectiveTo: new Date("2099-01-01"), createdById: actor })) });
+  await prisma.documentNumberRule.createMany({ data: ["sales_order", "fulfillment", "document_PICKING", "document_PACKING", "document_PROFORMA"].map(documentKind => ({ companyId: c, documentKind, prefix: `${documentKind}-`, digits: 6, resetPeriod: "YEARLY", effectiveFrom: new Date("2020-01-01"), effectiveTo: new Date("2099-01-01"), createdById: actor })) });
   await lot("2");
   const so = await order(["2"]);
   await service.submitSalesOrder(c, actor, so.id, randomUUID());

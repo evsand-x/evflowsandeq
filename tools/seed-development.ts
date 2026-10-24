@@ -175,7 +175,7 @@ async function main() {
         document_kind: "sales_order",
         prefix: "DEV-SO-",
         digits: 6,
-        reset_yearly: true,
+        reset_period: "YEARLY",
         effective_from: "2026-01-01",
         effective_to: "2099-01-01",
       },

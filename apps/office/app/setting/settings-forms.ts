@@ -36,10 +36,11 @@ export function policyPayload(code: string, form: unknown): { value: unknown } {
 
 export function previewDocumentNumber(
   prefix: string,
+  yearFormat: "YYYY" | "YY",
   digits: number,
-  resetYearly: boolean,
-  year: string,
+  day: string,
   next: string,
 ) {
-  return `${prefix}${resetYearly ? `${year}-` : ""}${next.padStart(digits, "0")}`;
+  const year = yearFormat === "YY" ? day.slice(2, 4) : day.slice(0, 4);
+  return `${prefix}.${year}.${day.slice(5, 7)}.${next.padStart(digits, "0")}`;
 }

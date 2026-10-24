@@ -3,14 +3,33 @@ import { numberingDefaults, prisma, type Prisma } from "@evflow/database";
 import { z } from "zod";
 import { transactionCommand } from "./transaction-command";
 import { AuditService } from "./audit.service";
-export async function nextDocumentNumber(tx: Prisma.TransactionClient, c: string, kind: string) {
+
+export type YearFormat = "YYYY" | "YY";
+export type ResetPeriod = "YEARLY" | "MONTHLY";
+type FormatRule = { prefix: string; yearFormat: YearFormat; digits: number };
+
+function dayOf(timezone: string, at: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(at);
+}
+
+/** Counter key: one counter per year, or per calendar month when the rule resets monthly. */
+export function sequenceKey(kind: string, resetPeriod: ResetPeriod, day: string) {
+  return resetPeriod === "MONTHLY" ? `${kind}:${day.slice(0, 7)}` : `${kind}:${day.slice(0, 4)}`;
+}
+
+export async function nextDocumentNumber(
+  tx: Prisma.TransactionClient,
+  c: string,
+  kind: string,
+  at: Date = new Date(),
+) {
   const company = await tx.company.findUniqueOrThrow({ where: { id: c } }),
-    day = new Intl.DateTimeFormat("en-CA", {
-      timeZone: company.timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+    day = dayOf(company.timezone, at);
   const rules = await tx.documentNumberRule.findMany({
     where: {
       companyId: c,
@@ -22,25 +41,23 @@ export async function nextDocumentNumber(tx: Prisma.TransactionClient, c: string
   if (rules.length !== 1)
     throw new ConflictException(`NUMBERING_RULE_REQUIRED_OR_CONFLICTING:${kind}`);
   const rule = rules[0]!,
-    year = day.slice(0, 4),
-    entity = rule.resetYearly ? `${kind}:${year}` : kind;
+    entity = sequenceKey(kind, rule.resetPeriod as ResetPeriod, day);
   const seq = await tx.masterCodeSequence.upsert({
     where: { companyId_entityType: { companyId: c, entityType: entity } },
     create: { companyId: c, entityType: entity, nextValue: 2 },
     update: { nextValue: { increment: 1 } },
   });
-  return formatDocumentNumber(rule, year, seq.nextValue - 1n);
+  return formatDocumentNumber(rule as FormatRule, day, seq.nextValue - 1n);
 }
 
-export function formatDocumentNumber(
-  rule: { prefix: string; digits: number; resetYearly: boolean },
-  year: string,
-  value: bigint,
-) {
+/** `Prefix.Year.Month.Sequence`; `day` is the company-timezone date (YYYY-MM-DD). */
+export function formatDocumentNumber(rule: FormatRule, day: string, value: bigint) {
   const digits = value.toString();
   if (digits.length > rule.digits) throw new ConflictException("DOCUMENT_NUMBER_EXHAUSTED");
-  return `${rule.prefix}${rule.resetYearly ? `${year}-` : ""}${digits.padStart(rule.digits, "0")}`;
+  const year = rule.yearFormat === "YY" ? day.slice(2, 4) : day.slice(0, 4);
+  return `${rule.prefix}.${year}.${day.slice(5, 7)}.${digits.padStart(rule.digits, "0")}`;
 }
+
 export async function configureNumbering(c: string, a: string, body: unknown, key: string) {
   const i = z
     .object({
@@ -50,7 +67,8 @@ export async function configureNumbering(c: string, a: string, body: unknown, ke
         .max(100),
       prefix: z.string().trim().min(1).max(40),
       digits: z.number().int().min(1).max(18),
-      reset_yearly: z.boolean(),
+      year_format: z.enum(["YYYY", "YY"]).default("YYYY"),
+      reset_period: z.enum(["YEARLY", "MONTHLY"]).default("YEARLY"),
       effective_from: z.string().date(),
       effective_to: z.string().date(),
     })
@@ -78,7 +96,8 @@ export async function configureNumbering(c: string, a: string, body: unknown, ke
         documentKind: i.document_kind,
         prefix: i.prefix,
         digits: i.digits,
-        resetYearly: i.reset_yearly,
+        yearFormat: i.year_format,
+        resetPeriod: i.reset_period,
         effectiveFrom: from,
         effectiveTo: to,
         createdById: a,
@@ -103,19 +122,23 @@ export const numberingRevisionSchema = z
       .string()
       .trim()
       .regex(/^[A-Z0-9/._-]{1,20}$/),
+    year_format: z.enum(["YYYY", "YY"]),
     digits: z.number().int().min(3).max(10),
-    reset_yearly: z.boolean(),
+    reset_period: z.enum(["YEARLY", "MONTHLY"]),
   })
   .strict();
 
 async function companyDay(client: Pick<Prisma.TransactionClient, "company">, c: string) {
   const company = await client.company.findUniqueOrThrow({ where: { id: c } });
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: company.timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  return dayOf(company.timezone, new Date());
+}
+
+/** Start of the target period (next month for MONTHLY, next 1 January for YEARLY) in the company timezone. */
+function nextPeriodStart(resetPeriod: ResetPeriod, day: string) {
+  const y = Number(day.slice(0, 4)),
+    m = Number(day.slice(5, 7));
+  if (resetPeriod === "YEARLY" || m === 12) return `${y + 1}-01-01`;
+  return `${y}-${String(m + 1).padStart(2, "0")}-01`;
 }
 
 export function numberingDefault(kind: string) {
@@ -124,7 +147,10 @@ export function numberingDefault(kind: string) {
   return entry;
 }
 
-/** New format from today; the running counter continues and issued numbers stay as they are (IAM-06). */
+/**
+ * Prefix, year format and length apply from today and the running counter continues (IAM-06).
+ * A reset-period change waits for the start of the next period so a month never gets two counters.
+ */
 export async function reviseNumbering(
   c: string,
   a: string,
@@ -136,32 +162,77 @@ export async function reviseNumbering(
   const i = numberingRevisionSchema.parse(body);
   return transactionCommand(c, a, `settings/numbering/${kind}`, key, i, async (tx) => {
     await tx.$queryRaw`SELECT id FROM companies WHERE id=${c}::uuid FOR UPDATE`;
-    const today = new Date(await companyDay(tx, c));
-    const active = await tx.documentNumberRule.findMany({
+    const day = await companyDay(tx, c),
+      today = new Date(day);
+    const open = await tx.documentNumberRule.findMany({
+      where: { companyId: c, documentKind: kind, effectiveTo: { gt: today } },
+    });
+    const active = open.filter((r) => r.effectiveFrom <= today);
+    const scheduled = open.filter((r) => r.effectiveFrom > today);
+    const current = active.length === 1 ? active[0]! : null;
+    const currentPeriod = (current?.resetPeriod ?? i.reset_period) as ResetPeriod;
+    const counter = await tx.masterCodeSequence.findUnique({
       where: {
-        companyId: c,
-        documentKind: kind,
-        effectiveFrom: { lte: today },
-        effectiveTo: { gt: today },
+        companyId_entityType: { companyId: c, entityType: sequenceKey(kind, currentPeriod, day) },
       },
     });
-    const data = { prefix: i.prefix, digits: i.digits, resetYearly: i.reset_yearly };
-    const sameDay = active.length === 1 && active[0]!.effectiveFrom.getTime() === today.getTime();
-    let row;
-    if (sameDay) {
-      row = await tx.documentNumberRule.update({ where: { id: active[0]!.id }, data });
-    } else {
-      for (const rule of active)
-        await tx.documentNumberRule.update({
-          where: { id: rule.id },
-          data: { effectiveTo: today },
+    if (String(counter?.nextValue ?? 1n).length > i.digits)
+      throw new ConflictException("NUMBERING_DIGITS_TOO_SHORT");
+    // A reset change scheduled earlier is replaced by this request.
+    if (scheduled.length)
+      await tx.documentNumberRule.deleteMany({ where: { id: { in: scheduled.map((r) => r.id) } } });
+    const data = {
+      prefix: i.prefix,
+      yearFormat: i.year_format,
+      digits: i.digits,
+      resetPeriod: currentPeriod,
+    };
+    const changed =
+      !current ||
+      current.prefix !== i.prefix ||
+      current.yearFormat !== i.year_format ||
+      current.digits !== i.digits;
+    let row = current;
+    if (!row || changed) {
+      if (row && row.effectiveFrom.getTime() === today.getTime()) {
+        row = await tx.documentNumberRule.update({
+          where: { id: row.id },
+          data: { ...data, effectiveTo: openEnded },
         });
-      row = await tx.documentNumberRule.create({
+      } else {
+        for (const rule of active)
+          await tx.documentNumberRule.update({
+            where: { id: rule.id },
+            data: { effectiveTo: today },
+          });
+        row = await tx.documentNumberRule.create({
+          data: {
+            companyId: c,
+            documentKind: kind,
+            ...data,
+            effectiveFrom: today,
+            effectiveTo: openEnded,
+            createdById: a,
+          },
+        });
+      }
+    } else if (row.effectiveTo.getTime() !== openEnded.getTime()) {
+      row = await tx.documentNumberRule.update({
+        where: { id: row.id },
+        data: { effectiveTo: openEnded },
+      });
+    }
+    let result = row;
+    if (row.resetPeriod !== i.reset_period) {
+      const from = new Date(nextPeriodStart(i.reset_period, day));
+      await tx.documentNumberRule.update({ where: { id: row.id }, data: { effectiveTo: from } });
+      result = await tx.documentNumberRule.create({
         data: {
           companyId: c,
           documentKind: kind,
           ...data,
-          effectiveFrom: today,
+          resetPeriod: i.reset_period,
+          effectiveFrom: from,
           effectiveTo: openEnded,
           createdById: a,
         },
@@ -172,57 +243,71 @@ export async function reviseNumbering(
       actorId: a,
       action: "numbering_rule.revised",
       resourceType: "numbering_rule",
-      resourceId: row.id,
-      before: active,
-      after: row,
+      resourceId: result.id,
+      before: open,
+      after: result,
     });
-    return row;
+    return { ...result, effective_from: result.effectiveFrom.toISOString().slice(0, 10) };
   });
 }
 
-/** Active rule and next-number preview per known document kind; reading takes no number. */
+/** Active rule, scheduled reset change and next-number preview per known document kind; reading takes no number. */
 export async function listNumberingSettings(c: string) {
   const day = await companyDay(prisma, c),
-    today = new Date(day),
-    year = day.slice(0, 4);
+    today = new Date(day);
   const rules = await prisma.documentNumberRule.findMany({
-    where: { companyId: c, effectiveFrom: { lte: today }, effectiveTo: { gt: today } },
+    where: { companyId: c, effectiveTo: { gt: today } },
+    orderBy: { effectiveFrom: "asc" },
   });
   return Promise.all(
     numberingDefaults.map(async (d) => {
       const base = { document_kind: d.document_kind, label: d.label };
-      const rule = rules.find((r) => r.documentKind === d.document_kind);
+      const ofKind = rules.filter((r) => r.documentKind === d.document_kind);
+      const rule = ofKind.find((r) => r.effectiveFrom <= today);
       if (!rule)
         return {
           ...base,
           prefix: null,
+          year_format: null,
           digits: null,
-          reset_yearly: null,
+          reset_period: null,
           effective_from: null,
           next_preview: null,
+          pending: null,
           active: false,
         };
+      const later = ofKind.find((r) => r.effectiveFrom > today);
       const seq = await prisma.masterCodeSequence.findUnique({
         where: {
           companyId_entityType: {
             companyId: c,
-            entityType: rule.resetYearly ? `${d.document_kind}:${year}` : d.document_kind,
+            entityType: sequenceKey(d.document_kind, rule.resetPeriod as ResetPeriod, day),
           },
         },
       });
       let next_preview: string | null = null;
       try {
-        next_preview = formatDocumentNumber(rule, year, seq?.nextValue ?? 1n);
+        next_preview = formatDocumentNumber(rule as FormatRule, day, seq?.nextValue ?? 1n);
       } catch {
         next_preview = null;
       }
       return {
         ...base,
         prefix: rule.prefix,
+        year_format: rule.yearFormat,
         digits: rule.digits,
-        reset_yearly: rule.resetYearly,
+        reset_period: rule.resetPeriod,
         effective_from: rule.effectiveFrom.toISOString().slice(0, 10),
         next_preview,
+        pending: later
+          ? {
+              prefix: later.prefix,
+              year_format: later.yearFormat,
+              digits: later.digits,
+              reset_period: later.resetPeriod,
+              effective_from: later.effectiveFrom.toISOString().slice(0, 10),
+            }
+          : null,
         active: true,
       };
     }),

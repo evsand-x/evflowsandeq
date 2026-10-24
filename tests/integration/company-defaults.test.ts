@@ -41,8 +41,12 @@ describe("company defaults provisioning", () => {
       const result = await provisionCompanyDefaults(tx, companyId, actorId, today);
       expect(result.policies_created).toContain("OPS-FLX-03");
       expect(result.numbering_created).toContain("sales_order");
-      const year = String(new Date().getFullYear());
-      expect(await nextDocumentNumber(tx, companyId, "sales_order")).toBe(`SO-${year}-00001`);
+      const [year, month] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Makassar" })
+        .format(new Date())
+        .split("-");
+      expect(await nextDocumentNumber(tx, companyId, "sales_order")).toBe(
+        `SO.${year}.${month}.0001`,
+      );
       const terms = await tx.systemPolicy.findUniqueOrThrow({
         where: { companyId_code: { companyId, code: "OPS-FLX-01" } },
         include: { versions: true },
@@ -71,7 +75,7 @@ describe("company defaults provisioning", () => {
           documentKind: "sales_order",
           prefix: "X-",
           digits: 4,
-          resetYearly: false,
+          resetPeriod: "YEARLY",
           effectiveFrom: new Date("2020-01-01"),
           effectiveTo: new Date("2099-01-01"),
           createdById: actorId,

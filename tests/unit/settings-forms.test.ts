@@ -24,7 +24,9 @@ describe("settings form helpers", () => {
     expect((terms.default as Array<{ label: string }>)[0]!.label).toBe("Tunai/COD");
   });
   it("client preview matches server format", () => {
-    expect(previewDocumentNumber("PJ-", 5, true, "2026", "3")).toBe("PJ-2026-00003");
-    expect(previewDocumentNumber("PJ-", 5, false, "2026", "3")).toBe("PJ-00003");
+    expect(previewDocumentNumber("SO-SSM", "YYYY", 4, "2026-10-24", "3")).toBe(
+      "SO-SSM.2026.10.0003",
+    );
+    expect(previewDocumentNumber("SO-SSM", "YY", 4, "2026-10-24", "3")).toBe("SO-SSM.26.10.0003");
   });
 });

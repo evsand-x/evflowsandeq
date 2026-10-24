@@ -186,7 +186,7 @@ it("posts frozen master tax to its selected account and records metadata without
             documentKind,
             prefix: `${documentKind}-`,
             digits: 6,
-            resetYearly: true,
+            resetPeriod: "YEARLY",
             effectiveFrom: new Date("2020-01-01"),
             effectiveTo: new Date("2099-01-01"),
             createdById: actor,

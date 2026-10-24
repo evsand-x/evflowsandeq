@@ -2,78 +2,89 @@
   {
     "document_kind": "sales_order",
     "label": "Sales Order",
-    "prefix": "SO-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "SO",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   },
   {
     "document_kind": "document_PROFORMA",
     "label": "Proforma",
-    "prefix": "PRO-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "PRO",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   },
   {
     "document_kind": "document_PICKING",
     "label": "Picking Slip",
-    "prefix": "PCK-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "PCK",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   },
   {
     "document_kind": "document_PACKING",
     "label": "Packing List",
-    "prefix": "PL-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "PL",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   },
   {
     "document_kind": "document_SURAT_JALAN",
     "label": "Surat Jalan",
-    "prefix": "SJ-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "SJ",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   },
   {
     "document_kind": "fulfillment",
     "label": "Pemenuhan",
-    "prefix": "FUL-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "FUL",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   },
   {
     "document_kind": "sales_invoice",
     "label": "Invoice Penjualan",
-    "prefix": "INV-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "INV",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   },
   {
     "document_kind": "credit_note",
     "label": "Nota Kredit",
-    "prefix": "CN-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "CN",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   },
   {
     "document_kind": "purchase_order",
     "label": "Purchase Order",
-    "prefix": "PO-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "PO",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   },
   {
     "document_kind": "goods_receipt",
     "label": "Penerimaan Barang",
-    "prefix": "GR-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "GR",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   },
   {
     "document_kind": "supplier_invoice",
     "label": "Tagihan Supplier",
-    "prefix": "SINV-",
-    "digits": 5,
-    "reset_yearly": true
+    "prefix": "SINV",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
   }
 ]
