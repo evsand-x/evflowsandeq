@@ -149,6 +149,56 @@ describe("independent submenu HTTP permissions", () => {
       profiles.mockRestore();
     }
   });
+  it("keeps period and bank setup independent of account_mapping.manage", async () => {
+    for (const kind of ["period", "bank"])
+      await request(app.getHttpServer())
+        .post(`/finance-controls/configuration/${kind}`)
+        .set("x-permissions", "account_mapping.manage")
+        .send({})
+        .expect(403);
+    // period kind requires the period permission: passes the guard (body then fails validation, not 403).
+    const res = await request(app.getHttpServer())
+      .post("/finance-controls/configuration/period")
+      .set("x-permissions", "finance_period.close")
+      .send({});
+    expect(res.status).not.toBe(403);
+    await request(app.getHttpServer())
+      .post("/finance-controls/configuration/bank")
+      .set("x-permissions", "finance_period.close,account_mapping.manage")
+      .send({})
+      .expect(403);
+  });
+  it("hides configuration sections without read permission", async () => {
+    const accounts = vi
+      .spyOn(prisma.financeAccount, "findMany")
+      .mockResolvedValue([{ id: "a" }] as never);
+    const periods = vi
+      .spyOn(prisma.financePeriod, "findMany")
+      .mockResolvedValue([{ id: "p" }] as never);
+    const profiles = vi
+      .spyOn(prisma.financePostingProfile, "findMany")
+      .mockResolvedValue([{ id: "f" }] as never);
+    try {
+      const mapping = await request(app.getHttpServer())
+        .get("/finance-controls/configuration")
+        .set("x-permissions", "account_mapping.read")
+        .expect(200);
+      expect(mapping.body.data).toEqual({ accounts: [], periods: [], profiles: [{ id: "f" }] });
+      const chart = await request(app.getHttpServer())
+        .get("/finance-controls/configuration")
+        .set("x-permissions", "account.read")
+        .expect(200);
+      expect(chart.body.data).toEqual({ accounts: [{ id: "a" }], periods: [], profiles: [] });
+      await request(app.getHttpServer())
+        .get("/finance-controls/configuration")
+        .set("x-permissions", "journal.read")
+        .expect(403);
+    } finally {
+      accounts.mockRestore();
+      periods.mockRestore();
+      profiles.mockRestore();
+    }
+  });
   it("isolates all three tax menus and scopes their source reads", async () => {
     for (const [route, permission] of [
       // The tax master lives in Setting > Pajak (tax_setting.*); faktur menus keep their own grants.

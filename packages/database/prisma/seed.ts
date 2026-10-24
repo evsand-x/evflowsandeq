@@ -184,6 +184,7 @@ async function main() {
     ["deduction_type.manage", "deduction_type", "manage"],
     ["account_mapping.read", "account_mapping", "read"],
     ["account_mapping.manage", "account_mapping", "manage"],
+    ["bank_account.manage", "bank_account", "manage"],
     ["customer_credit.update", "customer_credit", "update"],
     ["discount_limit.manage", "discount_limit", "manage"],
     ["special_price.approve", "special_price", "approve"],

@@ -845,8 +845,8 @@ Permission minimum:
 - `journal.post`
 - `journal.reverse`
 - `journal.control_account.adjust`
-- `posting_profile.read`
-- `posting_profile.manage`
+- `account_mapping.read` (Setting › Pemetaan Akun, pemetaan jurnal otomatis; menggantikan `posting_profile.read`)
+- `account_mapping.manage` (menggantikan `posting_profile.manage` untuk jenis `profile`; jenis `account` memakai `account.create`, `period` memakai `finance_period.close`, `bank` memakai `bank_account.manage`)
 - `posting_exception.resolve`
 - `inventory.cost.read`
 

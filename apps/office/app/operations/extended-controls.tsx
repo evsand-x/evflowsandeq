@@ -980,7 +980,19 @@ export function FinanceConfiguration({ command, pending, can }: Props) {
               </>
             )}
           </FieldGroup>
-          <Button disabled={pending || !can("account_mapping.manage")}>Simpan Konfigurasi</Button>
+          <Button
+            disabled={
+              pending ||
+              !can(
+                {
+                  profile: "account_mapping.manage",
+                  account: "account.create",
+                  period: "finance_period.close",
+                  bank: "bank_account.manage",
+                }[kind] ?? "account_mapping.manage",
+              )
+            }
+          >Simpan Konfigurasi</Button>
         </form>
       </Panel>
       {q.error && <Notice>{String(q.error)}</Notice>}

@@ -147,6 +147,7 @@ const resourceLabels: Record<string, [string, string, boolean?]> = {
   journal: ["Finance", "Jurnal"],
   "journal.reverse": ["Finance", "Persetujuan Pembalikan Jurnal"],
   bank_statement: ["Finance", "Rekening Koran"],
+  bank_account: ["Finance", "Rekening Bank"],
   bank_transaction: ["Finance", "Transaksi Bank"],
   bank_reconciliation: ["Finance", "Rekonsiliasi Bank"],
   finance_period: ["Setting", "Periode & Closing"],
