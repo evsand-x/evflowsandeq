@@ -1,5 +1,12 @@
 import { RequireResourcePermission } from "../identity/resource-permissions";
-import { customerPage, customerDetail, customerHistory, customerSales } from "./customer-workspace";
+import {
+  assertCustomerCreditEdit,
+  customerPage,
+  customerDetail,
+  customerHistory,
+  customerSales,
+  redactCustomerCredit,
+} from "./customer-workspace";
 import {
   listResourceSchema,
   masterDetail,
@@ -55,6 +62,7 @@ import { AuthGuard } from "../identity/auth.guard";
 import { PermissionGuard } from "../identity/permission.guard";
 import { RequirePermissions } from "../identity/permissions.decorator";
 import { MasterService } from "./master.service";
+import { paymentTerms } from "../sales/customer-credit";
 
 @Controller()
 @UseGuards(AuthGuard, PermissionGuard)
@@ -66,11 +74,13 @@ export class MasterController {
   async customerOptions(@Req() req: AuthenticatedRequest) {
     const where = { companyId: req.auth.company_id, state: "ACTIVE" as const };
     const select = { id: true, name: true };
-    const [channels, rayons] = await Promise.all([
+    const [channels, rayons, terms] = await Promise.all([
       prisma.customerChannel.findMany({ where, select, orderBy: { name: "asc" } }),
       prisma.rayon.findMany({ where, select, orderBy: { name: "asc" } }),
+      // Term choices for the customer's default term (active OPS-FLX-03); not sensitive.
+      paymentTerms(prisma, req.auth.company_id),
     ]);
-    return { data: { channels, rayons } };
+    return { data: { channels, rayons, payment_terms: terms } };
   }
 
   @Post("crm/master/customers")
@@ -267,14 +277,18 @@ export class MasterController {
     const expectedVersion = parseVersion(ifMatch);
     const input = updateCustomerSchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
+    assertCustomerCreditEdit(req.auth, input.data);
     return {
       data: serialize(
-        await this.master.updateCustomer(
-          req.auth.company_id,
-          req.auth.user_id,
-          id,
-          expectedVersion,
-          input.data,
+        redactCustomerCredit(
+          req.auth,
+          await this.master.updateCustomer(
+            req.auth.company_id,
+            req.auth.user_id,
+            id,
+            expectedVersion,
+            input.data,
+          ),
         ),
       ),
     };

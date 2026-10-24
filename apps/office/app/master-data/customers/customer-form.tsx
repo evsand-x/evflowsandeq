@@ -20,9 +20,10 @@ import {
   type Pic,
   type Ref,
   type Legal,
+  type PaymentTerm,
   onboarding,
+  taxInvoiceCodes,
   roles,
-  money,
 } from "./customer-types";
 const base = "/master-data/customers";
 const fields = [
@@ -82,6 +83,20 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
   const [person, setPerson] = useState(initial?.responsible_person ?? {}),
     [license, setLicense] = useState(initial?.responsible_license ?? {}),
     [noo, setNoo] = useState(initial?.noo_document ?? {});
+  // Kredit & Termin: the backend refuses these fields without customer_credit.update.
+  const canCredit = can("customer_credit.update");
+  const [credit, setCredit] = useState(() => ({
+    term: initial?.default_term_code ?? "",
+    taxCode: initial?.default_tax_invoice_code ?? "01",
+    limit: initial?.credit_limit ?? "",
+    frozen: initial?.credit_frozen ?? false,
+    reason: initial?.freeze_reason ?? "",
+    grace: initial?.past_due_grace_days == null ? "" : String(initial.past_due_grace_days),
+  }));
+  const changeCredit = (patch: Partial<typeof credit>) => {
+    setDirty(true);
+    setCredit((v) => ({ ...v, ...patch }));
+  };
   const [dirty, setDirty] = useState(false),
     [pending, setPending] = useState(false),
     [error, setError] = useState(""),
@@ -99,9 +114,9 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
   const refs = useQuery({
     queryKey: ["customer-refs", principal?.company_id, principal?.user_id],
     queryFn: async () => {
-      const result = await apiRequest<{ data: { channels: Ref[]; rayons: Ref[] } }>(
-        "/master-data/customer-options",
-      );
+      const result = await apiRequest<{
+        data: { channels: Ref[]; rayons: Ref[]; payment_terms: PaymentTerm[] };
+      }>("/master-data/customer-options");
       return result.data;
     },
     enabled: permitted,
@@ -178,12 +193,33 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
         responsible_license: license,
         noo_document: noo,
         email: values.email.trim() || null,
+        default_tax_invoice_code: credit.taxCode,
       };
+      // Credit attributes go only with the update, and only for credit editors.
+      const creditPayload =
+        initial && canCredit
+          ? {
+              default_term_code: credit.term || null,
+              credit_limit: credit.limit.trim() || null,
+              credit_frozen: credit.frozen,
+              freeze_reason: credit.frozen ? credit.reason.trim() || null : null,
+              past_due_grace_days: credit.grace === "" ? null : Number(credit.grace),
+            }
+          : {};
+      if (creditPayload.credit_limit && !/^\d{1,16}(\.\d{1,8})?$/.test(creditPayload.credit_limit))
+        throw new Error("Limit kredit harus berupa angka tanpa pemisah ribuan, contoh 25000000.");
+      if (credit.grace !== "" && !/^\d{1,4}$/.test(credit.grace))
+        throw new Error("Toleransi jatuh tempo harus berupa jumlah hari.");
+      if (canCredit && credit.frozen && !credit.reason.trim())
+        throw new Error("Isi alasan bila kredit pelanggan dibekukan.");
       const prior = saved.current;
       const result = await apiRequest<{ data: Customer }>(prior ? `${base}/${prior.id}` : base, {
         method: prior ? "PATCH" : "POST",
         ...(prior ? { version: prior.version } : {}),
-        body: JSON.stringify({ ...payload, ...(prior ? { version: prior.version } : {}) }),
+        body: JSON.stringify({
+          ...payload,
+          ...(prior ? { ...creditPayload, version: prior.version } : {}),
+        }),
       });
       saved.current = { id: result.data.id, version: result.data.version };
       // Only persist contacts the current user is allowed to change; CRM remains the owner.
@@ -271,7 +307,6 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
       />
     </label>
   );
-  const policy = initial?.payment_policies?.[0];
   if (!permitted)
     return (
       <p role="alert">
@@ -652,52 +687,84 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
             ),
           },
           {
-            id: "payment",
-            title: "Pembayaran & Piutang Awal",
+            id: "credit",
+            title: "Kredit & Termin",
             content: (
               <fieldset disabled={pending} className="customer-form">
                 <div className="customer-form-grid">
-                  <div className="customer-finance">
-                    <CustomerValue label="Termin pembayaran">
-                      {policy
-                        ? policy.mode === "TEMPO"
-                          ? `Net ${policy.top_days ?? "—"} hari`
-                          : policy.mode
-                        : "Belum ditetapkan"}
-                    </CustomerValue>
-                  </div>
-                  <div className="customer-finance">
-                    <CustomerValue label="Limit kredit">
-                      {money(policy?.credit_limit)}
-                    </CustomerValue>
-                  </div>
-                  <div className="customer-finance">
-                    <CustomerValue label="Status WAPU">Belum terverifikasi</CustomerValue>
-                  </div>
-                  <div className="customer-finance">
-                    <CustomerValue label="Saldo awal piutang">Belum diverifikasi</CustomerValue>
-                  </div>
-                </div>
-                <div className="customer-actions">
-                  {can("customer.payment_policy.manage") && (
-                    <Button type="button" variant="outline" asChild>
-                      <Link href="/operations/controls" target="_blank" rel="noopener noreferrer">
-                        Kelola di Finance → Kredit & TOP Pelanggan
-                      </Link>
-                    </Button>
+                  <SelectionField
+                    label="Termin bawaan"
+                    value={credit.term ? [credit.term] : []}
+                    disabled={!canCredit || !initial}
+                    options={(refs.data?.payment_terms ?? []).map((t) => ({
+                      id: t.code,
+                      name: t.label,
+                    }))}
+                    onChange={(v) => changeCredit({ term: v[0] ?? "" })}
+                  />
+                  <SelectionField
+                    label="Kode faktur bawaan"
+                    value={[credit.taxCode]}
+                    options={taxInvoiceCodes.map((code) => ({ id: code, name: code }))}
+                    onChange={(v) => changeCredit({ taxCode: v[0] ?? "01" })}
+                  />
+                  {canCredit ? (
+                    <>
+                      <label>
+                        Limit kredit (Rp)
+                        <Input
+                          inputMode="decimal"
+                          value={credit.limit}
+                          disabled={!initial}
+                          placeholder="Kosongkan bila tanpa limit"
+                          onChange={(e) => changeCredit({ limit: e.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Toleransi lewat jatuh tempo (hari)
+                        <Input
+                          inputMode="numeric"
+                          value={credit.grace}
+                          disabled={!initial}
+                          onChange={(e) => changeCredit({ grace: e.target.value })}
+                        />
+                      </label>
+                      <SelectionField
+                        label="Status kredit"
+                        value={[credit.frozen ? "FROZEN" : "ACTIVE"]}
+                        disabled={!initial}
+                        options={[
+                          { id: "ACTIVE", name: "Aktif" },
+                          { id: "FROZEN", name: "Dibekukan" },
+                        ]}
+                        onChange={(v) => changeCredit({ frozen: v[0] === "FROZEN" })}
+                      />
+                      {credit.frozen && (
+                        <label>
+                          Alasan dibekukan *
+                          <Textarea
+                            maxLength={1000}
+                            value={credit.reason}
+                            disabled={!initial}
+                            onChange={(e) => changeCredit({ reason: e.target.value })}
+                          />
+                        </label>
+                      )}
+                    </>
+                  ) : (
+                    <div className="customer-finance">
+                      <CustomerValue label="Limit kredit & status beku">
+                        Terbatas · memerlukan izin kredit pelanggan
+                      </CustomerValue>
+                    </div>
                   )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled
-                    title="Layar impor piutang awal belum tersedia"
-                  >
-                    Isi / impor rincian piutang awal (Finance)
-                  </Button>
                 </div>
                 <p className="customer-note">
-                  Dikelola Finance/Setting. Pelanggan baru mengikuti kebijakan COD atau bayar
-                  sebelum kirim; Net memerlukan evaluasi Finance.
+                  {!initial
+                    ? "Termin, limit dan status kredit diatur setelah draf pelanggan tersimpan."
+                    : canCredit
+                      ? "Daftar termin diatur di Setting › Termin & Kredit. Termin tempo memerlukan limit kredit dan toleransi jatuh tempo."
+                      : "Termin, limit dan status kredit hanya dapat diubah pemegang izin kredit pelanggan."}{" "}
                 </p>
               </fieldset>
             ),

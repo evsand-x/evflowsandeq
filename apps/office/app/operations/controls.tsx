@@ -16,13 +16,12 @@ type Options = {
   users?: { user: { id: string; displayName: string } }[];
   lots?: { id: string; batchNo: string; qualityState: string; product: { name: string } }[];
 };
+// Customer credit moved to Master Data › Pelanggan (customer_credit.update, stage 2b).
 const permissions = {
-  credit: "customer.payment_policy.manage",
   approval: "transaction_approval.manage",
   quality: "inventory.quality.decide",
 };
 const labels = {
-  credit: "Kredit & TOP",
   approval: "Pengaturan Persetujuan",
   quality: "Kelayakan stok",
 };
@@ -39,7 +38,7 @@ export function Controls({
     can(permissions[k]),
   );
   return (
-    <Tabs defaultValue={available[0] ?? "credit"}>
+    <Tabs defaultValue={available[0] ?? "approval"}>
       <TabsList>
         {available.map((k) => (
           <TabsTrigger key={k} value={k}>
@@ -102,18 +101,6 @@ function ControlForm({
         e.preventDefault();
         let path = "",
           body: unknown;
-        if (kind === "credit") {
-          path = `/customers/${value("customer")}/payment-policies`;
-          body = {
-            mode: value("mode"),
-            top_days: Number(value("top")),
-            credit_limit: value("limit"),
-            past_due_grace_days: Number(value("grace")),
-            frozen: value("frozen") === "true",
-            ...(value("frozen") === "true" ? { freeze_reason: value("reason") } : {}),
-            effective_from: new Date(value("from")).toISOString(),
-          };
-        }
         if (kind === "approval") {
           path = "/operations/approval-policies";
           body = {
@@ -142,34 +129,6 @@ function ControlForm({
         <CardContent>
           <FieldGroup>
             {query.error && <Notice>{String(query.error)}</Notice>}
-            {kind === "credit" &&
-              selection("customer", "Pelanggan", query.data?.data.customers ?? [])}
-            {kind === "credit" && (
-              <>
-                <Field>
-                  <FieldLabel>Cara bayar</FieldLabel>
-                  <Choice
-                    label="Cara bayar"
-                    value={value("mode")}
-                    onChange={(v) => change("mode", v)}
-                    options={{ TEMPO: "Tempo", COD: "COD", PREPAY: "Prepay" }}
-                  />
-                </Field>
-                {text("top", "TOP (hari)", "number")}
-                {text("limit", "Limit kredit")}
-                {text("grace", "Toleransi overdue (hari)", "number")}
-                <Field>
-                  <FieldLabel>Status kredit</FieldLabel>
-                  <Choice
-                    label="Status kredit"
-                    value={value("frozen")}
-                    onChange={(v) => change("frozen", v)}
-                    options={{ false: "Aktif", true: "Freeze" }}
-                  />
-                </Field>
-                {value("frozen") === "true" && text("reason", "Alasan freeze")}
-              </>
-            )}
             {kind === "approval" && (
               <>
                 <SelectionField

@@ -256,18 +256,3 @@ export const pickListCheckSchema = z
       .optional(),
   })
   .strict();
-export const paymentPolicySchema = z
-  .object({
-    mode: z.enum(["COD", "PREPAY", "TEMPO"]),
-    top_days: z.number().int().nonnegative().nullable().optional(),
-    credit_limit: z
-      .string()
-      .regex(/^\d{1,16}(\.\d{1,8})?$/)
-      .nullable()
-      .optional(),
-    effective_from: z.string().datetime().optional(),
-    past_due_grace_days: z.number().int().nonnegative().optional(),
-    frozen: z.boolean().optional(),
-    freeze_reason: z.string().trim().min(1).max(1000).optional(),
-  })
-  .strict();

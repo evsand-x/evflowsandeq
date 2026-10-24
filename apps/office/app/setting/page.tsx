@@ -52,9 +52,10 @@ export default function SettingHubPage() {
       title: "Penjualan",
       entries: [
         {
-          label: "Termin, Ongkos Kirim & Kredit",
-          description: "Daftar termin, ongkir bawaan dan cara memeriksa limit kredit.",
-          href: "/setting/sales",
+          label: "Termin & Kredit",
+          description:
+            "Daftar termin, ongkir bawaan, pelanggan baru dan cara memeriksa limit kredit.",
+          href: "/setting/terms",
           allowed: can("terms_credit.read"),
         },
         {

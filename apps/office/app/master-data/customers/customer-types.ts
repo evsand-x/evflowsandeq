@@ -22,12 +22,10 @@ export type Legal = {
   verification_state?: string;
   evidence_id?: string;
 };
-export type Policy = {
-  mode: string;
-  top_days: number | null;
-  credit_limit: string | null;
-  effective_from: string;
-};
+/** Entry of the company term list (Setting › Termin & Kredit, OPS-FLX-03). */
+export type PaymentTerm = { code: string; label: string; days: number; kind: string };
+/** Kode transaksi Faktur Pajak bawaan pelanggan. */
+export const taxInvoiceCodes = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"];
 export type Customer = {
   id: string;
   code: string;
@@ -59,7 +57,13 @@ export type Customer = {
   responsible_license?: Record<string, string> | null;
   noo_document?: Record<string, string> | null;
   contacts?: Pic[];
-  payment_policies?: Policy[];
+  default_term_code?: string | null;
+  default_tax_invoice_code?: string;
+  // Present only for holders of customer_credit.update (the server removes them otherwise).
+  credit_limit?: string | null;
+  credit_frozen?: boolean;
+  freeze_reason?: string | null;
+  past_due_grace_days?: number | null;
 };
 export const relationships: Record<string, string> = {
   PROSPECT: "Prospek",
@@ -80,4 +84,8 @@ export const roles: Record<string, string> = {
 };
 export function money(value?: string | null) {
   return formatMoney(value);
+}
+export function termLabel(code: string | null | undefined, terms: PaymentTerm[] | undefined) {
+  if (!code) return undefined;
+  return terms?.find((t) => t.code === code)?.label ?? code;
 }

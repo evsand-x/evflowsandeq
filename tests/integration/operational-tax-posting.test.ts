@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { prisma, type Prisma } from "@evflow/database";
 import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
 import { AuditService } from "../../packages/backend/src/common/audit.service";
+import { setCustomerCredit } from "../../packages/backend/src/sales/customer-credit";
+import { ensureTestTermList } from "../../tools/qa/payment-terms-fixture";
 import {
   saveTax,
   recordTaxInvoice,
@@ -138,17 +140,15 @@ async function setup() {
 }
 
 async function policy(limit = "100000") {
-  // Each test isolates this customer's transactions below; later timestamp wins.
-  await prisma.customerPaymentPolicy.updateMany({
-    where: { companyId: c },
-    data: { active: false },
-  });
-  return service.setPaymentPolicy(c, actor, customerId, {
-    mode: "TEMPO",
-    top_days: 30,
-    credit_limit: limit,
-    past_due_grace_days: 0,
-  });
+  // Credit attributes live on the customer (stage 2b); each call resets them.
+  await ensureTestTermList(prisma, c, actor);
+  return prisma.$transaction((tx) =>
+    setCustomerCredit(tx, new AuditService(), c, actor, customerId, {
+      default_term_code: "NET30",
+      credit_limit: limit,
+      past_due_grace_days: 0,
+    }),
+  );
 }
 async function lot(qty: string, expiry = "2090-01-01", qualityState = "AVAILABLE") {
   return prisma.stockLot.create({

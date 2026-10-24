@@ -21,6 +21,7 @@ import {
 import { proformaKinds, proformaStatus } from "./proforma";
 import { lineAmounts, rejectTaxChoice } from "./pricing-controls";
 import { defaultSalesTaxOn } from "../finance/operational-tax";
+import { paymentTerms } from "./customer-credit";
 
 @Injectable()
 export class OperationsService {
@@ -879,12 +880,7 @@ export class OperationsService {
           name: true,
           shippingAddress: true,
           primaryAddress: true,
-          paymentPolicies: {
-            where: { active: true, effectiveFrom: { lte: new Date() } },
-            orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }, { id: "asc" }],
-            take: 1,
-            select: { mode: true, topDays: true },
-          },
+          defaultTermCode: true,
         },
         orderBy: { name: "asc" },
         take: 250,
@@ -900,8 +896,18 @@ export class OperationsService {
       where: { id: c },
       select: { baseCurrency: true, timezone: true },
     });
+    // Only the customer's default term is shown here; credit limit/freeze stay restricted.
+    const terms = await paymentTerms(prisma, c);
     return {
-      customers,
+      customers: customers.map(({ defaultTermCode, ...customer }) => {
+        const term = terms.find((t) => t.code === defaultTermCode);
+        return {
+          ...customer,
+          paymentTerm: term
+            ? { code: term.code, label: term.label, mode: term.kind, topDays: term.days }
+            : null,
+        };
+      }),
       products,
       currency: company.baseCurrency,
       timezone: company.timezone,

@@ -624,6 +624,14 @@ model Customer {
   responsiblePerson Json?                      @map("responsible_person")
   responsibleLicense Json?                    @map("responsible_license")
   nooDocument       Json?                      @map("noo_document")
+  // Credit attributes (stage 2b): edited only with customer_credit.update; replace CustomerPaymentPolicy.
+  creditLimit       Decimal?                  @map("credit_limit") @db.Decimal(24, 8)
+  creditFrozen      Boolean                   @default(false) @map("credit_frozen")
+  freezeReason      String?                   @map("freeze_reason")
+  pastDueGraceDays  Int?                      @map("past_due_grace_days")
+  // Code from the company's active OPS-FLX-03 term list.
+  defaultTermCode   String?                   @map("default_term_code")
+  defaultTaxInvoiceCode String                @default("01") @map("default_tax_invoice_code") @db.Char(2)
   state             MasterRecordState         @default(DRAFT)
   version           Int                       @default(1)
   createdAt         DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1935,6 +1943,7 @@ model PayableOpenItem {
   @@map("payable_open_items")
 }
 
+/// Archive only since stage 2b: credit attributes live on Customer. Nothing writes this table.
 model CustomerPaymentPolicy {
   id            String              @id @default(uuid()) @db.Uuid
   companyId     String              @map("company_id") @db.Uuid

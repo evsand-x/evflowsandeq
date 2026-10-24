@@ -8,7 +8,6 @@ import {
   pickListConfirmSchema,
   postInvoiceSchema,
   invoiceDraftSchema,
-  paymentPolicySchema,
   createSupplierInvoiceSchema,
   createCustomerReceiptSchema,
   allocateCustomerReceiptSchema,
@@ -212,13 +211,6 @@ export class OtcPtpController {
         parse(createSalesOrderSchema, body),
         commandKey(key),
       )
-      .then((data) => ({ data }));
-  }
-  @Post("customers/:id/payment-policies")
-  @RequirePermissions("customer.payment_policy.manage")
-  policy(@Param("id") id: string, @Body() body: unknown, @Req() req: AuthenticatedRequest) {
-    return this.service
-      .setPaymentPolicy(req.auth.company_id, req.auth.user_id, id, parse(paymentPolicySchema, body))
       .then((data) => ({ data }));
   }
   @Post("sales-orders/:id/submit")

@@ -552,7 +552,7 @@ export function DashboardSidebar({
                           return null;
                         const controlPermission = (
                           {
-                            "Kredit & TOP Pelanggan": "customer.payment_policy.manage",
+                            "Kredit & TOP Pelanggan": "customer_credit.update",
                             "Pengaturan Persetujuan": "transaction_approval.manage",
                             "Kredit & Exposure": "customer.payment_policy.manage",
                             Persediaan: "inventory.quality.decide",

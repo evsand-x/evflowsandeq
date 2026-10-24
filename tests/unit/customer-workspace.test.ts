@@ -25,9 +25,11 @@ vi.mock("@evflow/database", () => ({
 }));
 import { CrmService } from "../../packages/backend/src/crm/crm.service";
 import {
+  assertCustomerCreditEdit,
   customerAllowed,
   customerListSchema,
   customerWhere,
+  redactCustomerCredit,
 } from "../../packages/backend/src/master/customer-workspace";
 import type { AuditService } from "../../packages/backend/src/common/audit.service";
 import {
@@ -56,13 +58,52 @@ describe("customer workspace boundaries", () => {
   it("does not expose finance across company scopes", () => {
     const auth = {
       company_id: "a",
-      permissions: [
-        { code: "customer.payment_policy.manage", scope_type: "company", scope_id: "b" },
-      ],
-    } as AuthPrincipal;
-    expect(customerAllowed(auth, "customer.payment_policy.manage")).toBe(false);
+      roles: [],
+      permissions: [{ code: "customer_credit.update", scope_type: "company", scope_id: "b" }],
+    } as unknown as AuthPrincipal;
+    expect(customerAllowed(auth, "customer_credit.update")).toBe(false);
     auth.permissions[0]!.scope_id = "a";
-    expect(customerAllowed(auth, "customer.payment_policy.manage")).toBe(true);
+    expect(customerAllowed(auth, "customer_credit.update")).toBe(true);
+  });
+  it("gates credit attributes on customer_credit.update, not on master_customer.update", () => {
+    const masterOnly = {
+      company_id: "a",
+      roles: [],
+      permissions: [
+        { code: "master_customer.update", scope_type: "company", scope_id: "a" },
+        // The legacy payment policy grant does not unlock the new attributes by itself.
+        { code: "customer.payment_policy.manage", scope_type: "company", scope_id: "a" },
+      ],
+    } as unknown as AuthPrincipal;
+    const creditEditor = {
+      company_id: "a",
+      roles: [],
+      permissions: [{ code: "customer_credit.update", scope_type: "company", scope_id: "a" }],
+    } as unknown as AuthPrincipal;
+    for (const field of [
+      "credit_limit",
+      "credit_frozen",
+      "freeze_reason",
+      "past_due_grace_days",
+      "default_term_code",
+    ])
+      expect(() => assertCustomerCreditEdit(masterOnly, { name: "X", [field]: null })).toThrow(
+        "Izin kredit pelanggan",
+      );
+    expect(() =>
+      assertCustomerCreditEdit(masterOnly, { name: "X", default_tax_invoice_code: "07" }),
+    ).not.toThrow();
+    expect(() => assertCustomerCreditEdit(creditEditor, { credit_limit: "10" })).not.toThrow();
+    const row = {
+      id: "c",
+      creditLimit: "10",
+      creditFrozen: true,
+      freezeReason: "r",
+      pastDueGraceDays: 1,
+      defaultTermCode: "NET30",
+    };
+    expect(redactCustomerCredit(masterOnly, row)).toEqual({ id: "c", defaultTermCode: "NET30" });
+    expect(redactCustomerCredit(creditEditor, row)).toEqual(row);
   });
   it("keeps the Kontak tab on crm_contact, separate from master_customer", () => {
     const contacts = resourcePermissionCode(

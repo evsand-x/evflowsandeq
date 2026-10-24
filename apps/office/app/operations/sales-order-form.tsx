@@ -43,7 +43,8 @@ type Options = {
     name: string;
     shippingAddress?: string | null;
     primaryAddress?: string | null;
-    paymentPolicies: { mode: string; topDays: number | null }[];
+    // Customer default term (Master Data › Pelanggan); null when not set.
+    paymentTerm: { code: string; label: string; mode: string; topDays: number } | null;
   }[];
   products: { id: string; name: string; code: string; baseUom: { name: string } }[];
 };
@@ -215,7 +216,7 @@ export function SalesOrderForm({
     enabled: !!principal,
   });
   const selected = options?.customers.find((c) => c.id === customer);
-  const policy = initial?.paymentSnapshot ?? selected?.paymentPolicies[0];
+  const policy = initial?.paymentSnapshot ?? selected?.paymentTerm;
   const currency = initial?.currency ?? options?.currency;
   const freightEnabled = freightMode !== "NONE";
   const productOf = (id: string) =>
@@ -498,7 +499,7 @@ export function SalesOrderForm({
                 </div>
               )}
               <div className="so-policy">
-                <span>Ketentuan pembayaran (snapshot dari Finance)</span>
+                <span>Ketentuan pembayaran (termin bawaan pelanggan)</span>
                 <strong>{terms(policy)}</strong>
                 <small>
                   {policy

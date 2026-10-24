@@ -6,6 +6,8 @@ import { hashPassword } from "../../packages/backend/src/identity/password";
 import { AuditService } from "../../packages/backend/src/common/audit.service";
 import { OperationsService } from "../../packages/backend/src/sales/operations.service";
 import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
+import { setCustomerCredit } from "../../packages/backend/src/sales/customer-credit";
+import { ensureTestTermList } from "./payment-terms-fixture";
 import sharp from "../../packages/backend/node_modules/sharp";
 import { financeFixture } from "../../tests/integration/finance-fixture";
 
@@ -54,6 +56,7 @@ async function main() {
             in: [
               "audit_event.read",
               "customer.payment_policy.manage",
+              "customer_credit.update",
               "sales_tax_rule.manage",
               "transaction_approval.manage",
               "inventory.quality.decide",
@@ -173,12 +176,14 @@ async function main() {
   });
   const ops = new OperationsService(new AuditService()),
     service = new OtcPtpService(new AuditService());
-  await service.setPaymentPolicy(c, a, customer.id, {
-    mode: "TEMPO",
-    top_days: 30,
-    credit_limit: "10000000",
-    past_due_grace_days: 0,
-  });
+  await ensureTestTermList(prisma, c, a);
+  await prisma.$transaction((tx) =>
+    setCustomerCredit(tx, new AuditService(), c, a, customer.id, {
+      default_term_code: "NET30",
+      credit_limit: "10000000",
+      past_due_grace_days: 0,
+    }),
+  );
   const proof = await sharp({
     text: { text: "BUKTI UJI FIKTIF\nTidak untuk transaksi nyata", width: 600, dpi: 96 },
   })

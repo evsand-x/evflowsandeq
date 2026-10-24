@@ -331,11 +331,36 @@ export const createCustomerSchema = z
     responsible_person: optionalObjectSchema,
     responsible_license: optionalObjectSchema,
     noo_document: optionalObjectSchema,
+    // Kode transaksi Faktur Pajak bawaan (01-10).
+    default_tax_invoice_code: z
+      .enum(["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"])
+      .optional(),
   })
   .strict();
 
+/** Customer credit attributes; the server accepts them only with customer_credit.update. */
+export const customerCreditFields = [
+  "default_term_code",
+  "credit_limit",
+  "credit_frozen",
+  "freeze_reason",
+  "past_due_grace_days",
+] as const;
+
 export const updateCustomerSchema = createCustomerSchema
-  .extend({ version: z.number().int().positive() })
+  .extend({
+    version: z.number().int().positive(),
+    // A code of the company's active OPS-FLX-03 term list; checked on the server.
+    default_term_code: z.string().trim().min(1).max(40).nullable().optional(),
+    credit_limit: z
+      .string()
+      .regex(/^\d{1,16}(\.\d{1,8})?$/)
+      .nullable()
+      .optional(),
+    credit_frozen: z.boolean().optional(),
+    freeze_reason: z.string().trim().max(1000).nullable().optional(),
+    past_due_grace_days: z.number().int().nonnegative().max(3650).nullable().optional(),
+  })
   .strict();
 
 const contactSchema = z.record(z.string(), z.string().trim().max(300)).nullable().optional();

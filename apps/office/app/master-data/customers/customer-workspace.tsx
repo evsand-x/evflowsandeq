@@ -40,10 +40,12 @@ import {
   type Customer,
   type Ref,
   type Pic,
+  type PaymentTerm,
   relationships,
   onboarding,
   roles,
   money,
+  termLabel,
 } from "./customer-types";
 import "./customer.css";
 const base = "/master-data/customers";
@@ -251,21 +253,22 @@ function CustomerList() {
     },
     {
       id: "payment",
-      header: "Kebijakan pembayaran",
-      cell: ({ row }) =>
-        rows.data?.finance_visible ? (
-          <CustomerBadge value={row.original.payment_policies?.[0]?.mode ?? "Belum ditetapkan"} />
-        ) : (
-          <span title="Memerlukan akses kebijakan pembayaran">Terbatas</span>
-        ),
+      header: "Termin bawaan",
+      cell: ({ row }) => row.original.default_term_code ?? "Belum ditetapkan",
     },
     {
       id: "limit",
       header: "Limit kredit",
       cell: ({ row }) =>
-        rows.data?.finance_visible
-          ? money(row.original.payment_policies?.[0]?.credit_limit)
-          : "Terbatas",
+        rows.data?.finance_visible ? (
+          row.original.credit_frozen ? (
+            <CustomerBadge value="INACTIVE" label="Dibekukan" />
+          ) : (
+            money(row.original.credit_limit)
+          )
+        ) : (
+          <span title="Memerlukan izin kredit pelanggan">Terbatas</span>
+        ),
     },
   ];
   const filter = (
@@ -570,7 +573,16 @@ function CustomerDetail({ row }: { row: Customer }) {
         `${base}/${row.id}/sales`,
       ),
   });
-  const policy = row.payment_policies?.[0];
+  const terms = useQuery({
+    queryKey: ["customer-refs", principal?.company_id, principal?.user_id],
+    queryFn: async () =>
+      (
+        await apiRequest<{
+          data: { channels: Ref[]; rayons: Ref[]; payment_terms: PaymentTerm[] };
+        }>("/master-data/customer-options")
+      ).data,
+  });
+  const term = termLabel(row.default_term_code, terms.data?.payment_terms);
   const pics = row.contacts ?? [];
   const roleSummary = (role: string) => {
     const a = pics.filter((p) => p.state !== "INACTIVE" && p.pic_functions.includes(role));
@@ -615,7 +627,7 @@ function CustomerDetail({ row }: { row: Customer }) {
           .join(", ") || "—",
     },
   ];
-  const finance = can("customer.payment_policy.manage");
+  const finance = can("customer_credit.update");
   return (
     <OfficePage
       section="master"
@@ -647,15 +659,7 @@ function CustomerDetail({ row }: { row: Customer }) {
         <ValueItem label="Channel · rayon">
           {[row.channel?.name, row.rayon?.name].filter(Boolean).join(" · ") || undefined}
         </ValueItem>
-        <ValueItem label="Kebijakan pembayaran">
-          {policy ? (
-            <CustomerBadge value={policy.mode} />
-          ) : finance ? (
-            "Belum ditetapkan"
-          ) : (
-            "Terbatas"
-          )}
-        </ValueItem>
+        <ValueItem label="Termin bawaan">{term ?? "Belum ditetapkan"}</ValueItem>
       </SummaryStrip>
       <DetailTabs
         tabs={[
@@ -676,17 +680,27 @@ function CustomerDetail({ row }: { row: Customer }) {
                 </ValueItem>
                 <ValueItem label="Penanggung jawab">{row.responsible_person?.name}</ValueItem>
                 <ValueItem label="Dokumen kedaluwarsa dalam 30 hari">{`${expires} dokumen`}</ValueItem>
-                <ValueItem label="Termin">
-                  {policy
-                    ? policy.mode === "TEMPO"
-                      ? `Net ${policy.top_days ?? "—"} hari`
-                      : policy.mode
-                    : finance
-                      ? undefined
-                      : "Terbatas"}
-                </ValueItem>
+                <ValueItem label="Kode faktur bawaan">{row.default_tax_invoice_code}</ValueItem>
                 <ValueItem label="Limit kredit">
-                  {policy ? money(policy.credit_limit) : finance ? undefined : "Terbatas"}
+                  {finance
+                    ? row.credit_limit
+                      ? money(row.credit_limit)
+                      : "Tanpa limit"
+                    : "Terbatas"}
+                </ValueItem>
+                <ValueItem label="Status kredit">
+                  {finance
+                    ? row.credit_frozen
+                      ? `Dibekukan · ${row.freeze_reason ?? ""}`
+                      : "Aktif"
+                    : "Terbatas"}
+                </ValueItem>
+                <ValueItem label="Toleransi lewat jatuh tempo">
+                  {finance
+                    ? row.past_due_grace_days == null
+                      ? undefined
+                      : `${row.past_due_grace_days} hari`
+                    : "Terbatas"}
                 </ValueItem>
               </ValueGrid>
             ),

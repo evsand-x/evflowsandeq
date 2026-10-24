@@ -122,11 +122,10 @@ describe("permission matrix navigation", () => {
       permission("unmapped_feature", "read"),
     ];
     const rows = navigationMatrixRows(catalog);
-    // CFG-10: every working menu has a row; the combined sales settings page edits operational policies.
+    // CFG-10: every working menu has a row.
     const alias: Record<string, string> = {
-      "Setting › Termin, Ongkos Kirim & Kredit": "Setting › Kebijakan Umum",
-      // Same capability (customer.payment_policy) as the customer credit policy row.
-      "Finance › Kredit & TOP Pelanggan": "Setting › Kebijakan Pelanggan Baru",
+      // Opens the customer master, whose credit attributes have their own row (customer_credit).
+      "Finance › Kredit & TOP Pelanggan": "Master Data › Pelanggan › Kredit & Termin",
     };
     for (const module of moduleNavigation)
       for (const item of module.items.filter((i) => isMenuAvailable(module.label, i))) {

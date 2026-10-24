@@ -215,47 +215,6 @@ export class OtcPtpService {
       return o;
     });
   }
-  async setPaymentPolicy(c: string, a: string, customerId: string, i: any) {
-    return prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM customers WHERE id = ${customerId}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
-      const customer = await tx.customer.findFirst({
-        where: { id: customerId, companyId: c, state: "ACTIVE" },
-      });
-      if (!customer) throw new NotFoundException("Pelanggan tidak ditemukan.");
-      if (
-        i.mode === "TEMPO" &&
-        (i.top_days === null || i.top_days === undefined || !i.credit_limit)
-      )
-        throw new ConflictException("TOP_AND_CREDIT_LIMIT_REQUIRED");
-      if (i.mode === "TEMPO" && i.past_due_grace_days == null)
-        throw new ConflictException("PAST_DUE_POLICY_REQUIRED");
-      if (i.frozen && !i.freeze_reason?.trim())
-        throw new ConflictException("FREEZE_REASON_REQUIRED");
-      const policy = await tx.customerPaymentPolicy.create({
-        data: {
-          companyId: c,
-          customerId,
-          mode: i.mode,
-          topDays: i.top_days ?? null,
-          creditLimit: i.credit_limit ? d(i.credit_limit) : null,
-          pastDueGraceDays: i.past_due_grace_days ?? null,
-          frozen: i.frozen ?? false,
-          freezeReason: i.freeze_reason ?? null,
-          effectiveFrom: i.effective_from ? new Date(i.effective_from) : new Date(),
-          createdById: a,
-        },
-      });
-      await this.audit.recordWith(tx, {
-        companyId: c,
-        actorId: a,
-        action: "customer.payment_policy.created",
-        resourceType: "customer_payment_policy",
-        resourceId: policy.id,
-        after: policy,
-      });
-      return policy;
-    });
-  }
   async submitSalesOrder(c: string, a: string, id: string, key: string, version?: number) {
     return transactionCommand(
       c,
@@ -367,12 +326,14 @@ export class OtcPtpService {
             state: "OPEN",
             version: { increment: 1 },
             submittedAt: o.submittedAt ?? new Date(),
+            // Terms of the customer at submission (stage 2b: customer default term + credit).
             paymentSnapshot: o.paymentSnapshot ?? {
-              policy_id: policy.id,
+              term_code: policy.termCode,
+              term_label: policy.termLabel,
               mode: policy.mode,
-              top_days: policy.mode === "COD" ? 0 : policy.topDays,
+              top_days: policy.topDays,
               credit_limit: policy.creditLimit?.toString() ?? null,
-              effective_from: policy.effectiveFrom.toISOString(),
+              evaluated_at: new Date().toISOString(),
             },
           },
           include: {

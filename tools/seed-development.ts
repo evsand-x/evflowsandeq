@@ -44,6 +44,7 @@ async function bootstrapDemoAdmin(companyId: string) {
 import { AuditService } from "../packages/backend/src/common/audit.service";
 import { AccessService } from "../packages/backend/src/identity/access.service";
 import { OtcPtpService } from "../packages/backend/src/otc-ptp.service";
+import { setCustomerCredit } from "../packages/backend/src/sales/customer-credit";
 import { OperationsService } from "../packages/backend/src/sales/operations.service";
 import { configureNumbering } from "../packages/backend/src/common/document-number";
 import sharp from "../packages/backend/node_modules/sharp";
@@ -212,16 +213,10 @@ async function main() {
         shippingAddress: "Alamat contoh Makassar — DATA UJI FIKTIF",
       },
     });
-    if (
-      !(await prisma.customerPaymentPolicy.findFirst({
-        where: { companyId: c, customerId: customer.id },
-      }))
-    )
-      await service.setPaymentPolicy(c, a, customer.id, {
-        mode: "COD",
-        top_days: 0,
-        effective_from: "2026-01-01",
-      });
+    if (!customer.defaultTermCode)
+      await prisma.$transaction((tx) =>
+        setCustomerCredit(tx, audit, c, a, customer.id, { default_term_code: "COD" }),
+      );
     // Sales lines use the default sales tax provisioned with the company defaults.
     const reference = `DEV-SP-${index + 1}`;
     let order = await prisma.salesOrder.findFirst({

@@ -437,12 +437,12 @@ export class OperationsController {
   @Get("control-options/:kind")
   async controlOptions(@Param("kind") kind: string, @Req() req: AuthenticatedRequest) {
     // "tax" serves the customer list of the WAPU/PPh receipt rules screen (ReceiptTaxRule stays
-    // until stage 3); per customer x product sales tax rules are retired.
-    const type = z.enum(["credit", "tax", "approval", "quality"]).parse(kind);
+    // until stage 3); per customer x product sales tax rules are retired. Customer credit is
+    // edited on Master Data > Pelanggan (stage 2b), so there is no "credit" kind any more.
+    const type = z.enum(["tax", "approval", "quality"]).parse(kind);
     allowed(
       req,
       {
-        credit: "customer.payment_policy.manage",
         tax: "sales_tax_rule.manage",
         approval: "transaction_approval.manage",
         quality: "inventory.quality.decide",

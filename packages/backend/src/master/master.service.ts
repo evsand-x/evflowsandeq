@@ -7,6 +7,7 @@ import {
   PreconditionFailedException,
 } from "@nestjs/common";
 import { AuditService } from "../common/audit.service";
+import { recordCreditChange, resolveCustomerCredit } from "../sales/customer-credit";
 
 type MasterState = "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
 
@@ -72,6 +73,13 @@ export class MasterService {
         return prisma.customer.findMany({
           where: { companyId, ...(contains ? { name: contains } : {}) },
           include: { channel: true, rayon: true },
+          // Credit values need customer_credit.update; this list is for master readers.
+          omit: {
+            creditLimit: true,
+            creditFrozen: true,
+            freezeReason: true,
+            pastDueGraceDays: true,
+          },
           orderBy: { name: "asc" },
         });
       case "suppliers":
@@ -597,6 +605,9 @@ export class MasterService {
           responsiblePerson: jsonOrNull(input.responsible_person),
           responsibleLicense: jsonOrNull(input.responsible_license),
           nooDocument: jsonOrNull(input.noo_document),
+          ...(input.default_tax_invoice_code
+            ? { defaultTaxInvoiceCode: String(input.default_tax_invoice_code) }
+            : {}),
           createdById: actorId,
           updatedById: actorId,
         },
@@ -605,6 +616,10 @@ export class MasterService {
     );
   }
 
+  /**
+   * Credit attributes (term, limit, freeze, grace) are only written when the input carries them;
+   * the controller rejects them without customer_credit.update.
+   */
   async updateCustomer(
     companyId: string,
     actorId: string,
@@ -636,6 +651,7 @@ export class MasterService {
         throw new ConflictException(
           "Status pelanggan bertransaksi ditetapkan oleh Finance setelah invoice diposting.",
         );
+      const credit = await resolveCustomerCredit(tx, companyId, current, input);
       const updated = await tx.customer.update({
         where: { id, companyId, version: expectedVersion },
         data: {
@@ -666,11 +682,16 @@ export class MasterService {
           responsiblePerson: jsonOrNull(input.responsible_person),
           responsibleLicense: jsonOrNull(input.responsible_license),
           nooDocument: jsonOrNull(input.noo_document),
+          defaultTaxInvoiceCode: input.default_tax_invoice_code
+            ? String(input.default_tax_invoice_code)
+            : current.defaultTaxInvoiceCode,
+          ...(credit ?? {}),
           version: { increment: 1 },
           updatedById: actorId,
         },
         include: { channel: true, rayon: true },
       });
+      if (credit) await recordCreditChange(tx, this.audit, companyId, actorId, id, current, credit);
       await this.audit.recordWith(tx, {
         companyId,
         actorId,

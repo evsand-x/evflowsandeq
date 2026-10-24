@@ -5,6 +5,7 @@ import { assertDevelopmentSeed } from "../packages/database/prisma/dev-seed-guar
 import { assertFictitiousCompany } from "./dev-company";
 import { AuditService } from "../packages/backend/src/common/audit.service";
 import { OtcPtpService } from "../packages/backend/src/otc-ptp.service";
+import { setCustomerCredit } from "../packages/backend/src/sales/customer-credit";
 import { OperationsService } from "../packages/backend/src/sales/operations.service";
 import { AdministrationService } from "../packages/backend/src/administration/administration.service";
 import { CrmService } from "../packages/backend/src/crm/crm.service";
@@ -265,18 +266,14 @@ async function main() {
         shippingAddress: "Alamat simulasi Makassar - DATA UJI FIKTIF",
       },
     });
-    if (
-      !(await prisma.customerPaymentPolicy.findFirst({
-        where: { companyId: c, customerId: customer.id },
-      }))
-    )
-      await service.setPaymentPolicy(c, a, customer.id, {
-        mode: "TEMPO",
-        top_days: 30,
-        credit_limit: "500000000",
-        past_due_grace_days: 0,
-        effective_from: from,
-      });
+    if (!customer.defaultTermCode)
+      await prisma.$transaction((tx) =>
+        setCustomerCredit(tx, audit, c, a, customer.id, {
+          default_term_code: "NET30",
+          credit_limit: "500000000",
+          past_due_grace_days: 0,
+        }),
+      );
     // Sales lines use the default sales tax provisioned with the company defaults.
     const contact = await crm.createContact(
       c,

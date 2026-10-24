@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { prisma, type Prisma } from "@evflow/database";
 import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
 import { AuditService } from "../../packages/backend/src/common/audit.service";
+import { setCustomerCredit } from "../../packages/backend/src/sales/customer-credit";
+import { ensureTestTermList } from "../../tools/qa/payment-terms-fixture";
 import {
   defaultSalesTaxSnapshot,
   saveTax,
@@ -173,12 +175,14 @@ async function setup(): Promise<Fixture> {
       createdById: actor,
     })),
   });
-  await service.setPaymentPolicy(c, actor, customer.id, {
-    mode: "TEMPO",
-    top_days: 30,
-    credit_limit: "100000000",
-    past_due_grace_days: 0,
-  });
+  await ensureTestTermList(prisma, c, actor);
+  await prisma.$transaction((tx) =>
+    setCustomerCredit(tx, new AuditService(), c, actor, customer.id, {
+      default_term_code: "NET30",
+      credit_limit: "100000000",
+      past_due_grace_days: 0,
+    }),
+  );
   return { c, actor, customerId: customer.id, productId: product.id, evidenceId };
 }
 

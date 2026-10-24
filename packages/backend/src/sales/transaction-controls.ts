@@ -2,6 +2,7 @@ import { ConflictException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
 import { lineAmounts } from "./pricing-controls";
 import { orderBasis, validException } from "./exception-controls";
+import { customerCredit, paymentTerm } from "./customer-credit";
 
 type Tx = Prisma.TransactionClient;
 const zero = () => new Prisma.Decimal(0);
@@ -14,13 +15,23 @@ export async function lockCustomer(tx: Tx, companyId: string, customerId: string
   return customer;
 }
 
+/**
+ * Payment terms and credit attributes of the customer (stage 2b). The term comes from the
+ * customer's default term code in the active OPS-FLX-03 list.
+ */
 export async function currentPaymentPolicy(tx: Tx, companyId: string, customerId: string) {
-  const policy = await tx.customerPaymentPolicy.findFirst({
-    where: { companyId, customerId, active: true, effectiveFrom: { lte: new Date() } },
-    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }, { id: "asc" }],
-  });
-  if (!policy) throw new ConflictException("PAYMENT_POLICY_REQUIRED");
-  return policy;
+  const credit = await customerCredit(tx, companyId, customerId);
+  if (!credit.defaultTerm) throw new ConflictException("PAYMENT_POLICY_REQUIRED");
+  const term = await paymentTerm(tx, companyId, credit.defaultTerm);
+  return {
+    termCode: term.code,
+    termLabel: term.label,
+    mode: term.kind,
+    topDays: term.kind === "TEMPO" ? term.days : 0,
+    creditLimit: credit.limit,
+    pastDueGraceDays: credit.graceDays,
+    frozen: credit.frozen,
+  };
 }
 
 /** Components are disjoint: invoiced POD is never counted again as unbilled. */
@@ -130,7 +141,7 @@ export async function checkCredit(
   if (policy.frozen && !permits("CUSTOMER_CREDIT_FROZEN"))
     throw new ConflictException("CUSTOMER_CREDIT_FROZEN");
   if (policy.mode !== "TEMPO") return policy;
-  if (policy.topDays === null || policy.creditLimit === null || policy.pastDueGraceDays === null)
+  if (policy.creditLimit === null || policy.pastDueGraceDays === null)
     throw new ConflictException("CREDIT_POLICY_INCOMPLETE");
   const company = await tx.company.findUniqueOrThrow({ where: { id: companyId } });
   const today = new Date(

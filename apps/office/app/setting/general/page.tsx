@@ -327,8 +327,8 @@ function OtherPolicies({ canEdit }: { canEdit: boolean }) {
       ))}
       <p className="page-frame-subtitle">
         Termin, ongkos kirim dan kredit diatur di{" "}
-        <Link className="page-frame-link" href="/setting/sales">
-          halaman Penjualan
+        <Link className="page-frame-link" href="/setting/terms">
+          Termin &amp; Kredit
         </Link>
         .
       </p>

@@ -439,11 +439,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
   const enabled =
     !!principal &&
     (configuring
-      ? [
-          "customer.payment_policy.manage",
-          "transaction_approval.manage",
-          "inventory.quality.decide",
-        ].some(can)
+      ? ["transaction_approval.manage", "inventory.quality.decide"].some(can)
       : financeControl
         ? can(
             (
