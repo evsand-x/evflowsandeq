@@ -414,7 +414,6 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     invoiceCreation = kind === "invoice-create",
     financeControl = [
       "reconciliation",
-      "accounting",
       "bank-statements",
       "tax-rules",
       "tax-documents",
@@ -445,7 +444,6 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
         ? can(
             (
               {
-                accounting: "posting_profile.read",
                 "bank-statements": "bank_statement.import",
                 "tax-rules": "tax_rule.read",
                 "tax-documents": "tax_component.read",
@@ -825,13 +823,11 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                     ? "Warehouse & Logistik / Barang Keluar"
                     : kind.startsWith("tax-")
                       ? "Finance / Pajak"
-                      : kind === "accounting"
-                        ? "Finance / Akuntansi"
-                        : ["reconciliation", "bank-statements"].includes(kind)
-                          ? "Finance / Kas & Bank"
-                          : configuring
-                            ? "Setting / Kontrol transaksi"
-                            : "Finance / Piutang (AR)"}
+                      : ["reconciliation", "bank-statements"].includes(kind)
+                        ? "Finance / Kas & Bank"
+                        : configuring
+                          ? "Setting / Kontrol transaksi"
+                          : "Finance / Piutang (AR)"}
               </nav>
               <h1>
                 {configuring
@@ -839,7 +835,6 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                   : financeControl
                     ? {
                         reconciliation: "Rekonsiliasi",
-                        accounting: "Pengaturan Jurnal Otomatis",
                         "bank-statements": "Impor Mutasi Bank",
                         "tax-rules": "Profil & Aturan Pajak",
                         "tax-documents": "Faktur Keluaran",

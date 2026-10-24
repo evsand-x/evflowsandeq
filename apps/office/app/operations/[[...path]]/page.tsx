@@ -16,6 +16,8 @@ export default async function Page({
   const path = (await params).path ?? ["orders"];
   const query = await searchParams;
   if (path[0] === "accounts") return <AccountsWorkspace key={path.join("/")} path={path} />;
+  // Jurnal otomatis moved to Setting > Pemetaan Akun; old links land there.
+  if (path[0] === "accounting") redirect("/setting/account-mapping");
   // The tax master moved to Setting > Pajak; old links land there.
   if (path[0] === "tax-rules") redirect("/setting/tax");
   if (["tax-documents", "tax-input"].includes(path[0] ?? ""))

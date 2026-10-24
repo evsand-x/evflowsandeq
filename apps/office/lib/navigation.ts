@@ -109,6 +109,7 @@ export const moduleNavigation = [
       "Penomoran Dokumen",
       "Pajak",
       "Jenis Potongan",
+      "Pemetaan Akun",
       "Daftar Referensi & Alasan",
       "Periode & Closing",
       "Impor/Ekspor & Arsip",
@@ -163,6 +164,7 @@ export const menuRoutes: Record<string, Record<string, string>> = {
     "Penomoran Dokumen": "/setting/numbering",
     Pajak: "/setting/tax",
     "Jenis Potongan": "/setting/deductions",
+    "Pemetaan Akun": "/setting/account-mapping",
   },
 };
 
@@ -177,6 +179,7 @@ export const settingPermissions: Record<string, string> = {
   "Penomoran Dokumen": "numbering_rule.read",
   Pajak: "tax_setting.read",
   "Jenis Potongan": "deduction_type.read",
+  "Pemetaan Akun": "account_mapping.read",
 };
 
 export function isMenuAvailable(module: string, item: string) {

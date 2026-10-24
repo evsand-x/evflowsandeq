@@ -453,7 +453,7 @@ export class FinanceControlsController {
     };
   }
   @Get("configuration")
-  @RequirePermissions("posting_profile.read")
+  @RequirePermissions("account_mapping.read")
   async configuration(@Req() r: AuthenticatedRequest) {
     const companyId = r.auth.company_id;
     const [accounts, periods, profiles] = await Promise.all([
@@ -479,7 +479,7 @@ export class FinanceControlsController {
     return { data: { accounts, periods, profiles } };
   }
   @Post("configuration/:kind")
-  @RequirePermissions("posting_profile.manage")
+  @RequirePermissions("account_mapping.manage")
   async configure(
     @Param("kind") kind: string,
     @Body() body: unknown,

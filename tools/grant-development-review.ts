@@ -29,7 +29,7 @@ async function main() {
     "delivery_receipt.read",
     "sales_invoice.read",
     "customer_receipt.read",
-    "posting_profile.read",
+    "account_mapping.read",
     "journal.read",
     "tax_rule.read",
     "tax_component.read",

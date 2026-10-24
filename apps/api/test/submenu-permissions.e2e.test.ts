@@ -76,7 +76,7 @@ describe("independent submenu HTTP permissions", () => {
   it("requires independent account permissions and scopes list queries", async () => {
     await request(app.getHttpServer())
       .post("/finance-controls/configuration/account")
-      .set("x-permissions", "posting_profile.manage")
+      .set("x-permissions", "account_mapping.manage")
       .send({})
       .expect(403);
     await request(app.getHttpServer())
@@ -116,6 +116,37 @@ describe("independent submenu HTTP permissions", () => {
       find.mockRestore();
       count.mockRestore();
       transaction.mockRestore();
+    }
+  });
+  it("guards the account mapping endpoints with account_mapping.read/manage only", async () => {
+    // The retired posting_profile.* grants no longer open Setting > Pemetaan Akun.
+    await request(app.getHttpServer())
+      .get("/finance-controls/configuration")
+      .set("x-permissions", "posting_profile.read")
+      .expect(403);
+    await request(app.getHttpServer())
+      .post("/finance-controls/configuration/profile")
+      .set("x-permissions", "posting_profile.manage")
+      .send({})
+      .expect(403);
+    // account_mapping.read alone never writes: account_mapping.manage required.
+    await request(app.getHttpServer())
+      .post("/finance-controls/configuration/profile")
+      .set("x-permissions", "account_mapping.read")
+      .send({})
+      .expect(403);
+    const accounts = vi.spyOn(prisma.financeAccount, "findMany").mockResolvedValue([]);
+    const periods = vi.spyOn(prisma.financePeriod, "findMany").mockResolvedValue([]);
+    const profiles = vi.spyOn(prisma.financePostingProfile, "findMany").mockResolvedValue([]);
+    try {
+      await request(app.getHttpServer())
+        .get("/finance-controls/configuration")
+        .set("x-permissions", "account_mapping.read")
+        .expect(200);
+    } finally {
+      accounts.mockRestore();
+      periods.mockRestore();
+      profiles.mockRestore();
     }
   });
   it("isolates all three tax menus and scopes their source reads", async () => {

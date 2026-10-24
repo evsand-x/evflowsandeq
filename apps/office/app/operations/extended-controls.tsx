@@ -484,8 +484,6 @@ export function FinanceWorkspace({
   }>("/finance-controls/reconciliation", can("journal.read") && can("inventory.cost.read"));
   const [selected, setSelected] = useState<Record<string, string>>({});
   const matchAmounts = useRef<Record<string, string>>({});
-  if (kind === "accounting")
-    return <FinanceConfiguration can={can} command={command} pending={pending} />;
   if (kind === "tax-rules")
     return <WithholdingRules can={can} command={command} pending={pending} />;
   if (kind === "tax-documents")
@@ -856,7 +854,7 @@ function StatementImport({ command, pending, can }: Props) {
     </form>
   );
 }
-function FinanceConfiguration({ command, pending, can }: Props) {
+export function FinanceConfiguration({ command, pending, can }: Props) {
   const q = useData<{
     accounts: { id: string; code: string; name: string }[];
     periods: { id: string; startsOn: string; endsOn: string; state: string }[];
@@ -982,7 +980,7 @@ function FinanceConfiguration({ command, pending, can }: Props) {
               </>
             )}
           </FieldGroup>
-          <Button disabled={pending || !can("posting_profile.manage")}>Simpan Konfigurasi</Button>
+          <Button disabled={pending || !can("account_mapping.manage")}>Simpan Konfigurasi</Button>
         </form>
       </Panel>
       {q.error && <Notice>{String(q.error)}</Notice>}

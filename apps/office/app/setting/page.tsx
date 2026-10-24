@@ -71,6 +71,13 @@ export default function SettingHubPage() {
           href: "/setting/deductions",
           allowed: can("deduction_type.read"),
         },
+        {
+          label: "Pemetaan Akun",
+          description:
+            "Akun untuk jurnal otomatis, rekening bank dan periode; berlaku umum untuk seluruh transaksi.",
+          href: "/setting/account-mapping",
+          allowed: can("account_mapping.read"),
+        },
       ],
     },
     {

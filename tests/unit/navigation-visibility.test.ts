@@ -56,6 +56,23 @@ describe("navigation shows only working menus", () => {
     ).not.toContain("Jenis Potongan");
     expect(navigationMatrixRows([]).map((row) => row.path)).toContain("Setting › Jenis Potongan");
   });
+  it("opens Setting > Pemetaan Akun only with account_mapping.read and no longer lists it in Finance", () => {
+    expect(
+      visibleMenuItems(principal([], ["account_mapping.read"]), "Setting").map((i) => [
+        i.label,
+        i.href,
+      ]),
+    ).toEqual([["Pemetaan Akun", "/setting/account-mapping"]]);
+    expect(
+      visibleMenuItems(principal([], ["posting_profile.read"]), "Setting").map((i) => i.label),
+    ).not.toContain("Pemetaan Akun");
+    const paths = navigationMatrixRows([]).map((row) => row.path);
+    expect(paths).toContain("Setting › Pemetaan Akun");
+    expect(paths).not.toContain("Finance › Akuntansi › Pengaturan Jurnal Otomatis");
+    expect(visibleMenuItems(admin, "Finance").map((i) => i.label)).not.toContain(
+      "Pengaturan Jurnal Otomatis",
+    );
+  });
   it("hides a module with no visible item", () => {
     expect(visibleModules(admin).map((m) => m.label)).not.toContain("HRIS");
     expect(visibleModules(admin).map((m) => m.label)).toContain("Setting");

@@ -47,6 +47,7 @@ async function main() {
         { code: { startsWith: "tax_component." } },
         { code: { startsWith: "tax_rule." } },
         { code: { startsWith: "posting_profile." } },
+        { code: { startsWith: "account_mapping." } },
         { code: { startsWith: "journal." } },
         { code: { startsWith: "bank_statement." } },
         { code: { startsWith: "bank_reconciliation." } },

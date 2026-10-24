@@ -169,7 +169,6 @@ export function DashboardSidebar({
           invoices: "Piutang (AR)",
           reconciliation: "Kas & Bank",
           "bank-statements": "Kas & Bank",
-          accounting: "Akuntansi",
           accounts: "Akuntansi",
           "tax-rules": "Pajak",
           "tax-documents": "Pajak",
@@ -378,14 +377,7 @@ export function DashboardSidebar({
                                       ["Mutasi", "bank-statements", "bank_statement.import"],
                                     ]
                                   : item === "Akuntansi"
-                                    ? [
-                                        ["Akun", "accounts", "account.read"],
-                                        [
-                                          "Pengaturan Jurnal Otomatis",
-                                          "accounting",
-                                          "posting_profile.read",
-                                        ],
-                                      ]
+                                    ? [["Akun", "accounts", "account.read"]]
                                     : item === "Pajak"
                                       ? [
                                           ["Daftar & Aturan Pajak", "tax-rules", "tax_master.read"],
