@@ -2,7 +2,7 @@ import { ConflictException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
 import { z } from "zod";
 import { createSalesOrderSchema } from "@evflow/contracts";
-import { operationalTaxSnapshot } from "../finance/operational-tax";
+import { rejectTaxChoice } from "./pricing-controls";
 import { freightValues } from "./proforma";
 import { transactionCommand } from "../common/transaction-command";
 import { AuditService } from "../common/audit.service";
@@ -334,6 +334,7 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
               line_id: z.string().uuid(),
               quantity: z.string().regex(/^\d+(\.\d{1,10})?$/),
               unit_price: z.string().regex(/^\d+(\.\d{1,8})?$/),
+              /** Refused (LINE_TAX_NOT_ALLOWED): every line uses the default sales tax. */
               tax_master_id: z.string().uuid().optional(),
             })
             .strict(),
@@ -343,6 +344,7 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
     })
     .strict()
     .parse(body);
+  rejectTaxChoice({ lines: input.lines, freight: input.freight });
   return transactionCommand(c, a, `orders/${id}/revise`, key, input, async (tx) => {
     const ref = await tx.salesOrder.findFirst({ where: { companyId: c, id } });
     if (!ref) throw new NotFoundException();
@@ -385,12 +387,8 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
           allocatedQuantity: 0,
           backorderQuantity: 0,
           priceSnapshot: Prisma.DbNull,
-          taxSnapshot: line.tax_master_id
-            ? {
-                ...(await operationalTaxSnapshot(tx, c, line.tax_master_id, new Date(), "SALES")),
-                operational_tax_id: line.tax_master_id,
-              }
-            : Prisma.DbNull,
+          // Re-priced with the default sales tax when the revised order is submitted.
+          taxSnapshot: Prisma.DbNull,
         },
       });
     }

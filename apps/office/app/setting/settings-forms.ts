@@ -110,8 +110,13 @@ export function taxPayload(draft: TaxDraft, effectiveFrom: string) {
 
 /** Mirrors the server rule; the server still decides. */
 export function canBeDefault(
-  tax: { usage: string; effect: string; active: boolean },
+  tax: { kind: string; usage: string; effect: string; active: boolean },
   usage: "SALES" | "PURCHASE",
 ) {
-  return tax.active && tax.effect === "ADD" && (tax.usage === "BOTH" || tax.usage === usage);
+  return (
+    tax.active &&
+    tax.kind === "PPN" &&
+    tax.effect === "ADD" &&
+    (tax.usage === "BOTH" || tax.usage === usage)
+  );
 }

@@ -7,7 +7,7 @@ export const issueProformaSchema = z
       .object({
         amount: z.string().regex(/^\d{1,14}(\.\d{1,8})?$/),
         tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
-        /** Ignored: taxable freight always uses the default sales tax. Kept for older clients. */
+        /** Refused (FREIGHT_TAX_RULE_NOT_ALLOWED): taxable freight always uses the default sales tax. */
         tax_rule_id: z.string().uuid().optional(),
       })
       .strict()

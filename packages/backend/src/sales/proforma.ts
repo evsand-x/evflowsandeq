@@ -6,7 +6,7 @@ import { issueProformaSchema, previewProformaSchema } from "@evflow/contracts";
 import { transactionCommand } from "../common/transaction-command";
 import { AuditService } from "../common/audit.service";
 import { issueDocument } from "./document-controls";
-import { lineAmounts, assertPriceGrants } from "./pricing-controls";
+import { lineAmounts, assertPriceGrants, rejectTaxChoice } from "./pricing-controls";
 import { defaultSalesTaxOn } from "../finance/operational-tax";
 import { lockCustomer, assertDispatchLots } from "./transaction-controls";
 
@@ -133,8 +133,9 @@ async function latest(tx: Tx, companyId: string, batchId: string) {
 export async function freightValues(
   tx: Tx,
   companyId: string,
-  input: { amount: string; tax_mode: "NON_TAXABLE" | "TAXABLE" },
+  input: { amount: string; tax_mode: "NON_TAXABLE" | "TAXABLE"; tax_rule_id?: string | undefined },
 ) {
+  rejectTaxChoice({ freight: input });
   const amount = new Prisma.Decimal(input.amount);
   if (input.tax_mode === "NON_TAXABLE")
     return { amount, tax: new Prisma.Decimal(0), snapshot: null };
@@ -186,6 +187,7 @@ async function lockedSource(tx: Tx, c: string, id: string) {
 
 export function previewProforma(c: string, id: string, body: unknown = {}) {
   const input = previewProformaSchema.parse(body);
+  rejectTaxChoice({ freight: input.freight });
   return prisma.$transaction(async (tx) => {
     const current = await lockedSource(tx, c, id);
     const document = await latest(tx, c, id);
@@ -219,6 +221,7 @@ export function previewProforma(c: string, id: string, body: unknown = {}) {
 export function issueProforma(c: string, a: string, id: string, body: unknown, key: string) {
   z.string().uuid().parse(id);
   const input = issueProformaSchema.parse(body);
+  rejectTaxChoice({ freight: input.freight });
   return transactionCommand(
     c,
     a,

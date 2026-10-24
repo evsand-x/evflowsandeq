@@ -35,6 +35,8 @@ describe("API problem translation", () => {
       "TAX_VERSION_CONFLICT",
       "TAX_NAME_EXISTS",
       "TAX_ACCOUNT_INVALID",
+      "LINE_TAX_NOT_ALLOWED",
+      "FREIGHT_TAX_RULE_NOT_ALLOWED",
     ])
       expect(translateProblem({ detail }).message).not.toMatch(/^[A-Z_]+$/);
   });

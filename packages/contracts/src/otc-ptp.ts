@@ -11,7 +11,7 @@ const freightTermsSchema = z
     basis: z.literal("PER_SHIPMENT"),
     estimate: nonNegativeDecimal,
     tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
-    /** Ignored: taxable freight always uses the default sales tax. Kept for older clients. */
+    /** Refused (FREIGHT_TAX_RULE_NOT_ALLOWED): taxable freight always uses the default sales tax. */
     tax_rule_id: z.string().uuid().optional(),
   })
   .strict();
@@ -45,6 +45,7 @@ export const createSalesOrderSchema = z
             product_id: z.string().uuid(),
             quantity: positiveDecimal,
             unit_price: z.string().regex(/^\d{1,16}(\.\d{1,8})?$/),
+            /** Refused (LINE_TAX_NOT_ALLOWED): every line uses the default sales tax. */
             tax_master_id: z.string().uuid().optional(),
           })
           .strict(),
@@ -62,7 +63,7 @@ export const shipmentSchema = z
       .object({
         amount: nonNegativeDecimal,
         tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
-        /** Ignored: taxable freight always uses the default sales tax. Kept for older clients. */
+        /** Refused (FREIGHT_TAX_RULE_NOT_ALLOWED): taxable freight always uses the default sales tax. */
         tax_rule_id: z.string().uuid().optional(),
       })
       .strict()

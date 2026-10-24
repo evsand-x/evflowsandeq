@@ -198,9 +198,9 @@ export function calculateOperationalTax(
 type DefaultUsage = "SALES" | "PURCHASE";
 const defaultColumn = { SALES: "isDefaultSales", PURCHASE: "isDefaultPurchase" } as const;
 
-/** A default must be an added tax usable for that direction (PPN on every invoice). */
+/** A default must be an active, added PPN usable for that direction (PPN on every invoice). */
 function defaultEligible(
-  tax: { usage?: string | null; effect: string; active: boolean },
+  tax: { kind: string; usage?: string | null; effect: string; active: boolean },
   flags: { isDefaultSales: boolean; isDefaultPurchase: boolean },
   usage?: DefaultUsage,
 ) {
@@ -212,6 +212,7 @@ function defaultEligible(
       ];
   return (
     tax.active &&
+    tax.kind === "PPN" &&
     tax.effect === "ADD" &&
     needs.every((u) => !tax.usage || tax.usage === "BOTH" || tax.usage === u)
   );

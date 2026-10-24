@@ -385,11 +385,12 @@ it("previews freight replacement and VAT without persisting, then issues the sam
       previewProforma(c, b.id, { freight: { ...freight, amount: "-1" } }),
     ),
   ).rejects.toThrow();
-  // A legacy freight tax rule id is ignored: taxable freight always uses the default sales tax.
-  const legacy = await previewProforma(c, b.id, {
-    freight: { ...freight, tax_rule_id: randomUUID() },
-  });
-  expect(legacy.snapshot.tax).toBe("17.6");
+  // Taxable freight always uses the default sales tax; a legacy freight tax rule id is refused.
+  await expect(
+    Promise.resolve().then(() =>
+      previewProforma(c, b.id, { freight: { ...freight, tax_rule_id: randomUUID() } }),
+    ),
+  ).rejects.toThrow("FREIGHT_TAX_RULE_NOT_ALLOWED");
   const issued = await issueProforma(
     c,
     actor,

@@ -93,11 +93,12 @@ describe("tax setting helpers", () => {
     });
   });
   it("offers a default only to an active added tax usable for that direction", () => {
-    const tax = { usage: "SALES", effect: "ADD", active: true };
+    const tax = { kind: "PPN", usage: "SALES", effect: "ADD", active: true };
     expect(canBeDefault(tax, "SALES")).toBe(true);
     expect(canBeDefault(tax, "PURCHASE")).toBe(false);
     expect(canBeDefault({ ...tax, usage: "BOTH" }, "PURCHASE")).toBe(true);
     expect(canBeDefault({ ...tax, effect: "DEDUCT" }, "SALES")).toBe(false);
     expect(canBeDefault({ ...tax, active: false }, "SALES")).toBe(false);
+    expect(canBeDefault({ ...tax, kind: "PPH" }, "SALES")).toBe(false);
   });
 });

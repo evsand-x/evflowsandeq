@@ -8,7 +8,13 @@ import {
   saveTax,
   setDefaultTax,
 } from "../../packages/backend/src/finance/operational-tax";
+import { readFileSync } from "node:fs";
 import { provisionCompanyDefaults } from "../../packages/backend/src/administration/company-defaults";
+import { reviseOrder } from "../../packages/backend/src/sales/o2c-lifecycle";
+import { previewProforma } from "../../packages/backend/src/sales/proforma";
+import { OperationsController } from "../../packages/backend/src/sales/operations.controller";
+import { OperationsService } from "../../packages/backend/src/sales/operations.service";
+import type { AuthenticatedRequest } from "../../packages/backend/src/identity/auth.types";
 import { financeFixture } from "./finance-fixture";
 
 // Real database and domain commands, all enclosed in a rollback-only transaction.
@@ -368,6 +374,203 @@ describe("default sales tax", () => {
         defaultSalesTaxSnapshot(tx, f.c, new Date()),
       );
       expect(snapshot).toMatchObject({ rate: "0.12", dpp_factor: "0.9166666667" });
+    });
+  });
+
+  it("rejects a per-line tax id on create", async () => {
+    await inRollback(async (f) => {
+      const account = await taxAccount(f.c, "2-20500");
+      const deduct = await saveTax(
+        f.c,
+        f.actor,
+        { ...ppnInput(account.id), name: "Potongan", effect: "DEDUCT", percentage: "0" },
+        randomUUID(),
+      );
+      await expect(
+        service.createSalesOrder(
+          f.c,
+          f.actor,
+          {
+            customer_id: f.customerId,
+            customer_reference: randomUUID(),
+            delivery_address: "Test",
+            evidence_id: f.evidenceId,
+            currency: "IDR",
+            lines: [
+              {
+                product_id: f.productId,
+                quantity: "1",
+                unit_price: "1000000",
+                tax_master_id: deduct.id,
+              },
+            ],
+          },
+          randomUUID(),
+        ),
+      ).rejects.toThrow("LINE_TAX_NOT_ALLOWED");
+      expect(await prisma.salesOrder.count({ where: { companyId: f.c } })).toBe(0);
+      await expect(
+        service.createSalesOrder(
+          f.c,
+          f.actor,
+          {
+            customer_id: f.customerId,
+            customer_reference: randomUUID(),
+            delivery_address: "Test",
+            evidence_id: f.evidenceId,
+            currency: "IDR",
+            freight: {
+              payer: "CUSTOMER",
+              basis: "PER_SHIPMENT",
+              estimate: "100",
+              tax_mode: "TAXABLE",
+              tax_rule_id: randomUUID(),
+            },
+            lines: [{ product_id: f.productId, quantity: "1", unit_price: "1000000" }],
+          },
+          randomUUID(),
+        ),
+      ).rejects.toThrow("FREIGHT_TAX_RULE_NOT_ALLOWED");
+    });
+  });
+
+  it("rejects a per-line tax id on revise", async () => {
+    const body = (line: Record<string, unknown>, freight: unknown = null) => ({
+      version: 1,
+      reason: "Koreksi jumlah",
+      evidence_id: randomUUID(),
+      customer_reference: "Koreksi jumlah",
+      delivery_address: "Koreksi jumlah",
+      freight,
+      lines: [{ line_id: randomUUID(), quantity: "1", unit_price: "10", ...line }],
+    });
+    await expect(
+      reviseOrder(
+        randomUUID(),
+        randomUUID(),
+        randomUUID(),
+        body({ tax_master_id: randomUUID() }),
+        randomUUID(),
+      ),
+    ).rejects.toThrow("LINE_TAX_NOT_ALLOWED");
+    await expect(
+      reviseOrder(
+        randomUUID(),
+        randomUUID(),
+        randomUUID(),
+        body(
+          {},
+          {
+            payer: "CUSTOMER",
+            basis: "PER_SHIPMENT",
+            estimate: "1",
+            tax_mode: "TAXABLE",
+            tax_rule_id: randomUUID(),
+          },
+        ),
+        randomUUID(),
+      ),
+    ).rejects.toThrow("FREIGHT_TAX_RULE_NOT_ALLOWED");
+    await expect(
+      Promise.resolve().then(() =>
+        previewProforma(randomUUID(), randomUUID(), {
+          freight: { amount: "1", tax_mode: "TAXABLE", tax_rule_id: randomUUID() },
+        }),
+      ),
+    ).rejects.toThrow("FREIGHT_TAX_RULE_NOT_ALLOWED");
+  });
+
+  it("rejects a non-PPN tax as default", async () => {
+    await inRollback(async (f) => {
+      const account = await taxAccount(f.c, "2-20500");
+      const pph = await saveTax(
+        f.c,
+        f.actor,
+        { ...ppnInput(account.id), name: "PPh tambahan", kind: "PPH" },
+        randomUUID(),
+      );
+      await expect(
+        setDefaultTax(f.c, f.actor, pph.id, "SALES", pph.version, randomUUID()),
+      ).rejects.toThrow("TAX_DEFAULT_INVALID");
+      const ppn = await saveTax(f.c, f.actor, ppnInput(account.id), randomUUID());
+      const marked = await setDefaultTax(f.c, f.actor, ppn.id, "SALES", ppn.version, randomUUID());
+      await expect(
+        saveTax(
+          f.c,
+          f.actor,
+          { ...ppnInput(account.id), kind: "PPH", effective_from: new Date().toISOString() },
+          randomUUID(),
+          ppn.id,
+          marked.version,
+        ),
+      ).rejects.toThrow("TAX_DEFAULT_INVALID");
+    });
+  });
+
+  it("copies tax master grants to Setting > Pajak one to one", async () => {
+    await inRollback(async (f) => {
+      const code = async (value: string) =>
+        (await prisma.permission.findUniqueOrThrow({ where: { code: value } })).id;
+      const role = (name: string) =>
+        prisma.role.create({ data: { companyId: f.c, code: name, name } });
+      const updateOnly = await role("UPDATE_ONLY");
+      const readOnly = await role("READ_ONLY");
+      const createOnly = await role("CREATE_ONLY");
+      for (const [r, permission] of [
+        [updateOnly.id, "tax_master.update"],
+        [readOnly.id, "tax_master.read"],
+        [createOnly.id, "tax_master.create"],
+      ] as const)
+        await prisma.rolePermission.create({
+          data: {
+            companyId: f.c,
+            roleId: r,
+            permissionId: await code(permission),
+            scopeType: "company",
+          },
+        });
+      // Re-run the grant statement of the migration; it is idempotent (ON CONFLICT DO NOTHING).
+      const sql = readFileSync(
+        "packages/database/prisma/migrations/20261024130000_default_tax/migration.sql",
+        "utf8",
+      );
+      const grant = sql.slice(sql.indexOf("INSERT INTO role_permissions"));
+      await prisma.$executeRawUnsafe(grant.slice(0, grant.indexOf(";")));
+      const granted = async (roleId: string) =>
+        (
+          await prisma.rolePermission.findMany({
+            where: { roleId },
+            include: { permission: true },
+          })
+        )
+          .map((rp) => rp.permission.code)
+          .sort();
+      expect(await granted(updateOnly.id)).toEqual(["tax_master.update", "tax_setting.update"]);
+      expect(await granted(readOnly.id)).toEqual(["tax_master.read", "tax_setting.read"]);
+      expect(await granted(createOnly.id)).toEqual(["tax_master.create"]);
+    });
+  });
+
+  it("serves the WAPU/PPh rule customer list to the old receipt-rule permission", async () => {
+    await inRollback(async (f) => {
+      const controller = new OperationsController(
+        new OperationsService(new AuditService()),
+        service,
+      );
+      const request = (code: string) =>
+        ({
+          auth: {
+            company_id: f.c,
+            user_id: f.actor,
+            roles: [],
+            permissions: [{ code, scope_type: "company", scope_id: null }],
+          },
+        }) as unknown as AuthenticatedRequest;
+      const result = (await controller.controlOptions("tax", request("sales_tax_rule.manage"))) as {
+        data: { customers: { id: string }[] };
+      };
+      expect(result.data.customers.map((c) => c.id)).toContain(f.customerId);
+      await expect(controller.controlOptions("tax", request("sales_order.read"))).rejects.toThrow();
     });
   });
 });

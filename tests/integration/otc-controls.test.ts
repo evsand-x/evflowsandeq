@@ -210,6 +210,16 @@ async function order(qtys = ["8"], price = "10") {
     lines: qtys.map((quantity) => ({ product_id: productId, quantity, unit_price: price })),
   });
 }
+/**
+ * KNOWN PRODUCT GAP: taxing on advance payment (taxable_event ADVANCE) is NOT configurable in the
+ * product. Only the retired per customer x product SalesTaxRule could set it; the default sales
+ * tax always taxes on POD. Whether advance timing returns is a pending user decision (spec
+ * docs/superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). This helper rewrites the
+ * stored line snapshot only so the legacy advance-tax posting path stays covered meanwhile.
+ */
+async function forceAdvanceTaxableEventForLegacyScenario(salesOrderId: string) {
+  await prisma.$executeRaw`UPDATE sales_order_lines SET tax_snapshot = jsonb_set(tax_snapshot, '{taxable_event}', '"ADVANCE"') WHERE sales_order_id=${salesOrderId}::uuid`;
+}
 async function cleanTransactions() {
   await cleanFinanceTransactions(c);
   await prisma.salesExceptionRequest.deleteMany({ where: { companyId: c } });
@@ -281,8 +291,7 @@ it("recognizes configured advance tax once and keeps official evidence separate 
     await lot("2");
     const so = await order(["2"]);
     await service.submitSalesOrder(c, actor, so.id, randomUUID());
-    // The default tax snapshot is taxed on POD; mark this order's lines as taxed on advance.
-    await prisma.$executeRaw`UPDATE sales_order_lines SET tax_snapshot = jsonb_set(tax_snapshot, '{taxable_event}', '"ADVANCE"') WHERE sales_order_id=${so.id}::uuid`;
+    await forceAdvanceTaxableEventForLegacyScenario(so.id);
     const batch = await prisma.fulfillmentBatch.findFirstOrThrow({
       where: { salesOrderId: so.id },
       include: { pickList: { include: { lines: true } }, allocations: true },

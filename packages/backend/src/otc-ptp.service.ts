@@ -8,7 +8,12 @@ import {
   eligibleLots,
   lockCustomer,
 } from "./sales/transaction-controls";
-import { assertPriceGrants, lineAmounts, priceOrder } from "./sales/pricing-controls";
+import {
+  assertPriceGrants,
+  lineAmounts,
+  priceOrder,
+  rejectTaxChoice,
+} from "./sales/pricing-controls";
 import { approvePr } from "./procurement/approval-controls";
 import { transactionCommand } from "./common/transaction-command";
 import { lockFinance, postLedger } from "./finance/posting";
@@ -145,6 +150,7 @@ export class OtcPtpService {
     });
   }
   async createSalesOrder(c: string, a: string, i: any, key?: string) {
+    rejectTaxChoice(i);
     const cust = await prisma.customer.findFirst({
       where: { id: i.customer_id, companyId: c, state: "ACTIVE" },
     });
@@ -167,16 +173,6 @@ export class OtcPtpService {
         throw new ConflictException("ORDER_PRODUCT_INVALID");
       if (i.freight?.tax_mode === "TAXABLE")
         await this.freightTax(tx, c, d(i.freight.estimate), "TAXABLE");
-      const masterSnapshots = await Promise.all(
-        i.lines.map(async (line: any) =>
-          line.tax_master_id
-            ? {
-                ...(await operationalTaxSnapshot(tx, c, line.tax_master_id, new Date(), "SALES")),
-                operational_tax_id: line.tax_master_id,
-              }
-            : null,
-        ),
-      );
       const o = await tx.salesOrder.create({
         data: {
           companyId: c,
@@ -198,12 +194,11 @@ export class OtcPtpService {
               }
             : Prisma.DbNull,
           lines: {
-            create: i.lines.map((x: any, index: number) => ({
+            create: i.lines.map((x: any) => ({
               companyId: c,
               productId: x.product_id,
               orderedQuantity: d(x.quantity),
               unitPrice: d(x.unit_price),
-              ...(masterSnapshots[index] ? { taxSnapshot: masterSnapshots[index] } : {}),
             })),
           },
         },

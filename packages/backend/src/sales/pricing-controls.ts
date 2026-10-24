@@ -1,7 +1,7 @@
-import { ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
 import { validException } from "./exception-controls";
-import { defaultSalesTaxSnapshot, operationalTaxSnapshot } from "../finance/operational-tax";
+import { defaultSalesTaxSnapshot } from "../finance/operational-tax";
 
 export type TaxSnapshot = {
   rule_id: string;
@@ -37,6 +37,20 @@ export async function assertPriceGrants(
     if (!grants.some((g) => g.amountLimit.gte(line.unitPrice.mul(line.orderedQuantity))))
       throw new ConflictException("PRICE_EXCEPTION_APPROVAL_REQUIRED");
   }
+}
+
+/**
+ * Every product carries the default sales tax: a client may not pick a tax per line or a tax rule
+ * for freight. Old clients that still send one get a clear refusal instead of a silent override.
+ */
+export function rejectTaxChoice(input: {
+  lines?: ReadonlyArray<{ tax_master_id?: unknown }> | undefined;
+  freight?: { tax_rule_id?: unknown } | null | undefined;
+}) {
+  if (input.lines?.some((line) => line.tax_master_id !== undefined))
+    throw new BadRequestException("LINE_TAX_NOT_ALLOWED");
+  if (input.freight?.tax_rule_id !== undefined)
+    throw new BadRequestException("FREIGHT_TAX_RULE_NOT_ALLOWED");
 }
 
 export function lineAmounts(line: PricedLine, quantity: Prisma.Decimal) {
@@ -100,21 +114,9 @@ export async function priceOrder(
       !priceGrants.some((g) => g.amountLimit.gte(line.unitPrice.mul(line.orderedQuantity)))
     )
       throw new ConflictException("PRICE_EXCEPTION_APPROVAL_REQUIRED");
-    // Every product carries PPN: a line uses the company default sales tax unless an explicit
-    // master tax was recorded on it. The per customer x product SalesTaxRule is no longer read.
-    const selected = line.taxSnapshot as { operational_tax_id?: string } | null;
-    const taxSnapshot = selected?.operational_tax_id
-      ? {
-          ...(await operationalTaxSnapshot(
-            tx,
-            companyId,
-            selected.operational_tax_id,
-            now,
-            "SALES",
-          )),
-          operational_tax_id: selected.operational_tax_id,
-        }
-      : await defaultSalesTaxSnapshot(tx, companyId, now);
+    // Every product carries PPN: each line uses the company default sales tax effective now.
+    // The per customer x product SalesTaxRule and per-line tax choices are no longer read.
+    const taxSnapshot = await defaultSalesTaxSnapshot(tx, companyId, now);
     await tx.salesOrderLine.update({
       where: { id: line.id },
       data: {

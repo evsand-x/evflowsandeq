@@ -120,7 +120,11 @@ export function translateProblem(problem: { detail?: string; message?: string } 
     };
   const taxMessages: Record<string, string> = {
     TAX_DEFAULT_INVALID:
-      "Pajak bawaan harus aktif, ditambahkan ke transaksi, dan berlaku untuk penggunaan tersebut.",
+      "Pajak bawaan harus PPN yang aktif, ditambahkan ke transaksi, dan berlaku untuk penggunaan tersebut.",
+    LINE_TAX_NOT_ALLOWED:
+      "Pajak tidak dapat dipilih per baris. Setiap baris memakai pajak penjualan bawaan dari Setting › Pajak.",
+    FREIGHT_TAX_RULE_NOT_ALLOWED:
+      "Aturan pajak ongkir tidak dapat dipilih. Ongkir kena pajak memakai pajak penjualan bawaan.",
     TAX_DEFAULT_REQUIRED_ACTIVE:
       "Pajak bawaan tidak dapat dinonaktifkan. Jadikan pajak lain sebagai bawaan terlebih dahulu.",
     TAX_VERSION_CONFLICT:

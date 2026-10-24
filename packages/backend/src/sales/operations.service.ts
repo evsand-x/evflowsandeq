@@ -19,7 +19,7 @@ import {
   type OrderListFilters,
 } from "./order-list-filters";
 import { proformaKinds, proformaStatus } from "./proforma";
-import { lineAmounts } from "./pricing-controls";
+import { lineAmounts, rejectTaxChoice } from "./pricing-controls";
 import { defaultSalesTaxOn } from "../finance/operational-tax";
 
 @Injectable()
@@ -200,6 +200,7 @@ export class OperationsService {
     },
     key: string,
   ) {
+    rejectTaxChoice({ freight: input.freight });
     return transactionCommand(c, a, `fulfillments/${id}/shipment`, key, input, async (tx) => {
       await tx.$queryRaw`SELECT id FROM fulfillment_batches WHERE id=${id}::uuid AND company_id=${c}::uuid FOR UPDATE`;
       const batch = await tx.fulfillmentBatch.findFirst({ where: { id, companyId: c } });
