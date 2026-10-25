@@ -380,7 +380,7 @@ export function DashboardSidebar({
                                     ? [["Akun", "accounts", "account.read"]]
                                     : item === "Pajak"
                                       ? [
-                                          ["Daftar & Aturan Pajak", "tax-rules", "tax_master.read"],
+                                          ["Aturan WAPU & PPh", "tax-withholding", "tax_rule.read"],
                                           ["Faktur Keluaran", "tax-documents", "tax_output.read"],
                                           ["Faktur Masukan", "tax-input", "tax_input.read"],
                                         ]
@@ -544,9 +544,6 @@ export function DashboardSidebar({
                           return null;
                         const controlPermission = (
                           {
-                            "Kredit & TOP Pelanggan": "customer_credit.update",
-                            "Pengaturan Persetujuan": "transaction_approval.manage",
-                            "Kredit & Exposure": "customer.payment_policy.manage",
                             Persediaan: "inventory.quality.decide",
                           } as Record<string, string>
                         )[item];
@@ -556,7 +553,7 @@ export function DashboardSidebar({
                           module.label === "Setting"
                             ? menuRoutes.Setting![item]
                             : controlAllowed && !preview
-                              ? "/operations/controls"
+                              ? menuRoutes[module.label]?.[item]
                               : module.label === "Master Data" && item === "Pelanggan" && preview
                                 ? "/preview/crm/customers"
                                 : master;

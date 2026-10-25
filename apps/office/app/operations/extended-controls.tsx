@@ -484,7 +484,7 @@ export function FinanceWorkspace({
   }>("/finance-controls/reconciliation", can("journal.read") && can("inventory.cost.read"));
   const [selected, setSelected] = useState<Record<string, string>>({});
   const matchAmounts = useRef<Record<string, string>>({});
-  if (kind === "tax-rules")
+  if (kind === "tax-withholding")
     return <WithholdingRules can={can} command={command} pending={pending} />;
   if (kind === "tax-documents")
     return <OfficialTaxDocuments can={can} command={command} pending={pending} />;

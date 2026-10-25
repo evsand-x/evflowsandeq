@@ -38,7 +38,6 @@ const navigation: Entry[] = [
   entry("Finance › Piutang (AR) › Invoice", "sales_invoice"),
   entry("Finance › Piutang (AR) › Penerimaan Pembayaran", "customer_receipt"),
   entry("Finance › Piutang (AR) › Pengembalian Dana", "customer_refund"),
-  entry("Finance › Kredit & TOP Pelanggan"),
   entry("Finance › Utang (AP)"),
   entry("Finance › Kas & Bank › Rekening Koran", "bank_statement"),
   entry("Finance › Kas & Bank › Mutasi", "bank_transaction"),
@@ -46,7 +45,8 @@ const navigation: Entry[] = [
   entry("Finance › Akuntansi › Akun", "account"),
   entry("Finance › Akuntansi › Jurnal", "journal"),
   entry("Finance › Akuntansi › Pembalikan Jurnal", "journal.reverse"),
-  entry("Finance › Pajak › Daftar & Aturan Pajak", "tax_master"),
+  entry("Finance › Pajak › Aturan WAPU & PPh", "tax_rule"),
+  entry("Finance › Pajak › Aturan WAPU & PPh › Kelola", "sales_tax_rule"),
   entry("Finance › Pajak › Faktur Keluaran", "tax_output"),
   entry("Finance › Pajak › Faktur Masukan", "tax_input"),
   ...["Closing", "Aset", "Anggaran", "Biaya & Klaim", "Laporan", "Daftar Arsip"].map((label) =>
@@ -89,7 +89,6 @@ const navigation: Entry[] = [
   entry("Setting › Termin & Kredit", "terms_credit"),
   entry("Setting › Kebijakan Pelanggan Baru", "customer.payment_policy"),
   entry("Setting › Kredit & Exposure"),
-  entry("Setting › Pengaturan Persetujuan", "transaction_approval"),
   entry("Setting › Template Cetak"),
   entry("Setting › Penomoran Dokumen", "numbering_rule"),
   entry("Setting › Pajak", "tax_setting"),
@@ -215,6 +214,9 @@ export function matrixPermissionChecked(
   );
 }
 
+// Resources whose grants no longer guard anything (kept in the database, never shown as orphan rows).
+const retiredResources = new Set(["operational_policy", "posting_profile", "tax_master"]);
+
 export function navigationMatrixRows(permissions: Permission[]): NavigationMatrixRow[] {
   const byResource = new Map<string, Permission[]>();
   for (const permission of permissions) {
@@ -232,7 +234,7 @@ export function navigationMatrixRows(permissions: Permission[]): NavigationMatri
       items: resource ? (byResource.get(resource) ?? []) : [],
     }));
   for (const [resource, items] of byResource)
-    if (!mapped.has(resource))
+    if (!mapped.has(resource) && !retiredResources.has(resource))
       rows.push({ path: `Fitur lain › ${resource.replaceAll("_", " ")}`, resource, items });
   return rows;
 }

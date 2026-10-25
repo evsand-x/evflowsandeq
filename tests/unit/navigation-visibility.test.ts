@@ -1,6 +1,7 @@
 import type { AuthPrincipal } from "@evflow/contracts";
 import {
   isMenuAvailable,
+  menuRoutes,
   visibleMenuItems,
   visibleModules,
 } from "../../apps/office/lib/navigation";
@@ -81,5 +82,50 @@ describe("navigation shows only working menus", () => {
     const paths = navigationMatrixRows([]).map((row) => row.path);
     expect(paths.some((p) => p.startsWith("Setting › Template Cetak"))).toBe(false);
     expect(paths).toContain("Setting › Penomoran Dokumen");
+  });
+  it("each menu has exactly one home", () => {
+    const homes = new Map<string, string>();
+    for (const [module, routes] of Object.entries(menuRoutes))
+      for (const [item, href] of Object.entries(routes)) {
+        expect(href).not.toContain("/operations/controls");
+        expect(homes.get(href), `${module} › ${item} duplicates ${homes.get(href)}`).toBeUndefined();
+        homes.set(href, `${module} › ${item}`);
+      }
+    const finance = visibleMenuItems(admin, "Finance").map((i) => i.label);
+    expect(finance).not.toContain("Kredit & TOP Pelanggan");
+    expect(visibleMenuItems(admin, "Warehouse & Logistik").map((i) => i.label)).toContain(
+      "Persediaan",
+    );
+  });
+  it("Setting lists the consolidated submenus in order", () => {
+    expect(visibleMenuItems(admin, "Setting").map((i) => i.label)).toEqual([
+      "Profil Perusahaan",
+      "Pengguna",
+      "Peran",
+      "Kebijakan Umum",
+      "Penomoran Dokumen",
+      "Pajak",
+      "Termin & Kredit",
+      "Jenis Potongan",
+      "Pemetaan Akun",
+    ]);
+  });
+  it("leaves no matrix rows for retired policy, posting profile or tax master grants", () => {
+    const perm = (resource: string) => ({
+      id: `${resource}.read`,
+      code: `${resource}.read`,
+      resource,
+      action: "read",
+      description: null,
+    });
+    const paths = navigationMatrixRows([
+      perm("operational_policy"),
+      perm("posting_profile"),
+      perm("tax_master"),
+    ]).map((row) => row.path);
+    expect(paths.filter((p) => p.startsWith("Fitur lain"))).toEqual([]);
+    expect(paths).not.toContain("Finance › Kredit & TOP Pelanggan");
+    expect(paths).not.toContain("Setting › Pengaturan Persetujuan");
+    expect(paths).not.toContain("Finance › Pajak › Daftar & Aturan Pajak");
   });
 });

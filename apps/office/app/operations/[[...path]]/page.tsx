@@ -20,6 +20,8 @@ export default async function Page({
   if (path[0] === "accounting") redirect("/setting/account-mapping");
   // The tax master moved to Setting > Pajak; old links land there.
   if (path[0] === "tax-rules") redirect("/setting/tax");
+  // The transaction controls page is gone: credit lives on the customer, tax in Setting, quality in Persediaan.
+  if (path[0] === "controls") redirect("/setting");
   if (["tax-documents", "tax-input"].includes(path[0] ?? ""))
     return <TaxWorkspace key={path.join("/")} path={path} />;
   if (["pick-slips", "warehouse", "returns"].includes(path[0] ?? ""))

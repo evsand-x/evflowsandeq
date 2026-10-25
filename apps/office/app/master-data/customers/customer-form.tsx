@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SelectionField } from "@/components/web/selection-field";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, settingsHrefOf } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { FormFrame, PageNotice } from "@/components/web/page-frame";
 import { useSession } from "../../session-provider";
@@ -111,6 +111,7 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
   const [dirty, setDirty] = useState(false),
     [pending, setPending] = useState(false),
     [error, setError] = useState(""),
+    [errorHref, setErrorHref] = useState<string | undefined>(),
     [checks, setChecks] = useState<string[] | null>(null),
     [duplicateTerm, setDuplicateTerm] = useState("");
   const saved = useRef<{ id: string; version: number } | null>(
@@ -183,6 +184,7 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
     busy.current = true;
     setPending(true);
     setError("");
+    setErrorHref(undefined);
     try {
       const incomplete = pics.some(
         (p) =>
@@ -313,6 +315,7 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
       toast.success("Data pelanggan dan PIC berhasil disimpan");
       router.push(`${base}/${result.data.id}`);
     } catch (err) {
+      setErrorHref(settingsHrefOf(err));
       setError(
         `${saved.current && !initial ? "Draft pelanggan sudah tersimpan; periksa rincian yang gagal lalu simpan kembali. " : ""}${err instanceof Error ? err.message : String(err)}`,
       );
@@ -346,7 +349,11 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
     );
   return (
     <>
-      {error && <PageNotice tone="error">{error}</PageNotice>}
+      {error && (
+        <PageNotice tone="error" settingsHref={errorHref}>
+          {error}
+        </PageNotice>
+      )}
       <FormFrame
         dirty={dirty}
         submitting={pending}

@@ -1,4 +1,4 @@
-import { translateProblem } from "../../apps/office/lib/api";
+import { ApiError, settingsHrefOf, translateProblem } from "../../apps/office/lib/api";
 
 describe("API problem translation", () => {
   it("translates numbering conflict into a Setting link", () => {
@@ -46,5 +46,24 @@ describe("API problem translation", () => {
       "FREIGHT_TAX_RULE_NOT_ALLOWED",
     ])
       expect(translateProblem({ detail }).message).not.toMatch(/^[A-Z_]+$/);
+  });
+  it("translates posting profile conflict with a link", () => {
+    const out = translateProblem({ detail: "POSTING_PROFILE_REQUIRED_OR_CONFLICTING" });
+    expect(out.message).toContain("Setting › Pemetaan Akun");
+    expect(out.settings_href).toBe("/setting/account-mapping");
+  });
+  it("explains an idempotency mismatch without a link", () => {
+    const out = translateProblem({ detail: "IDEMPOTENCY_PAYLOAD_MISMATCH" });
+    expect(out.message).not.toMatch(/^[A-Z_]+$/);
+    expect(out.settings_href).toBeUndefined();
+  });
+  it("reads the Setting link from an ApiError", () => {
+    expect(settingsHrefOf(new ApiError(409, "x", { settings_href: "/setting/tax" }))).toBe(
+      "/setting/tax",
+    );
+    expect(
+      settingsHrefOf(new ApiError(409, "x", { settings_href: "https://evil" })),
+    ).toBeUndefined();
+    expect(settingsHrefOf(new Error("x"))).toBeUndefined();
   });
 });

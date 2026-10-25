@@ -73,12 +73,21 @@ export function OfficePage({
       <a className="sr-only focus:not-sr-only" href="#page-main">
         Lewati navigasi
       </a>
-      <DashboardSidebar principal={session.principal} activeView="executive" activeSection={section} />
+      <DashboardSidebar
+        principal={session.principal}
+        activeView="executive"
+        activeSection={section}
+      />
       <SidebarInset className="min-w-0">
         <ExecutiveTopbar companyName={session.principal.company_name} />
         <main id="page-main" className="page-frame" data-band-tabs={tabs ? "" : undefined}>
           <header className="page-frame-header page-frame-band">
-            <svg className="page-frame-band-mark" viewBox="0 0 400 400" aria-hidden="true" focusable="false">
+            <svg
+              className="page-frame-band-mark"
+              viewBox="0 0 400 400"
+              aria-hidden="true"
+              focusable="false"
+            >
               <path
                 d="M250 36C150 36 64 112 64 214c0 92 70 160 168 160-70-14-118-76-118-156 0-88 60-160 136-182z"
                 fill="#ffffff"
@@ -227,7 +236,11 @@ export function FilterChips({
 }
 
 // Baris "Filter aktif" di bawah toolbar; tiap chip menghapus satu filter.
-export function ActiveFilters({ items }: { items: { key: string; label: string; onRemove: () => void }[] }) {
+export function ActiveFilters({
+  items,
+}: {
+  items: { key: string; label: string; onRemove: () => void }[];
+}) {
   if (!items.length) return null;
   return (
     <div className="page-frame-active-filters">
@@ -308,14 +321,26 @@ export function PageNotice({
   tone = "info",
   children,
   onRetry,
+  settingsHref,
 }: {
   tone?: "info" | "error";
   children: ReactNode;
   onRetry?: () => void;
+  /** Setting page that fixes the problem (problem.settings_href). */
+  settingsHref?: string | undefined;
 }) {
   return (
-    <div className="page-frame-notice" data-tone={tone} role={tone === "error" ? "alert" : "status"}>
+    <div
+      className="page-frame-notice"
+      data-tone={tone}
+      role={tone === "error" ? "alert" : "status"}
+    >
       <span>{children}</span>
+      {settingsHref && (
+        <Button asChild variant="outline" size="sm">
+          <Link href={settingsHref}>Buka pengaturan</Link>
+        </Button>
+      )}
       {onRetry && (
         <Button variant="outline" size="sm" onClick={onRetry}>
           Coba lagi
@@ -445,7 +470,9 @@ export function FormFrame({
         {aside}
       </div>
       <footer className="page-frame-form-footer">
-        {footerNote && <span className="page-frame-subtitle page-frame-form-note">{footerNote}</span>}
+        {footerNote && (
+          <span className="page-frame-subtitle page-frame-form-note">{footerNote}</span>
+        )}
         <Button
           type="button"
           variant="outline"

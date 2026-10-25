@@ -38,7 +38,7 @@ import "../crm/crm.css";
 import "./workflow.css";
 import "./sales-order.css";
 import "./sales-order-modern.css";
-import { Controls } from "./controls";
+import { StockQuality } from "./stock-quality";
 import { SalesExceptions, TaxComponents, FinanceWorkspace, Backorders } from "./extended-controls";
 
 type Option = { id: string; name: string };
@@ -410,12 +410,12 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
   const kind = path[0] ?? "orders",
     id = path[1],
     creating = id === "new",
-    configuring = kind === "controls",
+    stockQuality = kind === "stock-quality",
     invoiceCreation = kind === "invoice-create",
     financeControl = [
       "reconciliation",
       "bank-statements",
-      "tax-rules",
+      "tax-withholding",
       "tax-documents",
     ].includes(kind);
   const [page, setPage] = useState(1),
@@ -438,14 +438,14 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     }[kind] ?? "";
   const enabled =
     !!principal &&
-    (configuring
-      ? ["transaction_approval.manage", "inventory.quality.decide"].some(can)
+    (stockQuality
+      ? can("inventory.quality.decide")
       : financeControl
         ? can(
             (
               {
                 "bank-statements": "bank_statement.import",
-                "tax-rules": "tax_rule.read",
+                "tax-withholding": "tax_rule.read",
                 "tax-documents": "tax_component.read",
               } as Record<string, string>
             )[kind] ?? "bank_reconciliation.read",
@@ -478,7 +478,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     enabled:
       enabled &&
       !creating &&
-      !configuring &&
+      !stockQuality &&
       !financeControl &&
       !invoiceCreation &&
       !["backorders", "warehouse-backorders", "returns"].includes(kind),
@@ -793,7 +793,9 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
         principal={principal}
         {...(outboundStage ? { outboundStage } : {})}
         activeView={
-          ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
+          ["warehouse", "pick-slips", "warehouse-backorders", "returns", "stock-quality"].includes(
+            kind,
+          )
             ? "warehouse"
             : kind === "invoices"
               ? "finance"
@@ -802,11 +804,11 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
         activeSection={
           ["orders", "backorders"].includes(kind) || proformaDocument
             ? "sales"
-            : ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
+            : ["warehouse", "pick-slips", "warehouse-backorders", "returns", "stock-quality"].includes(
+                  kind,
+                )
               ? "warehouse"
-              : configuring
-                ? "setting"
-                : "finance"
+              : "finance"
         }
       />
       <SidebarInset className="min-w-0">
@@ -819,24 +821,24 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
               <nav className="executive-breadcrumb" aria-label="Breadcrumb">
                 {["orders", "backorders"].includes(kind) || proformaDocument
                   ? "Sales & Marketing / Pesanan Pelanggan"
-                  : ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
+                  : kind === "stock-quality"
+                    ? "Warehouse & Logistik / Persediaan"
+                    : ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
                     ? "Warehouse & Logistik / Barang Keluar"
                     : kind.startsWith("tax-")
                       ? "Finance / Pajak"
                       : ["reconciliation", "bank-statements"].includes(kind)
                         ? "Finance / Kas & Bank"
-                        : configuring
-                          ? "Setting / Kontrol transaksi"
-                          : "Finance / Piutang (AR)"}
+                        : "Finance / Piutang (AR)"}
               </nav>
               <h1>
-                {configuring
-                  ? "Kontrol transaksi"
+                {stockQuality
+                  ? "Kelayakan Stok"
                   : financeControl
                     ? {
                         reconciliation: "Rekonsiliasi",
                         "bank-statements": "Impor Mutasi Bank",
-                        "tax-rules": "Profil & Aturan Pajak",
+                        "tax-withholding": "Aturan WAPU & PPh Dipotong",
                         "tax-documents": "Faktur Keluaran",
                       }[kind]
                     : creating
@@ -992,8 +994,8 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                   command={command}
                   pending={pending}
                 />
-              ) : configuring ? (
-                <Controls can={can} command={command} pending={pending} />
+              ) : stockQuality ? (
+                <StockQuality command={command} pending={pending} />
               ) : creating ? (
                 <OrderForm
                   command={command}

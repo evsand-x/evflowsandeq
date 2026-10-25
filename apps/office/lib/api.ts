@@ -84,6 +84,13 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** The Setting page that fixes this error, when the API problem carries one. */
+export function settingsHrefOf(error: unknown): string | undefined {
+  if (!(error instanceof ApiError)) return undefined;
+  const href = (error.problem as { settings_href?: unknown } | undefined)?.settings_href;
+  return typeof href === "string" && href.startsWith("/setting/") ? href : undefined;
+}
+
 export function resetCsrf() {
   csrfToken = undefined;
 }
@@ -117,6 +124,17 @@ export function translateProblem(problem: { detail?: string; message?: string } 
       message:
         "Pajak penjualan bawaan belum diatur. Tandai satu pajak sebagai bawaan penjualan di Setting › Pajak.",
       settings_href: "/setting/tax",
+    };
+  if (detail === "POSTING_PROFILE_REQUIRED_OR_CONFLICTING")
+    return {
+      message:
+        "Pemetaan akun belum lengkap atau bentrok. Periksa Setting › Pemetaan Akun, pastikan setiap jenis jurnal memiliki satu pemetaan aktif.",
+      settings_href: "/setting/account-mapping",
+    };
+  if (detail === "IDEMPOTENCY_PAYLOAD_MISMATCH")
+    return {
+      message:
+        "Isi percobaan ulang berbeda dari transaksi sebelumnya. Muat ulang data dan periksa status transaksi.",
     };
   if (detail === "PAYMENT_POLICY_REQUIRED")
     return {
