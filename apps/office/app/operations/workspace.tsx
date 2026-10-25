@@ -27,7 +27,7 @@ import Decimal from "decimal.js";
 import { formatMoney } from "@/lib/format";
 import { SelectionField } from "@/components/web/selection-field";
 import { Switch } from "@/components/ui/switch";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, settingsHrefOf } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { invoicePaymentStatus, invoiceDocumentNote } from "@/lib/invoice-status";
 import { useSession } from "../session-provider";
@@ -161,7 +161,13 @@ function formatDate(value?: string | null) {
 function money(value?: string | null, _currency = "IDR") {
   return value == null ? "—" : formatMoney(value);
 }
-export function ErrorBox({ message }: { message: string }) {
+export function ErrorBox({
+  message,
+  settingsHref,
+}: {
+  message: string;
+  settingsHref?: string | undefined;
+}) {
   const messages: Record<string, string> = {
     RECEIPT_ALLOCATION_EXCEEDED: "Jumlah alokasi melebihi sisa penerimaan atau sisa piutang.",
     CREDIT_HOLD:
@@ -208,7 +214,17 @@ export function ErrorBox({ message }: { message: string }) {
   };
   return (
     <Alert variant="destructive" role="alert">
-      <AlertDescription>{messages[message] ?? message}</AlertDescription>
+      <AlertDescription>
+        {messages[message] ?? message}
+        {settingsHref && (
+          <>
+            {" "}
+            <Link href={settingsHref} className="underline">
+              Buka pengaturan
+            </Link>
+          </>
+        )}
+      </AlertDescription>
     </Alert>
   );
 }
@@ -415,12 +431,12 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     financeControl = [
       "reconciliation",
       "bank-statements",
-      "tax-withholding",
       "tax-documents",
     ].includes(kind);
   const [page, setPage] = useState(1),
     [search, setSearch] = useState(""),
     [error, setError] = useState(""),
+    [errorHref, setErrorHref] = useState<string | undefined>(),
     [pending, setPending] = useState(false);
   const keys = useRef(new Map<string, string>());
   const can = (permission: string) => !!principal && hasCompanyPermission(principal, permission);
@@ -445,7 +461,6 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
             (
               {
                 "bank-statements": "bank_statement.import",
-                "tax-withholding": "tax_rule.read",
                 "tax-documents": "tax_component.read",
               } as Record<string, string>
             )[kind] ?? "bank_reconciliation.read",
@@ -498,6 +513,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     }
     setPending(true);
     setError("");
+    setErrorHref(undefined);
     try {
       const result = await apiRequest<{ data: Row }>(url, {
         method: "POST",
@@ -514,6 +530,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
       } else toast.success("Transaksi tersimpan.");
       return result;
     } catch (e) {
+      setErrorHref(settingsHrefOf(e));
       setError(
         e instanceof Error
           ? e.message
@@ -838,7 +855,6 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                     ? {
                         reconciliation: "Rekonsiliasi",
                         "bank-statements": "Impor Mutasi Bank",
-                        "tax-withholding": "Aturan WAPU & PPh Dipotong",
                         "tax-documents": "Faktur Keluaran",
                       }[kind]
                     : creating
@@ -969,7 +985,10 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
           ) : (
             <>
               {(error || query.error || candidateQuery.error) && (
-                <ErrorBox message={error || String(query.error || candidateQuery.error)} />
+                <ErrorBox
+                  message={error || String(query.error || candidateQuery.error)}
+                  settingsHref={errorHref}
+                />
               )}
               {query.isFetching && <p role="status">Memuat data terbaru…</p>}
               {invoiceCreation ? (

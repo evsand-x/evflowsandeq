@@ -123,13 +123,9 @@ describe("permission matrix navigation", () => {
     ];
     const rows = navigationMatrixRows(catalog);
     // CFG-10: every working menu has a row.
-    const alias: Record<string, string> = {
-      // Opens the customer master, whose credit attributes have their own row (customer_credit).
-      "Finance › Kredit & TOP Pelanggan": "Master Data › Pelanggan › Kredit & Termin",
-    };
     for (const module of moduleNavigation)
       for (const item of module.items.filter((i) => isMenuAvailable(module.label, i))) {
-        const path = alias[`${module.label} › ${item}`] ?? `${module.label} › ${item}`;
+        const path = `${module.label} › ${item}`;
         expect(rows.some((row) => row.path === path || row.path.startsWith(`${path} ›`))).toBe(
           true,
         );

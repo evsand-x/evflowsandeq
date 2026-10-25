@@ -39,6 +39,7 @@ export function StockQuality({
       className="web-form"
       onSubmit={(e) => {
         e.preventDefault();
+        if (!lot || !state) return;
         void command(`/operations/stock/${lot}/quality`, { state, reason }).catch(() => undefined);
       }}
     >
@@ -83,7 +84,7 @@ export function StockQuality({
                 onChange={(e) => setReason(e.target.value)}
               />
             </Field>
-            <Button type="submit" disabled={pending || query.isPending}>
+            <Button type="submit" disabled={pending || query.isPending || !lot || !state}>
               Simpan keputusan
             </Button>
           </FieldGroup>

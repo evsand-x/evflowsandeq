@@ -19,7 +19,7 @@ export default async function Page({
   // Jurnal otomatis moved to Setting > Pemetaan Akun; old links land there.
   if (path[0] === "accounting") redirect("/setting/account-mapping");
   // The tax master moved to Setting > Pajak; old links land there.
-  if (path[0] === "tax-rules") redirect("/setting/tax");
+  if (["tax-rules", "tax-withholding"].includes(path[0] ?? "")) redirect("/setting/tax");
   // The transaction controls page is gone: credit lives on the customer, tax in Setting, quality in Persediaan.
   if (path[0] === "controls") redirect("/setting");
   if (["tax-documents", "tax-input"].includes(path[0] ?? ""))

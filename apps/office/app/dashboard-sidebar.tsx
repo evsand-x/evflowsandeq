@@ -380,7 +380,6 @@ export function DashboardSidebar({
                                     ? [["Akun", "accounts", "account.read"]]
                                     : item === "Pajak"
                                       ? [
-                                          ["Aturan WAPU & PPh", "tax-withholding", "tax_rule.read"],
                                           ["Faktur Keluaran", "tax-documents", "tax_output.read"],
                                           ["Faktur Masukan", "tax-input", "tax_input.read"],
                                         ]
@@ -423,7 +422,13 @@ export function DashboardSidebar({
                               </Collapsible>
                             </SidebarMenuSubItem>
                           );
-                        if (operational.length && (!preview || item === "Pesanan Pelanggan"))
+                        if (
+          operational.length &&
+          !preview &&
+          !operational.some(([, , permission]) => hasCompanyPermission(principal, permission!))
+        )
+          return null;
+        if (operational.length && (!preview || item === "Pesanan Pelanggan"))
                           return (
                             <SidebarMenuSubItem key={item}>
                               <Collapsible

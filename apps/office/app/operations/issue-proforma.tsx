@@ -12,7 +12,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, settingsHrefOf } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
 import { DashboardSidebar } from "../dashboard-sidebar";
@@ -27,7 +27,8 @@ export function ProformaDraftDetail({ orderId, batchId }: { orderId: string; bat
   const router = useRouter();
   const client = useQueryClient();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(""),
+    [errorHref, setErrorHref] = useState<string | undefined>();
   const [freightEnabled, setFreightEnabled] = useState(false);
   const [freightAmount, setFreightAmount] = useState("0");
   const [freightTaxable, setFreightTaxable] = useState(false);
@@ -107,6 +108,7 @@ export function ProformaDraftDetail({ orderId, batchId }: { orderId: string; bat
     busy.current = true;
     setPending(true);
     setError("");
+    setErrorHref(undefined);
     const payload = JSON.stringify({
       version: freightTouched ? freightQuery.data!.data.version : preview.version,
       ...(freightTouched ? { freight: freightInput } : {}),
@@ -126,6 +128,7 @@ export function ProformaDraftDetail({ orderId, batchId }: { orderId: string; bat
       toast.success("Proforma berhasil diterbitkan.");
       router.push(`/operations/proformas/${result.data.id}`);
     } catch (e) {
+      setErrorHref(settingsHrefOf(e));
       setError(
         e instanceof Error ? e.message : "Penerbitan belum terkonfirmasi. Muat ulang pratinjau.",
       );
@@ -173,6 +176,7 @@ export function ProformaDraftDetail({ orderId, batchId }: { orderId: string; bat
               {query.isFetching && !data && <p role="status">Memuat pratinjau terbaru…</p>}
               {(query.isError || error) && (
                 <ErrorBox
+                  settingsHref={error ? errorHref : undefined}
                   message={
                     error ||
                     (query.error instanceof Error

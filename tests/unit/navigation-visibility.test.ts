@@ -88,7 +88,10 @@ describe("navigation shows only working menus", () => {
     for (const [module, routes] of Object.entries(menuRoutes))
       for (const [item, href] of Object.entries(routes)) {
         expect(href).not.toContain("/operations/controls");
-        expect(homes.get(href), `${module} › ${item} duplicates ${homes.get(href)}`).toBeUndefined();
+        expect(
+          homes.get(href),
+          `${module} › ${item} duplicates ${homes.get(href)}`,
+        ).toBeUndefined();
         homes.set(href, `${module} › ${item}`);
       }
     const finance = visibleMenuItems(admin, "Finance").map((i) => i.label);
@@ -127,5 +130,11 @@ describe("navigation shows only working menus", () => {
     expect(paths).not.toContain("Finance › Kredit & TOP Pelanggan");
     expect(paths).not.toContain("Setting › Pengaturan Persetujuan");
     expect(paths).not.toContain("Finance › Pajak › Daftar & Aturan Pajak");
+    const tax = navigationMatrixRows([perm("tax_rule"), perm("sales_tax_rule")]).map((r) => r.path);
+    expect(tax.filter((p) => /WAPU|Fitur lain/.test(p))).toEqual([]);
+    expect(paths.filter((p) => p.startsWith("Finance › Pajak"))).toEqual([
+      "Finance › Pajak › Faktur Keluaran",
+      "Finance › Pajak › Faktur Masukan",
+    ]);
   });
 });

@@ -28,7 +28,7 @@ import {
 } from "@/components/web/page-frame";
 import { IconPlus, IconSearch } from "@/components/web/icons";
 import { SelectionField } from "@/components/web/selection-field";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, settingsHrefOf } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
 import { useListParams } from "../master-data/master-shared";
@@ -119,7 +119,8 @@ function OrderSubNav() {
 function useOrderCommand() {
   const client = useQueryClient();
   const [pending, setPending] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [errorHref, setErrorHref] = useState<string | undefined>();
   const keys = useRef(new Map<string, string>());
   const busy = useRef(false);
   const command: OrderCommand = async (url, body = {}) => {
@@ -127,6 +128,7 @@ function useOrderCommand() {
     busy.current = true;
     setPending(true);
     setError("");
+    setErrorHref(undefined);
     const signature = `${url}:${JSON.stringify(body)}`;
     const key = keys.current.get(signature) ?? crypto.randomUUID();
     keys.current.set(signature, key);
@@ -149,6 +151,7 @@ function useOrderCommand() {
         e instanceof Error
           ? e.message
           : "Hasil belum terkonfirmasi. Muat ulang sebelum mencoba kembali.";
+      setErrorHref(settingsHrefOf(e));
       setError(message);
       throw e;
     } finally {
@@ -156,7 +159,7 @@ function useOrderCommand() {
       setPending(false);
     }
   };
-  return { command, pending, error };
+  return { command, pending, error, errorHref };
 }
 
 export function SalesOrderWorkspace({ path }: { path: string[] }) {
@@ -414,7 +417,7 @@ const listColumns: ColumnDef<Order>[] = [
 function OrderFormPage({ row }: { row?: Order }) {
   const can = useCan(),
     router = useRouter();
-  const { command, pending, error } = useOrderCommand();
+  const { command, pending, error, errorHref } = useOrderCommand();
   const allowed = row ? can("sales_order.update") : can("sales_order.create");
   return (
     <OfficePage
@@ -435,7 +438,11 @@ function OrderFormPage({ row }: { row?: Order }) {
         <PageNotice tone="error">Anda tidak memiliki izin untuk halaman ini.</PageNotice>
       ) : (
         <>
-          {error && <PageNotice tone="error">{error}</PageNotice>}
+          {error && (
+        <PageNotice tone="error" settingsHref={errorHref}>
+          {error}
+        </PageNotice>
+      )}
           <SalesOrderForm
             key={row ? `${row.id}:${row.version}` : "new"}
             initial={row}
@@ -574,7 +581,7 @@ const pct = (part: Decimal, whole: Decimal) =>
 
 function OrderDetail({ row }: { row: Order }) {
   const can = useCan();
-  const { command, pending, error } = useOrderCommand();
+  const { command, pending, error, errorHref } = useOrderCommand();
   const journey = useOrderJourney(row, can);
   const [action, setAction] = useState<"close" | "cancel" | null>(null);
   const editable =
@@ -860,7 +867,11 @@ function OrderDetail({ row }: { row: Order }) {
         </>
       }
     >
-      {error && <PageNotice tone="error">{error}</PageNotice>}
+      {error && (
+        <PageNotice tone="error" settingsHref={errorHref}>
+          {error}
+        </PageNotice>
+      )}
       <NextStep row={row} journey={journey} can={can} command={command} pending={pending} />
       <DetailTabs
         tabs={[

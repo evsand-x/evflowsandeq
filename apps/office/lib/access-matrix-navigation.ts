@@ -45,8 +45,6 @@ const navigation: Entry[] = [
   entry("Finance › Akuntansi › Akun", "account"),
   entry("Finance › Akuntansi › Jurnal", "journal"),
   entry("Finance › Akuntansi › Pembalikan Jurnal", "journal.reverse"),
-  entry("Finance › Pajak › Aturan WAPU & PPh", "tax_rule"),
-  entry("Finance › Pajak › Aturan WAPU & PPh › Kelola", "sales_tax_rule"),
   entry("Finance › Pajak › Faktur Keluaran", "tax_output"),
   entry("Finance › Pajak › Faktur Masukan", "tax_input"),
   ...["Closing", "Aset", "Anggaran", "Biaya & Klaim", "Laporan", "Daftar Arsip"].map((label) =>
@@ -215,7 +213,7 @@ export function matrixPermissionChecked(
 }
 
 // Resources whose grants no longer guard anything (kept in the database, never shown as orphan rows).
-const retiredResources = new Set(["operational_policy", "posting_profile", "tax_master"]);
+const retiredResources = new Set(["operational_policy", "posting_profile", "tax_master", "tax_rule", "sales_tax_rule"]);
 
 export function navigationMatrixRows(permissions: Permission[]): NavigationMatrixRow[] {
   const byResource = new Map<string, Permission[]>();

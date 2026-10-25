@@ -20,7 +20,7 @@ import {
 import { AddOrderCustomer } from "./so-add-customer";
 import { SelectionField } from "@/components/web/selection-field";
 import { Switch } from "@/components/ui/switch";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, settingsHrefOf } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
 import { DataTable, Notice } from "../crm/crm-common";
@@ -798,7 +798,8 @@ export function CloseRemainder({
     [at, setAt] = useState(""),
     [channel, setChannel] = useState(""),
     [reference, setReference] = useState(""),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [errorHref, setErrorHref] = useState<string | undefined>();
   const remaining = row.lines.filter((l) => new D(l.remainder).gt(0));
   const [quantities, setQuantities] = useState<Record<string, string>>(
     Object.fromEntries(remaining.map((l) => [l.id, l.remainder])),
@@ -840,12 +841,13 @@ export function CloseRemainder({
                 : {}),
             })
               .then(onClose)
-              .catch((e) =>
-                setError(e instanceof Error ? e.message : "Penutupan belum terkonfirmasi."),
-              );
+              .catch((e) => {
+                setErrorHref(settingsHrefOf(e));
+                setError(e instanceof Error ? e.message : "Penutupan belum terkonfirmasi.");
+              });
           }}
         >
-          {error && <ErrorBox message={error} />}
+          {error && <ErrorBox message={error} settingsHref={errorHref} />}
           <FieldGroup>
             {remaining.map((l) => (
               <Field key={l.id}>
