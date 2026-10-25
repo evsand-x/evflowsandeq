@@ -423,12 +423,14 @@ export function DashboardSidebar({
                             </SidebarMenuSubItem>
                           );
                         if (
-          operational.length &&
-          !preview &&
-          !operational.some(([, , permission]) => hasCompanyPermission(principal, permission!))
-        )
-          return null;
-        if (operational.length && (!preview || item === "Pesanan Pelanggan"))
+                          operational.length &&
+                          !preview &&
+                          !operational.some(([, , permission]) =>
+                            hasCompanyPermission(principal, permission!),
+                          )
+                        )
+                          return null;
+                        if (operational.length && (!preview || item === "Pesanan Pelanggan"))
                           return (
                             <SidebarMenuSubItem key={item}>
                               <Collapsible

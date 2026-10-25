@@ -493,3 +493,14 @@ IAM-01/04: endpoint CRM memakai `crm_prospect`, `crm_contact`, `crm_opportunity`
 ## Daftar Peluang operasional — 16 Oktober 2026
 
 GET /crm/workspace/opportunities memerlukan crm_opportunity.read (scope perusahaan aktif). Query q maksimal 150 karakter dan page positif; pagination 20 baris, urutan updatedAt menurun lalu id. Respons data/total/page/page_size berisi id, code, period, state, prospect_id, notes dan identitas minimum customer (id/code/name). Tidak menyertakan kontak, data finansial atau outcome/order. Pencarian pada kode peluang/nama pelanggan. Tautan sumber prospek dan Master Pelanggan pada UI mengikuti izin tujuan. Tidak mengubah schema/database atau command peluang.
+
+## Kontrak tahap 2b — konsolidasi pengaturan (24 Oktober 2026)
+
+- `GET /settings/general` (`setting_general.read`) dan `PATCH /settings/general` (`setting_general.update`, `If-Match` versi): zona waktu (IANA) dan awal tahun buku.
+- `GET /settings/numbering` mengembalikan `year_format` (`YYYY`|`YY`) dan `reset_period` (`MONTHLY`|`YEARLY`) sebagai pengganti `reset_yearly`; `PUT /settings/numbering/:kind` menerima `prefix`, `digits`, `year_format`, `reset_period`. Format nomor `Prefix.YYYY|YY.MM.Urutan`; perubahan reset berlaku periode berikutnya.
+- `POST /tax/master/:id/default` (`tax_setting.update`, `If-Match`): menandai pajak bawaan penjualan atau pembelian (satu per arah per perusahaan). Pajak memiliki `dpp_factor`. Pajak per baris dokumen penjualan ditolak dengan `LINE_TAX_NOT_ALLOWED`.
+- Atribut kredit pelanggan (`credit_limit`, `credit_frozen`, `freeze_reason`, `past_due_grace_days`, `default_term_code`, `default_tax_invoice_code`) diubah dengan izin `customer_credit.update`; `default_term_code` juga memerlukan izin ini. Halaman Termin & Kredit memakai `terms_credit.*`.
+- `GET|POST /settings/deduction-types`, `GET /settings/deduction-types/accounts`, `PATCH /settings/deduction-types/:id` (`deduction_type.read|manage`).
+- `POST /finance-controls/configuration/:kind` memeriksa izin per jenis: `profile` → `account_mapping.manage`, `account` → `account.create`, `period` → `finance_period.close`, `bank` → `bank_account.manage`. Pembaca `account_mapping.read` menerima opsi akun detail minimal (id, kode, nama).
+- `GET /settings/discount-limit/me?product_id=` (semua sesi): batas diskon efektif pemanggil (persen atau `UNLIMITED`). `PATCH /settings/discount-limit/roles/:id` dan `/users/:id`: Admin Sistem saja. Batas produk lewat master produk (`discount_limit.manage`).
+- Dihapus: `/operations/controls`, aturan pajak per pelanggan × produk, `CustomerPaymentPolicy` sebagai sumber tulis.

@@ -199,3 +199,18 @@ Workspace Pengguna/Peran memakai halaman daftar, form penuh, detail bertab dan m
 ## Implementasi pemisahan submenu — 16 Oktober 2026
 
 Migration `20261016210000_independent_submenu_permissions` menggantikan grant induk CRM/Master Data dan baca fulfillment dengan grant anak terpisah. Peran lama mempertahankan tindakan/scope efektif yang sudah dimiliki; peran tanpa grant tetap kosong. Pemetaan diaudit oleh sistem. Admin Sistem tetap penuh dan sesinya tidak dicabut selama peran aktif. Matriks memiliki pilihan semua per kelompok/per tindakan, status sebagian, jumlah izin dipilih, serta buka/tutup seluruh menu. Kontrol tersebut hanya mengubah grant anak individual. Catatan pelaksanaan dan gate pada [hak akses fleksibel](../development/flexible-access-2026-10-16.md).
+
+## Implementasi tahap 2b — konsolidasi pengaturan (24 Oktober 2026)
+
+Setiap submenu Setting memiliki izin sendiri: `setting_general`, `terms_credit`, `tax_setting`, `deduction_type`, `account_mapping`, `numbering_rule`, `customer_credit`, `discount_limit`, `bank_account.manage`, `special_price.approve`. Tidak ada grant induk bersama.
+
+- **Penomoran:** format `Prefix.YYYY|YY.MM.Urutan`; reset Bulanan atau Tahunan. Perubahan reset berlaku pada periode berikutnya.
+- **Kebijakan Umum** (`/setting/general`): zona waktu dan awal tahun buku. `OPS-COMP-01..03` dan `OPS-FLX-05` dihentikan sebagai kebijakan.
+- **Pajak:** PPN bawaan 12% × DPP 11/12 untuk penjualan dan pembelian. Aturan pajak per pelanggan × produk dihapus; pajak per baris ditolak (`LINE_TAX_NOT_ALLOWED`).
+- **Termin & Kredit** (`/setting/terms`): limit, pembekuan, toleransi jatuh tempo, termin bawaan dan kode faktur pajak bawaan menjadi atribut pelanggan. Pelanggan tanpa termin bawaan memakai COD sementara tahap 3.
+- **Jenis Potongan:** 4 jenis bawaan, akun pelunasan dan aturan bukti.
+- **Pemetaan Akun** (`/setting/account-mapping`): izin per jenis konfigurasi Finance.
+- **Batas diskon:** per peran dan per orang (Admin Sistem saja), per produk (`discount_limit.manage`), bawaan perusahaan `OPS-FLX-09`; nilai terkecil menang.
+- Menu `/operations/controls` dihapus; satu menu hanya di satu modul; pesan galat menautkan halaman Setting terkait.
+
+Rencana: [2b](../superpowers/plans/2026-10-24-konsolidasi-pengaturan-2b.md). Catatan: [setting-consolidation-2026-10-24.md](../development/setting-consolidation-2026-10-24.md).

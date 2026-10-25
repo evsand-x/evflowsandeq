@@ -213,7 +213,13 @@ export function matrixPermissionChecked(
 }
 
 // Resources whose grants no longer guard anything (kept in the database, never shown as orphan rows).
-const retiredResources = new Set(["operational_policy", "posting_profile", "tax_master", "tax_rule", "sales_tax_rule"]);
+const retiredResources = new Set([
+  "operational_policy",
+  "posting_profile",
+  "tax_master",
+  "tax_rule",
+  "sales_tax_rule",
+]);
 
 export function navigationMatrixRows(permissions: Permission[]): NavigationMatrixRow[] {
   const byResource = new Map<string, Permission[]>();

@@ -428,11 +428,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     creating = id === "new",
     stockQuality = kind === "stock-quality",
     invoiceCreation = kind === "invoice-create",
-    financeControl = [
-      "reconciliation",
-      "bank-statements",
-      "tax-documents",
-    ].includes(kind);
+    financeControl = ["reconciliation", "bank-statements", "tax-documents"].includes(kind);
   const [page, setPage] = useState(1),
     [search, setSearch] = useState(""),
     [error, setError] = useState(""),
@@ -821,9 +817,13 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
         activeSection={
           ["orders", "backorders"].includes(kind) || proformaDocument
             ? "sales"
-            : ["warehouse", "pick-slips", "warehouse-backorders", "returns", "stock-quality"].includes(
-                  kind,
-                )
+            : [
+                  "warehouse",
+                  "pick-slips",
+                  "warehouse-backorders",
+                  "returns",
+                  "stock-quality",
+                ].includes(kind)
               ? "warehouse"
               : "finance"
         }
@@ -841,12 +841,12 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                   : kind === "stock-quality"
                     ? "Warehouse & Logistik / Persediaan"
                     : ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
-                    ? "Warehouse & Logistik / Barang Keluar"
-                    : kind.startsWith("tax-")
-                      ? "Finance / Pajak"
-                      : ["reconciliation", "bank-statements"].includes(kind)
-                        ? "Finance / Kas & Bank"
-                        : "Finance / Piutang (AR)"}
+                      ? "Warehouse & Logistik / Barang Keluar"
+                      : kind.startsWith("tax-")
+                        ? "Finance / Pajak"
+                        : ["reconciliation", "bank-statements"].includes(kind)
+                          ? "Finance / Kas & Bank"
+                          : "Finance / Piutang (AR)"}
               </nav>
               <h1>
                 {stockQuality

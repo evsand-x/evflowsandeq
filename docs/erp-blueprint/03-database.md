@@ -446,3 +446,13 @@ Rujukan implementasi dan batas verifikasi: [laporan remediasi backend O2C](../de
 ## Migrasi izin submenu — 16 Oktober 2026
 
 IAM-01/04: migration `20261016210000_independent_submenu_permissions` memetakan grant `crm.*`, `master_data.*`, dan `fulfillment.read` ke capability anak dengan aksi/scope identik, mencatat `role.permissions.migrated` oleh sistem, lalu menghapus capability induk tersebut. Grant kosong tetap kosong. `sales_order.read` tetap milik SO; hak baca Proforma serta Backorder yang sebelumnya ikut terbuka disalin ke capability terpisah. Pemegang `proforma.issue` memperoleh baca Proforma yang sebelumnya sudah tersedia. Sesi anggota terdampak dicabut kecuali tetap memegang `ADMIN_SYSTEM` aktif. Tidak mengubah schema atau saldo; pemulihan menggunakan forward migration berbasis audit, bukan menghidupkan fallback induk.
+
+## Migrasi tahap 2b — 24 Oktober 2026
+
+- `20261024110000_setting_permissions`: izin per submenu Setting; grant lama dipetakan tanpa memperluas hak.
+- `20261024120000_numbering_format`: `document_number_rules.year_format`, `reset_period` menggantikan `reset_yearly`; counter tanpa reset dilanjutkan pada kunci tahunan.
+- `20261024130000_default_tax`: `operational_taxes.dpp_factor`, `is_default_sales`, `is_default_purchase` (indeks unik parsial satu bawaan per arah).
+- `20261024140000_customer_credit` dan `20261024150000_customer_credit_unmapped`: `customers.credit_limit`, `credit_frozen`, `freeze_reason`, `past_due_grace_days`, `default_term_code`, `default_tax_invoice_code`; `customer_payment_policies` menjadi arsip baca saja.
+- `20261024160000_deduction_types`: tabel `deduction_types`.
+- `20261024170000_account_mapping` dan `20261024171000_bank_account_manage`: izin Pemetaan Akun dan `bank_account.manage`.
+- `20261024180000_discount_limits`: `roles.discount_limit`, `company_memberships.discount_limit`, `products.discount_limit` (DECIMAL(7,4), CHECK 0–100).

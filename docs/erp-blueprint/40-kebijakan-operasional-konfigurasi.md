@@ -17,7 +17,7 @@ Nilai berikut dibuat otomatis saat perusahaan disiapkan (CFG-08) dan dapat diedi
 | OPS-FLX-02 | Kebijakan COD awal pelanggan baru | Nonaktif (durasi 3 bulan bila dinyalakan) | Aktif/nonaktif, durasi, mode COD atau Bayar sebelum kirim |
 | OPS-FLX-03 | Daftar termin | Tunai/COD, Bayar sebelum kirim, Tempo 7/14/30/45/60 hari | Tambah, ubah, nonaktifkan; termin bebas boleh diketik pada SO |
 | OPS-FLX-04 | Ongkos kirim bawaan pada SO | Dibebankan ke pelanggan, Sebelum PPN | Ditanggung perusahaan; Dibebankan ke pelanggan Sebelum/Sesudah PPN; akun per pilihan |
-| OPS-FLX-05 | Penomoran dokumen | Satu aturan aktif per jenis dokumen, prefix jenis + tahun + urutan | Pola prefix/tahun/bulan/urutan dan reset periode (IAM-06) |
+| OPS-FLX-05 | (Dihentikan 24 Oktober 2026) Penomoran dokumen | Dikelola di Setting › Penomoran Dokumen | Prefix, tahun YY/YYYY, bulan, urutan, reset Bulanan/Tahunan |
 | OPS-FLX-06 | Format angka | Rupiah, pemisah ribuan titik, desimal koma | Jumlah desimal tampilan dan pembulatan |
 | OPS-FLX-07 | Persetujuan SO | Tidak ada aturan aktif | Aturan per kondisi pada Pengaturan Persetujuan |
 | OPS-FLX-08 | Persetujuan dokumen sendiri | Nonaktif | Izinkan eksplisit per jenis dokumen |
@@ -39,9 +39,9 @@ Nilai berikut dibuat otomatis saat perusahaan disiapkan (CFG-08) dan dapat diedi
 
 | Kode | Parameter | Nilai awal | Perilaku UI |
 |---|---|---|---|
-| OPS-COMP-01 | Zona waktu bisnis | Asia/Makassar | Pilih zona waktu IANA; timestamp teknis tetap UTC |
-| OPS-COMP-02 | Awal tahun buku | 1 Januari | Pilih bulan/tanggal awal; validasi terhadap periode yang sudah dibuka/ditutup |
-| OPS-COMP-03 | Mata uang dasar | IDR | Dapat dipilih sebelum transaksi moneter posted; setelah itu UI menjelaskan bahwa perubahan memerlukan cut-over atau company baru |
+| OPS-COMP-01 (dihentikan 24 Okt 2026) | Zona waktu bisnis | Asia/Makassar | Pilih zona waktu IANA; timestamp teknis tetap UTC |
+| OPS-COMP-02 (dihentikan 24 Okt 2026) | Awal tahun buku | 1 Januari | Pilih bulan/tanggal awal; validasi terhadap periode yang sudah dibuka/ditutup |
+| OPS-COMP-03 (dihentikan 24 Okt 2026) | Mata uang dasar | IDR | Dapat dipilih sebelum transaksi moneter posted; setelah itu UI menjelaskan bahwa perubahan memerlukan cut-over atau company baru |
 
 Nama, alamat, kontak dan logo tetap dikelola melalui **Setting → Profil Perusahaan** sesuai IAM-10, bukan melalui policy ini.
 
@@ -161,3 +161,9 @@ Kontrak OPS-FIN-06 diperluas tanpa mengubah nilai default lama: value integer po
 
 Rujukan implementasi dan batas verifikasi: [laporan remediasi backend O2C](../development/o2c-backend-remediation-2026-10-05.md).
 
+
+## Perubahan tahap 2b — 24 Oktober 2026
+
+- `OPS-COMP-01..03` dihentikan sebagai kebijakan: zona waktu dan awal tahun buku dikelola di Setting › Kebijakan Umum; mata uang hanya Rupiah.
+- `OPS-FLX-05` dihentikan: penomoran dikelola di Setting › Penomoran Dokumen. Nilai bawaan: format `Prefix.YYYY.MM.Urutan`, 4 digit, reset Tahunan; pilihan YY/YYYY dan reset Bulanan/Tahunan.
+- `OPS-FLX-09` ditambahkan: batas diskon bawaan perusahaan (kosong = 0%), melengkapi batas per peran, orang dan produk.

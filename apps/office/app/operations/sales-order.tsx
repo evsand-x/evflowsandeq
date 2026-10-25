@@ -199,7 +199,11 @@ function OrderListPage() {
     d ? new Date(`${d}T00:00:00`).toLocaleDateString("id-ID", { dateStyle: "medium" }) : "",
   );
   const active = [
-    state !== "ALL" && { key: "state", label: `Status: ${orderStateFilters[state]}`, onRemove: clear("state") },
+    state !== "ALL" && {
+      key: "state",
+      label: `Status: ${orderStateFilters[state]}`,
+      onRemove: clear("state"),
+    },
     value("customer_id") && {
       key: "customer_id",
       label: `Pelanggan: ${customerName ?? "terpilih"}`,
@@ -222,7 +226,9 @@ function OrderListPage() {
     },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[];
   // Angka di tombol Filter hanya menghitung filter di popup; status/pemenuhan tampil di toolbar.
-  const popupCount = active.filter((item) => ["customer_id", "period", "remainder"].includes(item.key)).length;
+  const popupCount = active.filter((item) =>
+    ["customer_id", "period", "remainder"].includes(item.key),
+  ).length;
   return (
     <OfficePage
       section="sales"
@@ -273,7 +279,13 @@ function OrderListPage() {
                 <FilterPopover
                   count={popupCount}
                   onReset={() =>
-                    list.set({ customer_id: "ALL", from: "ALL", to: "ALL", remainder: "ALL", page: 1 })
+                    list.set({
+                      customer_id: "ALL",
+                      from: "ALL",
+                      to: "ALL",
+                      remainder: "ALL",
+                      page: 1,
+                    })
                   }
                   resultLabel={`Tampilkan ${listing?.total ?? 0} SO`}
                 >
@@ -439,10 +451,10 @@ function OrderFormPage({ row }: { row?: Order }) {
       ) : (
         <>
           {error && (
-        <PageNotice tone="error" settingsHref={errorHref}>
-          {error}
-        </PageNotice>
-      )}
+            <PageNotice tone="error" settingsHref={errorHref}>
+              {error}
+            </PageNotice>
+          )}
           <SalesOrderForm
             key={row ? `${row.id}:${row.version}` : "new"}
             initial={row}
@@ -594,9 +606,10 @@ function OrderDetail({ row }: { row: Order }) {
     shipped = sum(row.lines, shippedOf),
     closed = sum(row.lines, (l) => l.closedQuantity),
     backorder = sum(row.lines, (l) => l.backorderQuantity);
-  const unit = new Set(row.lines.map((l) => l.product.baseUom?.name)).size === 1
-    ? (row.lines[0]?.product.baseUom?.name ?? "")
-    : "unit";
+  const unit =
+    new Set(row.lines.map((l) => l.product.baseUom?.name)).size === 1
+      ? (row.lines[0]?.product.baseUom?.name ?? "")
+      : "unit";
   const customer = row.customer as { name?: string; channel?: { name: string } | null } | undefined;
   const channel = customer?.channel?.name;
   const rates = new Set(row.lines.map((l) => l.taxSnapshot?.rate ?? ""));
@@ -661,7 +674,10 @@ function OrderDetail({ row }: { row: Order }) {
       id: "backorder",
       header: "Backorder",
       cell: ({ row: r }) => (
-        <span className="so-num" data-warn={new Decimal(r.original.backorderQuantity).gt(0) || undefined}>
+        <span
+          className="so-num"
+          data-warn={new Decimal(r.original.backorderQuantity).gt(0) || undefined}
+        >
           {amount(r.original.backorderQuantity)}
         </span>
       ),
@@ -674,7 +690,9 @@ function OrderDetail({ row }: { row: Order }) {
     {
       id: "price",
       header: "Harga",
-      cell: ({ row: r }) => <span className="so-num">{amount(r.original.unitPrice, row.currency)}</span>,
+      cell: ({ row: r }) => (
+        <span className="so-num">{amount(r.original.unitPrice, row.currency)}</span>
+      ),
     },
     {
       id: "subtotal",
@@ -730,19 +748,27 @@ function OrderDetail({ row }: { row: Order }) {
           <div className="so-box">
             <dl className="so-sums">
               <div>
-                <dt>Nilai barang · {amount(ordered.toString())} {unit}</dt>
+                <dt>
+                  Nilai barang · {amount(ordered.toString())} {unit}
+                </dt>
                 <dd>{amount(row.subtotal, row.currency)}</dd>
               </div>
               <div>
                 <dt>{taxTitle}</dt>
-                <dd>{row.taxAmount == null ? "Ditetapkan saat evaluasi" : amount(row.taxAmount, row.currency)}</dd>
+                <dd>
+                  {row.taxAmount == null
+                    ? "Ditetapkan saat evaluasi"
+                    : amount(row.taxAmount, row.currency)}
+                </dd>
               </div>
               <div className="so-sums-total">
                 <dt>Total barang</dt>
                 <dd>{row.total == null ? "Menunggu evaluasi" : amount(row.total, row.currency)}</dd>
               </div>
             </dl>
-            <p className="page-frame-subtitle">Ongkir dihitung per pengiriman, terpisah dari nilai barang.</p>
+            <p className="page-frame-subtitle">
+              Ongkir dihitung per pengiriman, terpisah dari nilai barang.
+            </p>
           </div>
           <div className="so-box">
             <strong className="so-box-title">Progres jumlah</strong>
@@ -778,7 +804,13 @@ function OrderDetail({ row }: { row: Order }) {
       <section>
         <h3 className="so-section-title">Barang</h3>
         <div className="so-embedded">
-          <DataTable data={row.lines} columns={items} total={row.lines.length} label="barang" showColumns={false} />
+          <DataTable
+            data={row.lines}
+            columns={items}
+            total={row.lines.length}
+            label="barang"
+            showColumns={false}
+          />
         </div>
         <p className="page-frame-subtitle so-footnote">
           Jumlah ditutup tidak dihitung sebagai terkirim dan tidak menghapus jumlah pesanan asli.
