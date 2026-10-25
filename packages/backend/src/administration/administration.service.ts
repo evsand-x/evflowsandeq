@@ -175,6 +175,7 @@ export class AdministrationService {
       include: { versions: { where: { state: "ACTIVE" }, take: 1 } },
     });
     if (!policy) throw new NotFoundException("Policy tidak ditemukan.");
+    if (code === "OPS-FLX-03") await this.assertTermsNotInUse(companyId, input.value);
     try {
       await prisma.$transaction(async (transaction) => {
         const created = await activatePolicyVersionInTransaction(transaction, {
@@ -216,6 +217,27 @@ export class AdministrationService {
       }
       throw error;
     }
+  }
+
+  /**
+   * A payment term that is still the default term of a customer cannot be removed or recoded:
+   * it would block every order of those customers (PAYMENT_TERM_INVALID).
+   */
+  private async assertTermsNotInUse(companyId: string, value: unknown) {
+    const kept = new Set(
+      (Array.isArray(value) ? value : [])
+        .map((term) => (term as { code?: unknown })?.code)
+        .filter((c): c is string => typeof c === "string"),
+    );
+    const used = await prisma.customer.groupBy({
+      by: ["defaultTermCode"],
+      where: { companyId, defaultTermCode: { not: null } },
+      _count: { _all: true },
+    });
+    const count = used
+      .filter((row) => row.defaultTermCode && !kept.has(row.defaultTermCode))
+      .reduce((sum, row) => sum + row._count._all, 0);
+    if (count > 0) throw new ConflictException(`PAYMENT_TERM_IN_USE:${count}`);
   }
 
   async requirePolicySnapshot(companyId: string, code: string) {

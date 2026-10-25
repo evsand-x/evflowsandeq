@@ -35,6 +35,12 @@ describe("API problem translation", () => {
       expect(out.settings_href).toBe("/setting/terms");
     }
   });
+  it("explains a term still used by customers, with the count and a customers link", () => {
+    const out = translateProblem({ detail: "PAYMENT_TERM_IN_USE:12" });
+    expect(out.message).toContain("12 pelanggan");
+    expect(out.message).toContain("Master Data › Pelanggan");
+    expect(out.settings_href).toBe("/master-data/customers");
+  });
   it("explains tax master conflicts in business words", () => {
     for (const detail of [
       "TAX_DEFAULT_INVALID",

@@ -247,9 +247,7 @@ export function SalesOrderForm({
   const qtyTotal = lines.every((l) => validQty(l.quantity))
     ? lines.reduce((sum, l) => sum.add(l.quantity), new D(0))
     : undefined;
-  const units = new Set(
-    lines.map((l) => productOf(l.product_id)?.baseUom?.name).filter(Boolean),
-  );
+  const units = new Set(lines.map((l) => productOf(l.product_id)?.baseUom?.name).filter(Boolean));
   const unit = units.size === 1 ? [...units][0] : "unit";
   useEffect(() => {
     if (!dirty) return;
@@ -347,7 +345,11 @@ export function SalesOrderForm({
       header: "Subtotal",
       cell: ({ row }) => {
         const value = subtotal(row.original);
-        return <span className="so-num so-strong">{value ? amount(value.toString(), currency) : "—"}</span>;
+        return (
+          <span className="so-num so-strong">
+            {value ? amount(value.toString(), currency) : "—"}
+          </span>
+        );
       },
     },
     ...(!initial
@@ -443,10 +445,10 @@ export function SalesOrderForm({
     !customer
       ? { tone: "info", text: "Ketentuan pembayaran mengikuti pelanggan yang dipilih" }
       : !policy
-      ? { tone: "danger", text: "Ketentuan pembayaran pelanggan belum ditetapkan" }
-      : policy.mode === "PREPAY"
-        ? { tone: "info", text: "Bayar sebelum kirim: dana diverifikasi sebelum dispatch" }
-        : { tone: "info", text: "Past due dan limit kredit dicek bila tempo" },
+        ? { tone: "danger", text: "Ketentuan pembayaran pelanggan belum ditetapkan" }
+        : policy.mode === "PREPAY"
+          ? { tone: "info", text: "Bayar sebelum kirim: dana diverifikasi sebelum dispatch" }
+          : { tone: "info", text: "Past due dan limit kredit dicek bila tempo" },
     { tone: "warning", text: "Stok per barang dicek; kekurangan menjadi backorder" },
   ];
   return (
@@ -500,12 +502,14 @@ export function SalesOrderForm({
               )}
               <div className="so-policy">
                 <span>Ketentuan pembayaran (termin bawaan pelanggan)</span>
-                <strong>{terms(policy)}</strong>
+                <strong>
+                  {!policy && customer ? "COD · TOP 0 (bawaan perusahaan)" : terms(policy)}
+                </strong>
                 <small>
                   {policy
                     ? "Past due dan limit dicek saat diajukan."
                     : customer
-                      ? "SO dapat disimpan sebagai Draft, tetapi belum bisa diajukan."
+                      ? "Pelanggan belum punya termin bawaan, jadi SO memakai termin COD bawaan perusahaan saat diajukan."
                       : "Pilih pelanggan untuk melihat ketentuan pembayaran."}
                 </small>
               </div>

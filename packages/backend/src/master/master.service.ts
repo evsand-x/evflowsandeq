@@ -605,8 +605,6 @@ export class MasterService {
           collectionSchedule: nullable(input.collection_schedule),
           invoiceExchangeSchedule: nullable(input.invoice_exchange_schedule),
           paymentMethodPreference: nullable(input.payment_method_preference),
-          paymentToleranceDays:
-            input.payment_tolerance_days == null ? null : Number(input.payment_tolerance_days),
           legalDocuments: this.customerLegalDocuments(input.legal_documents),
           responsiblePerson: jsonOrNull(input.responsible_person),
           responsibleLicense: jsonOrNull(input.responsible_license),
@@ -679,8 +677,6 @@ export class MasterService {
           collectionSchedule: nullable(input.collection_schedule),
           invoiceExchangeSchedule: nullable(input.invoice_exchange_schedule),
           paymentMethodPreference: nullable(input.payment_method_preference),
-          paymentToleranceDays:
-            input.payment_tolerance_days == null ? null : Number(input.payment_tolerance_days),
           legalDocuments: this.customerLegalDocuments(
             input.legal_documents,
             current.legalDocuments,

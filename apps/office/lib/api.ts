@@ -148,6 +148,12 @@ export function translateProblem(problem: { detail?: string; message?: string } 
         "Termin bawaan pelanggan tidak ada lagi di daftar termin. Pilih termin lain pada data pelanggan atau periksa Setting › Termin & Kredit.",
       settings_href: "/setting/terms",
     };
+  const inUse = /^PAYMENT_TERM_IN_USE:(\d+)$/.exec(detail);
+  if (inUse)
+    return {
+      message: `Termin tidak dapat dihapus atau diganti kodenya karena masih menjadi termin bawaan ${inUse[1]} pelanggan. Pindahkan pelanggan tersebut ke termin lain di Master Data › Pelanggan, lalu ulangi.`,
+      settings_href: "/master-data/customers",
+    };
   const taxMessages: Record<string, string> = {
     TAX_DEFAULT_INVALID:
       "Pajak bawaan harus PPN yang aktif, ditambahkan ke transaksi, dan berlaku untuk penggunaan tersebut.",

@@ -52,7 +52,6 @@ const fields = [
   "collection_schedule",
   "invoice_exchange_schedule",
   "payment_method_preference",
-  "payment_tolerance_days",
 ] as const;
 type Values = Record<(typeof fields)[number], string>;
 type EditablePic = Pic & { key: string };
@@ -195,8 +194,6 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
         throw new Error("Lengkapi nama dan minimal satu fungsi untuk setiap PIC yang diisi.");
       const payload = {
         ...values,
-        payment_tolerance_days:
-          values.payment_tolerance_days === "" ? null : Number(values.payment_tolerance_days),
         channel_id: channel || null,
         rayon_id: rayon || null,
         billing_address: billingSame ? values.primary_address : values.billing_address,
@@ -855,7 +852,6 @@ export function CustomerForm({ initial }: { initial?: Customer | undefined }) {
                   {text("potential", "Potensi")}
                   {text("invoice_exchange_schedule", "Jadwal tukar faktur")}
                   {text("payment_method_preference", "Metode pembayaran")}
-                  {text("payment_tolerance_days", "Toleransi hari", { type: "number" })}
                   <CustomerValue label="PIC penagihan / gudang">
                     {pics
                       .filter((p) =>

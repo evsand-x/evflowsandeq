@@ -336,7 +336,10 @@ export const createCustomerSchema = z
     collection_schedule: z.string().trim().max(200).nullable().optional(),
     invoice_exchange_schedule: z.string().trim().max(200).nullable().optional(),
     payment_method_preference: z.string().trim().max(100).nullable().optional(),
-    payment_tolerance_days: z.number().int().nonnegative().nullable().optional(),
+    // Retired: past_due_grace_days is the only tolerance field. The column is kept as an archive.
+    payment_tolerance_days: z
+      .null({ message: "Toleransi hari sudah digabung ke toleransi lewat jatuh tempo." })
+      .optional(),
     legal_documents: z.array(z.record(z.unknown())).max(100).nullable().optional(),
     responsible_person: optionalObjectSchema,
     responsible_license: optionalObjectSchema,

@@ -57,53 +57,55 @@ export default function NumberingPage() {
       ) : !query.data ? (
         <p role="status">Memuat…</p>
       ) : (
-        <section className="page-frame-panel">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left">
-                <th scope="col">Jenis dokumen</th>
-                <th scope="col">Format</th>
-                <th scope="col">Nomor berikutnya</th>
-                <th scope="col">Berlaku sejak</th>
-                {canEdit && (
-                  <th scope="col">
-                    <span className="sr-only">Aksi</span>
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {query.data.map((row) => (
-                <tr key={row.document_kind} className="border-t">
-                  <td className="py-2">{row.label}</td>
-                  <td>
-                    {row.active ? (
-                      <>
-                        {`${row.prefix}.${row.year_format === "YY" ? "TT" : "TTTT"}.BB.${"0".repeat(row.digits ?? 0)}`}
-                        <span className="page-frame-subtitle block">
-                          {row.reset_period ? resetLabel[row.reset_period] : ""}
-                          {row.pending
-                            ? ` · ${resetLabel[row.pending.reset_period]} mulai ${row.pending.effective_from}`
-                            : ""}
-                        </span>
-                      </>
-                    ) : (
-                      "Belum diatur"
-                    )}
-                  </td>
-                  <td>{row.next_preview ?? "—"}</td>
-                  <td>{row.effective_from ?? "—"}</td>
+        <section className="page-frame-panel min-w-0">
+          <div className="max-w-full overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="text-left">
+                  <th scope="col">Jenis dokumen</th>
+                  <th scope="col">Format</th>
+                  <th scope="col">Nomor berikutnya</th>
+                  <th scope="col">Berlaku sejak</th>
                   {canEdit && (
-                    <td className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => setEditing(row)}>
-                        Ubah
-                      </Button>
-                    </td>
+                    <th scope="col">
+                      <span className="sr-only">Aksi</span>
+                    </th>
                   )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {query.data.map((row) => (
+                  <tr key={row.document_kind} className="border-t">
+                    <td className="py-2">{row.label}</td>
+                    <td>
+                      {row.active ? (
+                        <>
+                          {`${row.prefix}.${row.year_format === "YY" ? "TT" : "TTTT"}.BB.${"0".repeat(row.digits ?? 0)}`}
+                          <span className="page-frame-subtitle block">
+                            {row.reset_period ? resetLabel[row.reset_period] : ""}
+                            {row.pending
+                              ? ` · ${resetLabel[row.pending.reset_period]} mulai ${row.pending.effective_from}`
+                              : ""}
+                          </span>
+                        </>
+                      ) : (
+                        "Belum diatur"
+                      )}
+                    </td>
+                    <td>{row.next_preview ?? "—"}</td>
+                    <td>{row.effective_from ?? "—"}</td>
+                    {canEdit && (
+                      <td className="text-right">
+                        <Button variant="outline" size="sm" onClick={() => setEditing(row)}>
+                          Ubah
+                        </Button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
       {editing && <EditDialog row={editing} onClose={() => setEditing(null)} />}

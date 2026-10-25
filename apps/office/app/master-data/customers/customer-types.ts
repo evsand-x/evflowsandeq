@@ -51,7 +51,6 @@ export type Customer = {
   collection_schedule?: string | null;
   invoice_exchange_schedule?: string | null;
   payment_method_preference?: string | null;
-  payment_tolerance_days?: number | null;
   legal_documents?: Legal[] | null;
   responsible_person?: Record<string, string> | null;
   responsible_license?: Record<string, string> | null;

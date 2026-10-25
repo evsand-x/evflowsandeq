@@ -175,6 +175,15 @@ describe("customer credit attributes", () => {
           creditEditor,
         ),
       ).rejects.toMatchObject({ status: 400 });
+      // The legacy "Toleransi hari" is retired: sending it is refused, past_due_grace_days is the only field.
+      await expect(
+        controller.updateCustomer(
+          customerId,
+          `"${await version()}"`,
+          await body({ payment_tolerance_days: 7 }),
+          creditEditor,
+        ),
+      ).rejects.toMatchObject({ status: 400 });
       // A stale version is refused (If-Match).
       await expect(
         controller.updateCustomer(

@@ -66,7 +66,8 @@ async function setup(): Promise<Fixture> {
   const accounts: Record<string, string> = {};
   for (const [code, name, category] of [
     ["2-20500", "PPN Keluaran", "LIABILITY"],
-    ["1-10502", "Pajak Dibayar di Muka", "ASSET"],
+    ["1-10501", "Pajak Dibayar di Muka - PPh 22", "ASSET"],
+    ["1-10502", "Pajak Dibayar di Muka - PPh 23", "ASSET"],
     ["8-80999", "Beban Lain-lain", "EXPENSE"],
   ] as const)
     accounts[code] = (
@@ -99,7 +100,7 @@ describe("deduction types", () => {
         proofRequired: true,
       });
       expect(byName["PPh 22"]).toMatchObject({
-        settleAccountId: accounts["1-10502"],
+        settleAccountId: accounts["1-10501"],
         proofType: "BUKTI_POTONG",
         proofRequired: true,
       });
@@ -111,7 +112,7 @@ describe("deduction types", () => {
       });
       // Idempotent, and an edit is never overwritten.
       await updateDeductionType(c, actor, byName["PPh 22"]!.id, 1, {
-        ...input(accounts["1-10502"]!, { name: "PPh 22", proof_required: false }),
+        ...input(accounts["1-10501"]!, { name: "PPh 22", proof_required: false }),
       });
       const again = await prisma.$transaction((tx) => provisionCompanyDefaults(tx, c, actor));
       expect(again.deduction_types_created).toEqual([]);
