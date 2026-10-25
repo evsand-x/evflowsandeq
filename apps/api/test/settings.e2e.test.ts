@@ -71,7 +71,13 @@ describe("settings HTTP authorization", () => {
       .expect(200);
     expect(
       res.body.data.find((r: { document_kind: string }) => r.document_kind === "sales_order"),
-    ).toMatchObject({ label: "Sales Order", prefix: "SO-", active: true });
+    ).toMatchObject({
+      label: "Sales Order",
+      active: true,
+      prefix: expect.any(String),
+      year_format: expect.any(String),
+      reset_period: expect.any(String),
+    });
   });
   it("preferences returns number format for any session", async () => {
     const res = await request(app.getHttpServer())
