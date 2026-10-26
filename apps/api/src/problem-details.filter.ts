@@ -39,6 +39,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         code: selection?.success ? selection.data.code : code,
         detail,
         request_id: randomUUID(),
+        ...(payload && typeof payload === "object" && "settings_href" in payload &&
+          typeof payload.settings_href === "string" && /^\/setting\/[a-z-]+$/.test(payload.settings_href)
+          ? { settings_href: payload.settings_href } : {}),
         ...(selection?.success
           ? { companies: selection.data.companies }
           : payload && typeof payload === "object"

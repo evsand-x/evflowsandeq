@@ -1,5 +1,6 @@
 import { ConflictException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
+import { assertFinancePeriodOpen } from "./period-guard";
 
 type Tx = Prisma.TransactionClient;
 const d = (v: Prisma.Decimal | string | number) => new Prisma.Decimal(v);
@@ -92,11 +93,7 @@ export async function postLedger(
       .receivedAt;
   }
   const businessDate = await financeDate(tx, c, at);
-  const periods = await tx.financePeriod.findMany({
-    where: { companyId: c, startsOn: { lte: businessDate }, endsOn: { gte: businessDate } },
-  });
-  if (periods.length !== 1 || periods[0]!.state !== "OPEN")
-    throw new ConflictException("FINANCE_PERIOD_NOT_OPEN");
+  const period = await assertFinancePeriodOpen(tx, c, businessDate);
   const profiles = await tx.financePostingProfile.findMany({
     where: {
       companyId: c,
@@ -194,7 +191,7 @@ export async function postLedger(
       sourceType: first.sourceType,
       sourceId: first.sourceId,
       businessDate,
-      periodId: periods[0]!.id,
+      periodId: period.id,
       profileId: profile.id,
       currency,
       actorId: actor,

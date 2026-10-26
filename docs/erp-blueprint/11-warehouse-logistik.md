@@ -1,5 +1,10 @@
 # Domain Warehouse & Logistik
 
+## Gudang pada SO — backend 25 Oktober 2026
+
+OTC-04: SO baru menyimpan gudang kepala dan opsional per baris. Alokasi mengunci lot dan memeriksa ulang kelayakan, hanya pada gudang baris atau kepala; tidak otomatis mengambil gudang lain. SO lama tanpa gudang mempertahankan perilaku sebelumnya sampai direvisi. Pembacaan stok pada form hanya informasi: saldo dikurangi reservasi pada STORAGE/DISPATCH dengan mutu AVAILABLE dan expiry sah. Stok locator lain ditampilkan terpisah, termasuk karantina, tanpa membuat reservasi atau memindahkan barang. Pengajuan pindah locator belum bagian backend daftar/form ini.
+
+
 Dokumen ini adalah sumber domain kanonis untuk modul ini. Judul ‘Bagian asal’ mempertahankan keterlacakan isi sebelum konsolidasi; prioritas keputusan tetap mengikuti Peta Dokumen.
 
 

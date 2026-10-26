@@ -1,3 +1,6 @@
+import { orderDetail } from "./order-detail";
+import { type OrderPermission } from "./order-related";
+import { availablePrepayFunds } from "./prepay-funds";
 import { randomUUID, createHash } from "node:crypto";
 import {
   Injectable,
@@ -12,16 +15,15 @@ import sharp from "sharp";
 import { parseServerEnv } from "@evflow/config/env";
 import { AuditService } from "../common/audit.service";
 import { transactionCommand } from "../common/transaction-command";
-import { orderView } from "./order-view";
 import {
-  fulfillmentOrderIds,
-  orderFilterWhere,
   type OrderListFilters,
 } from "./order-list-filters";
 import { proformaKinds, proformaStatus } from "./proforma";
 import { lineAmounts, rejectTaxChoice } from "./pricing-controls";
 import { defaultSalesTaxOn } from "../finance/operational-tax";
 import { paymentTerms } from "./customer-credit";
+import { listSalesOrders } from "./order-list";
+import { orderFormOptions } from "./order-availability";
 
 @Injectable()
 export class OperationsService {
@@ -300,6 +302,7 @@ export class OperationsService {
     stage?: "checking" | "shipping" | "pod",
     view?: string,
     orderFilters: OrderListFilters = {},
+    includeFinancial = true,
   ) {
     const skip = (page - 1) * 25,
       query = { contains: search, mode: "insensitive" as const };
@@ -400,87 +403,7 @@ export class OperationsService {
       const filtered = combined.filter((r) => !view || view === "ALL" || r.status === view);
       return { rows: filtered.slice(skip, skip + 25), total: filtered.length, summary };
     }
-    if (kind === "orders") {
-      const company = await prisma.company.findUniqueOrThrow({
-        where: { id: c },
-        select: { timezone: true },
-      });
-      const fulfillmentIds = orderFilters.fulfillment
-        ? await fulfillmentOrderIds(c, orderFilters.fulfillment)
-        : undefined;
-      const where: Prisma.SalesOrderWhereInput = {
-        companyId: c,
-        ...(state ? { state } : {}),
-        OR: [{ number: query }, { customer: { name: query } }],
-        AND: [
-          ...orderFilterWhere(orderFilters, company.timezone),
-          ...(fulfillmentIds ? [{ id: { in: fulfillmentIds } }] : []),
-        ],
-      };
-      const [rows, total] = await prisma.$transaction([
-        prisma.salesOrder.findMany({
-          where,
-          skip,
-          take: 25,
-          orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-          select: {
-            id: true,
-            number: true,
-            state: true,
-            currency: true,
-            createdAt: true,
-            customer: { select: { name: true } },
-            lines: {
-              include: {
-                allocations: {
-                  select: {
-                    acceptedQuantity: true,
-                    inTransitQuantity: true,
-                    returnedQuantity: true,
-                  },
-                },
-              },
-            },
-          },
-        }),
-        prisma.salesOrder.count({ where }),
-      ]);
-      const [draft, open, partial, backorder] = await prisma.$transaction([
-        prisma.salesOrder.count({ where: { companyId: c, state: "DRAFT" } }),
-        prisma.salesOrder.count({ where: { companyId: c, state: "OPEN" } }),
-        prisma.$queryRaw<{ count: number }[]>`
-          SELECT COUNT(*)::integer AS count FROM sales_orders o
-          WHERE o.company_id=${c}::uuid
-          AND (SELECT COALESCE(SUM(a.accepted_quantity+a.in_transit_quantity+a.returned_quantity),0)
-            FROM fulfillment_allocations a JOIN sales_order_lines l ON l.id=a.sales_order_line_id WHERE l.sales_order_id=o.id)>0
-          AND (SELECT COALESCE(SUM(a.accepted_quantity+a.in_transit_quantity+a.returned_quantity),0)
-            FROM fulfillment_allocations a JOIN sales_order_lines l ON l.id=a.sales_order_line_id WHERE l.sales_order_id=o.id)
-            < (SELECT COALESCE(SUM(l.ordered_quantity),0) FROM sales_order_lines l WHERE l.sales_order_id=o.id)`,
-        prisma.salesOrder.count({
-          where: { companyId: c, state: "OPEN", lines: { some: { backorderQuantity: { gt: 0 } } } },
-        }),
-      ]);
-      // Pilihan filter pelanggan hanya dari pelanggan yang memiliki SO pada perusahaan ini.
-      const customers = await prisma.salesOrder.findMany({
-        where: { companyId: c },
-        distinct: ["customerId"],
-        select: { customer: { select: { id: true, name: true } } },
-        orderBy: { customerId: "asc" },
-        take: 500,
-      });
-      return {
-        rows: rows.map(({ lines, ...row }) => ({ ...row, ...orderView({ ...row, lines }) })),
-        total,
-        pageSize: 25,
-        summary: { draft, open, partial: partial[0]?.count ?? 0, creditHold: null, backorder },
-        filters: {
-          customers: customers
-            .map((row) => row.customer)
-            .sort((a, b) => a.name.localeCompare(b.name, "id")),
-        },
-        asOf: new Date().toISOString(),
-      };
-    }
+    if (kind === "orders") return listSalesOrders(c, page, search, state, orderFilters, undefined, includeFinancial);
     if (kind === "warehouse") {
       const where: Prisma.FulfillmentBatchWhereInput = {
         companyId: c,
@@ -668,72 +591,18 @@ export class OperationsService {
       },
     });
     const documentCurrency = (document.snapshot as { currency?: string } | null)?.currency;
-    const funds =
-      fundsAllowed && documentCurrency
-        ? await prisma.customerReceipt.aggregate({
-            where: {
-              companyId: c,
-              fulfillmentBatchId: document.batchId,
-              state: "POSTED",
-              currency: documentCurrency,
-            },
-            _sum: { unallocatedAmount: true },
-          })
-        : null;
+    const funds = fundsAllowed && documentCurrency && batch
+      ? await availablePrepayFunds(prisma, c, { id: document.batchId, salesOrderId: batch.salesOrder.id, currency: documentCurrency })
+      : null;
     return {
       ...document,
       batch,
-      verifiedFunds: funds
-        ? (funds._sum.unallocatedAmount ?? new Prisma.Decimal(0)).toString()
-        : null,
+      verifiedFunds: funds?.toString() ?? null,
       status: await proformaStatus(c, document),
     };
   }
-  async order(c: string, id: string) {
-    const row = await prisma.salesOrder.findFirst({
-      where: { companyId: c, id },
-      include: {
-        customer: { select: { name: true, channel: { select: { name: true } } } },
-        lines: {
-          include: {
-            product: { select: { code: true, name: true, baseUom: { select: { name: true } } } },
-            allocations: {
-              select: { acceptedQuantity: true, inTransitQuantity: true, returnedQuantity: true },
-            },
-          },
-        },
-        fulfillments: { include: { pickList: { select: { id: true, state: true } } } },
-      },
-    });
-    if (!row) throw new NotFoundException();
-    const documents = await prisma.fulfillmentDocument.findMany({
-      where: {
-        companyId: c,
-        batchId: { in: row.fulfillments.map((b) => b.id) },
-        kind: proformaKinds,
-      },
-      select: { id: true, kind: true, number: true, batchId: true, snapshot: true, issuedAt: true },
-      orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
-    });
-    const view = orderView(row);
-    const creator = await prisma.user.findUnique({
-      where: { id: row.createdById },
-      select: { displayName: true },
-    });
-    return {
-      ...row,
-      ...view,
-      lines: row.lines.map((line, index) => ({ ...line, ...view.lineValues[index] })),
-      createdByName: creator?.displayName ?? null,
-      freightEstimate: row.freightEstimate?.toString() ?? null,
-      freightTermsSnapshot: row.freightTermsSnapshot,
-      documents: await Promise.all(
-        documents.map(async ({ snapshot, ...document }) => ({
-          ...document,
-          status: await proformaStatus(c, { ...document, snapshot }),
-        })),
-      ),
-    };
+  async order(c: string, id: string, can: OrderPermission = () => false) {
+    return prisma.$transaction(tx => orderDetail(c, id, can, tx), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   }
   async batch(c: string, id: string) {
     const row = await prisma.fulfillmentBatch.findFirst({
@@ -780,7 +649,7 @@ export class OperationsService {
     });
     return { ...row, documents };
   }
-  async invoice(c: string, id: string) {
+  async invoice(c: string, id: string, receiptsAllowed = false) {
     const row = await prisma.salesInvoice.findFirst({
       where: { companyId: c, id },
       include: {
@@ -813,15 +682,15 @@ export class OperationsService {
             },
           },
         },
-        receiptAllocations: true,
+        receiptAllocations: receiptsAllowed,
       },
     });
     if (!row) throw new NotFoundException();
-    const receipts = await prisma.customerReceipt.findMany({
+    const receipts = receiptsAllowed ? await prisma.customerReceipt.findMany({
       where: { companyId: c, customerId: row.customerId },
       orderBy: { receivedAt: "desc" },
       take: 100,
-    });
+    }) : [];
     const document = await prisma.fulfillmentDocument.findFirst({
       where: { companyId: c, kind: `INVOICE:${id}` },
     });
@@ -911,6 +780,7 @@ export class OperationsService {
       products,
       currency: company.baseCurrency,
       timezone: company.timezone,
+      ...await orderFormOptions(c),
     };
   }
 }

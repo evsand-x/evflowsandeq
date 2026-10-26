@@ -1,5 +1,14 @@
 # Features — backlog dan tahap implementasi
 
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+Implementasi Bagian 2 mencakup backend dan Office detail SO, uang muka/verifikasi, dana PREPAY, dokumen terkait, cetak/duplikat dan tindakan. Belum dinyatakan siap rilis: full suite dan QA browser operasional masih gate terpisah. Bagian 1 frontend serta Bagian 3–5 tidak ikut diklaim selesai.
+
+## Cakupan backend SO mudah — 25 Oktober 2026
+
+Bagian 1 backend mencakup kontrak/migration kepala SO, default dan validasi wajib, create/revisi, termin dan gudang saat submit, status tunggal, daftar/filter/hitungan server, opsi form dan stock availability. Acuan OTC-01/04/12/17, CFG-08, IAM-01/04, NFR-02/09. UI bagian 1, detail/DP langsung bagian 2, matriks/harga/scope bagian 3, pindah locator bagian 4 serta penomoran/pajak tetap terpisah. Hasil tes dan batas release gate dicatat pada catatan eksekusi; keberhasilan backend bukan klaim aplikasi siap produksi.
+
+
 ## Urutan kerja keputusan 24 Oktober 2026
 
 Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md), urutan berikut didahulukan:

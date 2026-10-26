@@ -28,9 +28,17 @@ export default async function Page({
     return (
       <OutboundWorkspace
         key={`${path.join("/")}:${query.stage}:${query.view}`}
-        path={path}
-        stage={query.stage}
-        form={query.view === "form"}
+        path={
+          path[0] === "warehouse" && ["checking", "shipping", "pod"].includes(path[1] ?? "")
+            ? ["warehouse", ...path.slice(2)]
+            : path
+        }
+        stage={
+          path[0] === "warehouse" && ["checking", "shipping", "pod"].includes(path[1] ?? "")
+            ? path[1]
+            : query.stage
+        }
+        form={path.at(-1) === "edit" || query.view === "form"}
       />
     );
   if (path[0] === "proformas" && path[1] === "from-order" && path[2] && path[3])

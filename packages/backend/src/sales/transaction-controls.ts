@@ -19,14 +19,16 @@ export async function lockCustomer(tx: Tx, companyId: string, customerId: string
  * Payment terms and credit attributes of the customer (stage 2b). The term comes from the
  * customer's default term code in the active OPS-FLX-03 list.
  */
-export async function currentPaymentPolicy(tx: Tx, companyId: string, customerId: string) {
+export async function currentPaymentPolicy(tx: Tx, companyId: string, customerId: string, termCodeOverride?: string | null) {
   const credit = await customerCredit(tx, companyId, customerId);
   // Interim until stage 3 adds the term picker on the SO: a customer without a default term
   // uses the company's COD term (first OPS-FLX-03 entry of kind COD).
-  const term = credit.defaultTerm
+  const term = termCodeOverride
+    ? (await paymentTerms(tx, companyId)).find(t => t.code === termCodeOverride)
+    : credit.defaultTerm
     ? await paymentTerm(tx, companyId, credit.defaultTerm)
     : (await paymentTerms(tx, companyId)).find((t) => t.kind === "COD");
-  if (!term) throw new ConflictException("PAYMENT_POLICY_REQUIRED");
+  if (!term) throw new ConflictException(termCodeOverride ? "ORDER_PAYMENT_TERM_UNKNOWN" : "PAYMENT_POLICY_REQUIRED");
   return {
     termCode: term.code,
     termLabel: term.label,
@@ -129,9 +131,16 @@ export async function checkCredit(
 ) {
   if (!(await tx.customer.findFirst({ where: { id: customerId, companyId, state: "ACTIVE" } })))
     throw new ConflictException("CUSTOMER_NOT_ACTIVE");
-  const policy = await currentPaymentPolicy(tx, companyId, customerId);
   const grants = orderId ? await validException(tx, companyId, orderId, "SALES_ORDER_UNLOCK") : [];
   const order = orderId ? (await orderBasis(tx, companyId, orderId)).order : null;
+  // Issued terms are immutable during later stock allocation; only current credit attributes change.
+  const payment = order?.paymentSnapshot as { term_code?: string; term_label?: string; mode?: string; top_days?: number } | null;
+  const credit = await customerCredit(tx, companyId, customerId);
+  const policy = payment?.mode && ["COD", "PREPAY", "TEMPO"].includes(payment.mode)
+    ? { mode: payment.mode as "COD" | "PREPAY" | "TEMPO", topDays: payment.top_days ?? 0,
+        termCode: payment.term_code ?? "", termLabel: payment.term_label ?? "",
+        creditLimit: credit.limit, pastDueGraceDays: credit.graceDays, frozen: credit.frozen }
+    : await currentPaymentPolicy(tx, companyId, customerId, order?.paymentTermCode);
   if (order && (order.customerId !== customerId || order.currency !== currency))
     throw new ConflictException("UNLOCK_SCOPE_INVALID");
   const value = order?.lines.reduce(
@@ -186,7 +195,7 @@ export async function stockBusinessDate(tx: Tx, companyId: string) {
   );
 }
 
-export async function eligibleLots(tx: Tx, companyId: string, productIds: string[]) {
+export async function eligibleLots(tx: Tx, companyId: string, productIds: string[], warehouseIds?: string[]) {
   const today = await stockBusinessDate(tx, companyId);
   const policy = await tx.systemPolicy.findUnique({
     where: { companyId_code: { companyId, code: "OPS-WH-02" } },
@@ -216,6 +225,7 @@ export async function eligibleLots(tx: Tx, companyId: string, productIds: string
     qualityState: "AVAILABLE",
     quantityOnHand: { gt: 0 },
     productId: { in: productIds },
+    ...(warehouseIds ? { warehouseId: { in: warehouseIds } } : {}),
     warehouse: { state: "ACTIVE" },
     product: { state: "ACTIVE" },
     locator: { state: "ACTIVE", locatorType: { in: ["STORAGE", "DISPATCH"] } },

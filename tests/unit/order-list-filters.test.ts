@@ -28,9 +28,9 @@ describe("Sales Order list filters", () => {
     ).toEqual([
       { customerId: customer },
       {
-        createdAt: {
-          gte: new Date("2026-09-30T16:00:00.000Z"),
-          lt: new Date("2026-10-07T16:00:00.000Z"),
+        orderDate: {
+          gte: new Date("2026-10-01T00:00:00.000Z"),
+          lt: new Date("2026-10-08T00:00:00.000Z"),
         },
       },
     ]);
@@ -89,6 +89,7 @@ describe("Sales Order list filters", () => {
       undefined,
       undefined,
       { customer_id: customer, from: "2026-10-01", fulfillment: "PARTIAL", remainder: "BACKORDER" },
+      false,
     );
     await controller.list("proformas", {}, req);
     expect(list.mock.lastCall).toEqual([

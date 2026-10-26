@@ -23,6 +23,17 @@ Nilai berikut dibuat otomatis saat perusahaan disiapkan (CFG-08) dan dapat diedi
 | OPS-FLX-08 | Persetujuan dokumen sendiri | Nonaktif | Izinkan eksplisit per jenis dokumen |
 | OPS-FLX-09 | Batas diskon bawaan perusahaan | Kosong (0%) | Persen 0-100; berlaku bila orang dan peran tidak punya batas. Batas per peran, per orang, dan batas produk (terkecil menang); Admin Sistem tanpa batas |
 
+## Konfigurasi SO — 25 Oktober 2026
+
+| Kode | Parameter | Nilai awal | Perilaku |
+|---|---|---|---|
+| OPS-FLX-10 | Gudang bawaan penjualan | Kosong | Kode gudang aktif; satu gudang aktif otomatis dipilih bila default kosong |
+| OPS-FLX-11 | Gudang per barang di SO | Nonaktif | Mengizinkan pilihan gudang per baris; tetap dalam perusahaan |
+| OPS-FLX-12 | No. SP pelanggan wajib | Nonaktif | Backend menegakkan saat simpan/revisi/submit |
+| OPS-FLX-13 | Lampiran SO wajib | Nonaktif | Backend menegakkan kewajiban; bukti terisi selalu diperiksa scope dan tujuan |
+
+Nilai bertanggal/terversi melalui policy API kelompok sales; tidak mengubah histori posted. Kartu UI khusus merupakan tahap frontend berikutnya.
+
 ## 1. Prinsip penggunaan
 
 1. Pengguna memerlukan permission sesuai kelompok kebijakan untuk melihat atau mengubah nilai.

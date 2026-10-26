@@ -1,5 +1,20 @@
 # API — kontrak awal v1
 
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+POST /sales-orders/:id/advances membutuhkan sales_order_advance.create dan Idempotency-Key; body amount, received_at (datetime), bank_account_id, bank_reference opsional, evidence_id. POST /sales-order-advances/:id/verify dan /reject membutuhkan sales_order_advance.verify, version; reject juga reason. GET /operations/orders/:id/related dan /actions membutuhkan sales_order.read dan menyaring per jenis/tindakan. POST /sales-orders/:id/print-events membutuhkan sales_order.print; POST /sales-orders/:id/duplicate membutuhkan sales_order.create dan Idempotency-Key. Detail menambah progress baris, neighbors, companyProfile, lastChanged/lastPrinted; advances/DP hanya untuk izin sumber dan remainingBill juga mensyaratkan akses invoice.
+
+## Backend SO mudah — kontrak 25 Oktober 2026
+
+POST /sales-orders menerima customer_reference, delivery_address, evidence_id opsional; order_date YYYY-MM-DD, payment_term_code, salesperson_id, warehouse_id dan lines[].warehouse_id opsional dengan resolusi default server. Currency tetap IDR. Revisi /sales-orders/:id/revise menerima field yang sama; penghilangan mempertahankan kepala lama, evidence_id null menghapus bukti opsional, versi/alasan tetap wajib. Submit memeriksa ulang kewajiban bukti/referensi serta termin draft.
+
+GET /operations/lists/orders menerima status DRAFT|WAITING_APPROVAL|OPEN|PARTIALLY_SHIPPED|IN_DELIVERY|COMPLETED|CANCELLED, from/to berdasarkan order_date dan cari nomor/pelanggan/No. SP. Tambahan respons: customerReference, orderDate, paymentTermCode, warehouseId, salespersonId, displayStatus, dueDateEstimate, downPayment. summary berisi hitungan tujuh status + all; field lama dipertahankan untuk kompatibilitas. Paging 25 baris, urutan orderDate desc/number desc/id asc; filter, hitungan, dan fakta halaman dalam transaksi baca RepeatableRead. Snapshot kredit tidak dikirim dalam daftar.
+
+GET /operations/order-options (sales_order.create atau update) menambah warehouses, salespeople (hanya id/nama anggota aktif), terms, defaults dan closedThrough. GET /operations/stock-availability?warehouse_id=UUID&product_ids=UUID,UUID (sales_order.create) menerima maksimal 100 produk; data lain perusahaan ditolak. Respons data berisi productId, available string decimal dan elsewhere[{locatorType,locatorName,quantity}]. Pembacaan tidak mengubah reservasi.
+
+Error konfigurasi memuat kode pada errors.code, pesan manusia pada detail dan settings_href di root problem response. Scope perusahaan tetap berasal dari sesi; izin per submenu tetap diperiksa server.
+
+
 ## Dampak keputusan 24 Oktober 2026 — rancangan
 
 Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Kontrak final ditetapkan pada rencana implementasi. Kelompok baru: pengaturan terpusat (profil, format angka, termin, ongkir, mode kredit, penomoran), struktur organisasi (departemen, jabatan, karyawan, atasan), aturan persetujuan (CRUD, validasi, simulasi, aktivasi), kotak masuk persetujuan lintas jenis dokumen (daftar, setujui, tolak, minta revisi, delegasi). Endpoint pengecualian SO lama dialihkan ke kontrak persetujuan umum. Semua mutasi tetap memakai sesi, CSRF, izin per submenu dan Idempotency-Key.

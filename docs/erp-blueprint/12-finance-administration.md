@@ -1,5 +1,9 @@
 # Domain Finance
 
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+Catat uang muka SO hanya pada DRAFT/OPEN, jumlah positif, total tersedia dan kumulatif catatan pending/verified tidak melampaui total. Bukti PAYMENT dan rekening perusahaan aktif wajib. Verifikasi pengguna berbeda mengunci catatan/versi, memeriksa periode tanggal penerimaan lalu memposting Kas/Bank–Uang Muka Pelanggan melalui posting profile dan pajak uang muka yang berlaku. Penolakan menyimpan alasan tanpa jurnal. Receipt SO-bound tidak boleh dialokasikan ke invoice SO lain. Sisa tagihan = total SO − receipt unallocated POSTED terkait − pembayaran invoice POSTED; nilai ini tidak menggandakan uang muka yang sudah dialokasikan.
+
 ## Keputusan 24 Oktober 2026 — pajak dan potongan
 
 Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md), FIN-17 dan FIN-18: daftar pajak dan pemetaan akun pindah ke Setting; Finance memuat Piutang (Invoice, Terima Pembayaran, bukti potong), Kas & Bank, Akuntansi (Daftar Akun, Jurnal) dan Faktur Pajak. Aturan pajak per pelanggan × produk dan WAPU/PPh per pelanggan dihentikan; menu Kredit & TOP Pelanggan dihapus.

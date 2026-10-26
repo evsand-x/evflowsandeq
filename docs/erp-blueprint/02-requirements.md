@@ -1,5 +1,16 @@
 # Requirements — aturan bisnis dan penerimaan
 
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+OTC-01/04/12/17, FIN-01/02/03, IAM-01/04 dan NFR-02/09: catatan uang muka SO menunggu verifikasi pengguna berbeda; posting dan pengikatan dana PREPAY atomik, tidak menghitung pending. Detail, dokumen terkait, cetak, duplikat dan tindakan mengikuti izin server. Gate release dan bukti pengujian dicatat di laporan eksekusi.
+
+## Backend daftar/form SO — 25 Oktober 2026
+
+OTC-01/04/12/17, CFG-08, IAM-01/04: kontrak backend menerima pelanggan dan baris dengan tanggal bawaan zona perusahaan, termin pelanggan yang dapat diganti, sales pembuat bawaan, alamat pelanggan dan gudang pilihan. No. SP/lampiran opsional kecuali OPS-FLX-12/13 aktif. Gudang per baris memerlukan OPS-FLX-11. Tanggal SO boleh di periode terkunci karena tidak memposting; dokumen berjurnal tetap diperiksa pada posting.
+
+OTC-12 merevisi status tampilan menjadi Draft, Menunggu Persetujuan, Open, Dikirim Sebagian, Dalam Pengiriman, Selesai, Dibatalkan. Selesai berdasarkan POD diterima atau sisa ditutup, tanpa menunggu tagihan/pembayaran; barang ditolak tidak dihitung sebagai diterima. Status adalah projection backend, bukan bypass state command. Filter dan hitungan tab dilakukan server. Mesin persetujuan umum, scope sales/harga baru dan layar terbaru masih bagian berikutnya.
+
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 FIN-01, IAM-04, APP-03: cakupan aktif Akun adalah daftar/buat/edit/detail dengan kode unik per perusahaan, nama boleh sama, kategori rinci, kelompok, Header/Detail, saldo normal, induk, deskripsi, PSAK 118 dan status. Akun terpakai mengunci klasifikasi; edit aman memerlukan alasan/audit. account.read/create/update/import independen. Saldo awal tidak diimpor dari master. Akun uji tanpa referensi dapat dihapus melalui migrasi terkontrol; yang bersejarah tetap tersimpan nonaktif.

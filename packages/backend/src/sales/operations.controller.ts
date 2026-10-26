@@ -18,12 +18,14 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { z } from "zod";
+import { stockAvailability } from "./order-availability";
 import { prisma } from "@evflow/database";
 import { AuthGuard } from "../identity/auth.guard";
 import { PermissionGuard } from "../identity/permission.guard";
 import { RequirePermissions } from "../identity/permissions.decorator";
 import type { AuthenticatedRequest } from "../identity/auth.types";
 import { OperationsService } from "./operations.service";
+import { orderActions } from "./order-actions";
 import { previewProforma } from "./proforma";
 import { orderListFilterSchema } from "./order-list-filters";
 import { requestException, decideException, manageException } from "./exception-controls";
@@ -32,6 +34,7 @@ import { processExceptionEvaluations } from "./exception-evaluation";
 import { isAccessAdministrator, shipmentSchema } from "@evflow/contracts";
 import { outboundList, returnList, returnDetail, returnSources } from "./outbound-read";
 import { listHandoffs, saveHandoff } from "./commercial-handoff";
+import { orderRelated } from "./order-related";
 
 const uuid = (v: string) => z.string().uuid().parse(v);
 const key = (v?: string) => {
@@ -88,6 +91,11 @@ export class OperationsController {
     @Inject(OperationsService) private readonly service: OperationsService,
     @Inject(OtcPtpService) private readonly otc: OtcPtpService,
   ) {}
+  @Get("orders/:id/actions")
+  @RequirePermissions("sales_order.read")
+  async orderActions(@Param("id") id:string,@Req() req:AuthenticatedRequest) {
+    return {data:await orderActions(req.auth.company_id,req.auth.user_id,uuid(id),p=>hasPermission(req,p))};
+  }
   @Get("fulfillment-batches/:id/proforma-preview")
   @RequirePermissions("proforma.issue")
   async previewProforma(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
@@ -350,6 +358,8 @@ export class OperationsController {
       .parse(body);
     if (i.purpose === "CUSTOMER_MASTER")
       allowedAny(req, ["master_customer.create", "master_customer.update"]);
+    else if (i.purpose === "PAYMENT")
+      allowedAny(req, ["customer_receipt.post", "sales_order_advance.create"]);
     else allowed(req, writePermission[i.purpose]!);
     return {
       data: await this.service.upload(
@@ -368,6 +378,14 @@ export class OperationsController {
     });
     if (!metadata) throw new NotFoundException();
     if (metadata.purpose === "CUSTOMER_MASTER") allowed(req, "master_customer.read");
+    else if (metadata.purpose === "PAYMENT" && !hasPermission(req, "customer_receipt.read")) {
+      allowedAny(req, ["sales_order_advance.create", "sales_order_advance.verify"]);
+      // Advance access does not expose unrelated Finance attachments. Recorders
+      // may preview their own upload before attaching it to a pending advance.
+      const ownUpload = hasPermission(req, "sales_order_advance.create") && metadata.actorId === req.auth.user_id;
+      if (!ownUpload && !await prisma.salesOrderAdvance.findFirst({where:{companyId:req.auth.company_id,evidenceId:metadata.id},select:{id:true}}))
+        throw new ForbiddenException();
+    }
     else if (metadata.purpose === "PROFORMA_HANDOFF") allowed(req, "proforma.read");
     else if (
       metadata.purpose === "TAX" &&
@@ -433,6 +451,12 @@ export class OperationsController {
       );
     allowed(req, canCreate ? "sales_order.create" : "sales_order.update");
     return { data: await this.service.lookups(req.auth.company_id) };
+  }
+  @Get("stock-availability")
+  @RequirePermissions("sales_order.create")
+  async stockAvailability(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const parsed = z.object({ warehouse_id: z.string().uuid(), product_ids: z.string().transform(value => value.split(",")).pipe(z.array(z.string().uuid()).min(1).max(100)) }).strict().parse(query);
+    return { data: await stockAvailability(req.auth.company_id, parsed.warehouse_id, parsed.product_ids) };
   }
   @Get("control-options/:kind")
   async controlOptions(@Param("kind") kind: string, @Req() req: AuthenticatedRequest) {
@@ -621,14 +645,15 @@ export class OperationsController {
         to: z.string().optional(),
         fulfillment: z.string().optional(),
         remainder: z.string().optional(),
+        status: z.string().optional(),
       })
       .strict()
       .parse(query);
-    const { customer_id, from, to, fulfillment, remainder, ...base } = q;
+    const { customer_id, from, to, fulfillment, remainder, status, ...base } = q;
     // Filter pelanggan/periode/pemenuhan/sisa hanya berlaku untuk daftar Sales Order.
     const orderFilters =
       type === "orders"
-        ? orderListFilterSchema.parse({ customer_id, from, to, fulfillment, remainder })
+        ? orderListFilterSchema.parse({ customer_id, from, to, fulfillment, remainder, status })
         : undefined;
     return {
       data: await (orderFilters
@@ -641,6 +666,7 @@ export class OperationsController {
             base.stage,
             base.view,
             orderFilters,
+            ["sales_order_advance.create", "sales_order_advance.verify", "customer_receipt.read"].some(permission => hasPermission(req, permission)),
           )
         : this.service.list(
             req.auth.company_id,
@@ -667,7 +693,12 @@ export class OperationsController {
   @Get("orders/:id")
   @RequirePermissions("sales_order.read")
   async order(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    return { data: await this.service.order(req.auth.company_id, uuid(id)) };
+    return { data: await this.service.order(req.auth.company_id, uuid(id), permission => hasPermission(req, permission)) };
+  }
+  @Get("orders/:id/related")
+  @RequirePermissions("sales_order.read")
+  async orderRelated(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: await orderRelated(req.auth.company_id, uuid(id), permission => hasPermission(req, permission)) };
   }
   @Get("warehouse/:id")
   @RequirePermissions("outbound_checking.read")
@@ -675,9 +706,9 @@ export class OperationsController {
     return { data: await this.service.batch(req.auth.company_id, uuid(id)) };
   }
   @Get("invoices/:id")
-  @RequirePermissions("sales_invoice.read", "customer_receipt.read")
+  @RequirePermissions("sales_invoice.read")
   async invoice(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    return { data: await this.service.invoice(req.auth.company_id, uuid(id)) };
+    return { data: await this.service.invoice(req.auth.company_id, uuid(id), hasPermission(req, "customer_receipt.read")) };
   }
   @Post("warehouse/:id/shipment")
   @RequirePermissions("fulfillment.dispatch")

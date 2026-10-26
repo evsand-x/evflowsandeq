@@ -26,12 +26,27 @@ export const openingStockSchema = z
     unit_cost: z.string().regex(/^\d{1,16}(\.\d{1,8})?$/),
   })
   .strict();
+export const salesOrderDisplayStatusSchema = z.enum([
+  "DRAFT",
+  "WAITING_APPROVAL",
+  "OPEN",
+  "PARTIALLY_SHIPPED",
+  "IN_DELIVERY",
+  "COMPLETED",
+  "CANCELLED",
+]);
+export type SalesOrderDisplayStatus = z.infer<typeof salesOrderDisplayStatusSchema>;
+
 export const createSalesOrderSchema = z
   .object({
     customer_id: z.string().uuid(),
-    customer_reference: z.string().trim().min(1).max(100),
-    delivery_address: z.string().trim().min(1).max(1000),
-    evidence_id: z.string().uuid(),
+    customer_reference: z.string().trim().max(100).optional(),
+    delivery_address: z.string().trim().max(1000).optional(),
+    evidence_id: z.string().uuid().optional(),
+    order_date: z.string().date().optional(),
+    payment_term_code: z.string().trim().min(1).max(40).optional(),
+    salesperson_id: z.string().uuid().optional(),
+    warehouse_id: z.string().uuid().optional(),
     notes: z.string().trim().max(2000).optional(),
     freight: freightTermsSchema.optional(),
     currency: z
@@ -43,6 +58,7 @@ export const createSalesOrderSchema = z
         z
           .object({
             product_id: z.string().uuid(),
+            warehouse_id: z.string().uuid().optional(),
             quantity: positiveDecimal,
             unit_price: z.string().regex(/^\d{1,16}(\.\d{1,8})?$/),
             /** Refused (LINE_TAX_NOT_ALLOWED): every line uses the default sales tax. */
@@ -235,7 +251,10 @@ export const pickListCheckSchema = z
   .object({
     packing: z
       .object({
-        package_count: z.string().regex(/^\d{1,6}$/).optional(),
+        package_count: z
+          .string()
+          .regex(/^\d{1,6}$/)
+          .optional(),
         total_weight_kg: nonNegativeDecimal.optional(),
         package_type: z.string().trim().max(100).optional(),
         notes: z.string().trim().max(2000).optional(),
@@ -245,14 +264,26 @@ export const pickListCheckSchema = z
       .optional(),
     checks: z
       .array(
-        z.object({
-          pick_list_line_id: z.string().uuid(),
-          condition: z.string().trim().min(1).max(100),
-          checked_quantity: nonNegativeDecimal.optional(),
-          notes: z.string().trim().max(500).optional(),
-        }).strict(),
+        z
+          .object({
+            pick_list_line_id: z.string().uuid(),
+            condition: z.string().trim().min(1).max(100),
+            checked_quantity: nonNegativeDecimal.optional(),
+            notes: z.string().trim().max(500).optional(),
+          })
+          .strict(),
       )
       .max(100)
       .optional(),
   })
   .strict();
+
+export const recordSalesOrderAdvanceSchema = z.object({
+ amount: z.string().regex(/^\d{1,16}(\.\d{1,8})?$/).refine(v => !/^0+(\.0*)?$/.test(v)),
+ received_at: z.string().datetime(),
+ bank_account_id: z.string().uuid(),
+ bank_reference: z.string().trim().min(1).max(200).optional(),
+ evidence_id: z.string().uuid(),
+}).strict();
+export const verifySalesOrderAdvanceSchema = z.object({ version: z.number().int().positive() }).strict();
+export const rejectSalesOrderAdvanceSchema = verifySalesOrderAdvanceSchema.extend({ reason: z.string().trim().min(1).max(500) });

@@ -524,7 +524,7 @@ export class FinanceControlsController {
       !isAccessAdministrator(r.auth) &&
       !r.auth.permissions.some(
         (p) =>
-          ["customer_receipt.post", "bank_statement.import", "bank_reconciliation.read"].includes(
+          ["customer_receipt.post", "sales_order_advance.create", "sales_order_advance.verify", "bank_statement.import", "bank_reconciliation.read"].includes(
             p.code,
           ) &&
           ["company", "privileged"].includes(p.scope_type) &&

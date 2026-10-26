@@ -12,6 +12,7 @@ import {
 } from "@nestjs/common";
 import { generalSettingsUpdateSchema } from "@evflow/contracts";
 import { prisma } from "@evflow/database";
+import { activePolicyValue } from "../common/policy-value";
 import { getGeneralSettings, updateGeneralSettings } from "./general-settings";
 import { AuthGuard } from "../identity/auth.guard";
 import { PermissionGuard } from "../identity/permission.guard";
@@ -28,14 +29,6 @@ const key = (v?: string) => {
   return v;
 };
 
-async function activePolicyValue(companyId: string, code: string) {
-  const version = await prisma.policyVersion.findFirst({
-    where: { policy: { companyId, code }, state: "ACTIVE" },
-    orderBy: { versionNo: "desc" },
-  });
-  return version?.valueSnapshot ?? null;
-}
-
 @Controller("settings")
 @UseGuards(AuthGuard, PermissionGuard)
 export class SettingsController {
@@ -47,7 +40,7 @@ export class SettingsController {
       data: {
         company_name: company.name,
         logo_object_key: company.logoObjectKey,
-        number_format: await activePolicyValue(company.id, "OPS-FLX-06"),
+        number_format: await activePolicyValue(prisma, company.id, "OPS-FLX-06"),
       },
     };
   }

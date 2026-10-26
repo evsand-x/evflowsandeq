@@ -33,6 +33,7 @@ import { AuthGuard } from "./identity/auth.guard";
 import { PermissionGuard } from "./identity/permission.guard";
 import { RequirePermissions } from "./identity/permissions.decorator";
 import { OtcPtpService } from "./otc-ptp.service";
+import { recordOrderPrint } from "./sales/order-print";
 import { closeRemainder, releaseBatch, resolvePick, reviseOrder } from "./sales/o2c-lifecycle";
 import { issueProforma } from "./sales/proforma";
 
@@ -52,6 +53,31 @@ const commandKey = (value: string | undefined) => {
 @UseGuards(AuthGuard, PermissionGuard)
 export class OtcPtpController {
   constructor(@Inject(OtcPtpService) private readonly service: OtcPtpService) {}
+  @Post("sales-orders/:id/print-events")
+  @RequirePermissions("sales_order.print")
+  async printOrder(@Param("id") id:string,@Req() r:AuthenticatedRequest) {
+    return {data:await recordOrderPrint(r.auth.company_id,r.auth.user_id,id)};
+  }
+  @Post("sales-orders/:id/duplicate")
+  @RequirePermissions("sales_order.create")
+  async duplicateOrder(@Param("id") id:string,@Headers("idempotency-key") key:string|undefined,@Req() r:AuthenticatedRequest) {
+    return {data:await this.service.duplicateSalesOrder(r.auth.company_id,r.auth.user_id,id,commandKey(key))};
+  }
+  @Post("sales-orders/:id/advances")
+  @RequirePermissions("sales_order_advance.create")
+  async recordAdvance(@Param("id") id: string, @Body() input: unknown, @Headers("idempotency-key") key: string | undefined, @Req() r: AuthenticatedRequest) {
+    return {data: await this.service.recordSalesOrderAdvance(r.auth.company_id,r.auth.user_id,id,input,commandKey(key))};
+  }
+  @Post("sales-order-advances/:id/verify")
+  @RequirePermissions("sales_order_advance.verify")
+  async verifyAdvance(@Param("id") id: string, @Body() input: unknown, @Req() r: AuthenticatedRequest) {
+    return {data: await this.service.verifySalesOrderAdvance(r.auth.company_id,r.auth.user_id,id,input)};
+  }
+  @Post("sales-order-advances/:id/reject")
+  @RequirePermissions("sales_order_advance.verify")
+  async rejectAdvance(@Param("id") id: string, @Body() input: unknown, @Req() r: AuthenticatedRequest) {
+    return {data: await this.service.rejectSalesOrderAdvance(r.auth.company_id,r.auth.user_id,id,input)};
+  }
   @Post("fulfillment-batches/:id/issue-proforma")
   @RequirePermissions("proforma.issue")
   async proforma(

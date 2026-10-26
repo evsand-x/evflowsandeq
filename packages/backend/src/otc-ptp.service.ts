@@ -1,3 +1,5 @@
+import { postCustomerReceiptTx } from "./finance/customer-receipt";
+import { recordSalesOrderAdvance, verifySalesOrderAdvance, rejectSalesOrderAdvance } from "./sales/order-advance";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Prisma, prisma } from "@evflow/database";
 import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
@@ -9,6 +11,8 @@ import {
   lockCustomer,
 } from "./sales/transaction-controls";
 import { customerCreditOmit } from "./sales/customer-credit";
+import { createSalesOrderSchema } from "@evflow/contracts";
+import { resolveOrderHeader, validateOrderEvidence } from "./sales/order-header";
 import {
   assertPriceGrants,
   lineAmounts,
@@ -18,7 +22,7 @@ import {
 import { approvePr } from "./procurement/approval-controls";
 import { transactionCommand } from "./common/transaction-command";
 import { lockFinance, postLedger } from "./finance/posting";
-import { postAdvanceTax, consumeAdvanceTax } from "./finance/advance-tax";
+import { consumeAdvanceTax } from "./finance/advance-tax";
 import { issueDocument, requireEvidence } from "./sales/document-controls";
 import { reservationExpiry } from "./sales/reservation-controls";
 import { nextDocumentNumber } from "./common/document-number";
@@ -27,12 +31,16 @@ import {
   calculateOperationalTax,
   defaultSalesTaxOn,
 } from "./finance/operational-tax";
+import { availablePrepayFunds, bindOrderAdvancesToBatch } from "./sales/prepay-funds";
 type Tx = Prisma.TransactionClient;
 const d = (v: string | Prisma.Decimal) => new Prisma.Decimal(v);
 type FreightTaxMode = "NON_TAXABLE" | "TAXABLE";
 @Injectable()
 export class OtcPtpService {
   constructor(@Inject(AuditService) private readonly audit: AuditService) {}
+  recordSalesOrderAdvance(c: string, a: string, id: string, input: unknown, key: string) { return recordSalesOrderAdvance(c,a,id,input,key); }
+  verifySalesOrderAdvance(c: string, a: string, id: string, input: unknown) { return verifySalesOrderAdvance(c,a,id,input); }
+  rejectSalesOrderAdvance(c: string, a: string, id: string, input: unknown) { return rejectSalesOrderAdvance(c,a,id,input); }
   /** Taxable freight carries the default sales tax (PPN); its snapshot is kept on the document. */
   private async freightTax(tx: Tx, companyId: string, amount: Prisma.Decimal, mode: FreightTaxMode) {
     if (mode === "NON_TAXABLE") return { amount: d("0"), snapshot: null };
@@ -151,18 +159,17 @@ export class OtcPtpService {
     });
   }
   async createSalesOrder(c: string, a: string, i: any, key?: string) {
+    i = createSalesOrderSchema.parse(i);
     rejectTaxChoice(i);
-    const cust = await prisma.customer.findFirst({
-      where: { id: i.customer_id, companyId: c, state: "ACTIVE" },
-    });
-    if (!cust) throw new NotFoundException("Pelanggan tidak ditemukan.");
-    return transactionCommand(c, a, "sales-orders/create", key, i, async (tx) => {
+    return transactionCommand(c, a, "sales-orders/create", key, i, (tx) => this.createSalesOrderTx(tx,c,a,i));
+  }
+  private async createSalesOrderTx(tx: Prisma.TransactionClient,c:string,a:string,i:any,duplicate=false) {
+      const cust = await lockCustomer(tx, c, i.customer_id);
+      if (cust.state !== "ACTIVE") throw new NotFoundException("Pelanggan tidak ditemukan.");
       const company = await tx.company.findUniqueOrThrow({ where: { id: c } });
       if (i.currency !== company.baseCurrency)
         throw new ConflictException("FOREIGN_CURRENCY_SALES_NOT_ENABLED");
-      await requireEvidence(tx, c, i.evidence_id, "SALES_ORDER");
-      if (!i.customer_reference?.trim() || !i.delivery_address?.trim())
-        throw new ConflictException("ORDER_REFERENCE_ADDRESS_REQUIRED");
+      const { lineWarehouseIds, ...header } = await resolveOrderHeader(tx, c, a, i, cust, {deferEvidence:duplicate});
       const products = await tx.product.count({
         where: {
           companyId: c,
@@ -181,9 +188,7 @@ export class OtcPtpService {
           number: await this.num(tx, c, "sales_order", "SO"),
           currency: i.currency,
           createdById: a,
-          customerReference: i.customer_reference,
-          deliveryAddress: i.delivery_address,
-          evidenceId: i.evidence_id,
+          ...header,
           notes: i.notes,
           freightEstimate: i.freight ? d(i.freight.estimate) : null,
           freightTermsSnapshot: i.freight
@@ -195,11 +200,13 @@ export class OtcPtpService {
               }
             : Prisma.DbNull,
           lines: {
-            create: i.lines.map((x: any) => ({
+            create: i.lines.map((x: any, index: number) => ({
               companyId: c,
               productId: x.product_id,
               orderedQuantity: d(x.quantity),
               unitPrice: d(x.unit_price),
+              warehouseId: lineWarehouseIds[index],
+              ...(duplicate ? {uomId:x.duplicateUomId} : {}),
             })),
           },
         },
@@ -214,7 +221,17 @@ export class OtcPtpService {
         after: o,
       });
       return o;
-    });
+  }
+  async duplicateSalesOrder(c:string,a:string,id:string,key:string) {
+    return transactionCommand(c,a,`sales-orders/${id}/duplicate`,key,{id},tx=>this.duplicateSalesOrderTx(tx,c,a,id));
+  }
+  async duplicateSalesOrderTx(tx:Prisma.TransactionClient,c:string,a:string,id:string) {
+    const source=await tx.salesOrder.findFirst({where:{companyId:c,id},include:{lines:{orderBy:{id:"asc"}}}});
+    if(!source) throw new NotFoundException("SO tidak ditemukan.");
+    const input=createSalesOrderSchema.parse({customer_id:source.customerId,currency:source.currency,lines:source.lines.map(l=>({product_id:l.productId,quantity:l.orderedQuantity.toString(),unit_price:"0",...(l.warehouseId?{warehouse_id:l.warehouseId}:{})}))});
+    const copy=await this.createSalesOrderTx(tx,c,a,{...input,lines:input.lines.map((line,index)=>({...line,duplicateUomId:source.lines[index]!.uomId}))},true);
+    await this.audit.recordWith(tx,{companyId:c,actorId:a,action:"sales_order.duplicated",resourceType:"sales_order",resourceId:copy.id,metadata:{source_id:id}});
+    return copy;
   }
   async submitSalesOrder(c: string, a: string, id: string, key: string, version?: number) {
     return transactionCommand(
@@ -248,7 +265,7 @@ export class OtcPtpService {
         }
         if (o.state === "OPEN" && version === undefined)
           throw new ConflictException("REALLOCATION_COMMAND_REQUIRED");
-        await requireEvidence(tx, c, o.evidenceId ?? undefined, "SALES_ORDER");
+        await validateOrderEvidence(tx, c, o.customerReference, o.evidenceId);
         if (o.state === "DRAFT") await priceOrder(tx, c, o.customerId, o.currency, o.lines);
         else await assertPriceGrants(tx, c, o.lines);
         const policy = await checkCredit(tx, c, o.customerId, o.currency, o.id);
@@ -256,6 +273,9 @@ export class OtcPtpService {
           tx,
           c,
           o.lines.map((x) => x.productId),
+          o.lines.every(l => l.warehouseId ?? o.warehouseId)
+            ? [...new Set(o.lines.map(l => (l.warehouseId ?? o.warehouseId)!))]
+            : undefined,
         );
         const alloc: any[] = [];
         const shortage: any[] = [];
@@ -265,7 +285,8 @@ export class OtcPtpService {
               ? line.orderedQuantity.sub(line.closedQuantity)
               : line.backorderQuantity;
           let rem = d(pending);
-          for (const lot of lockedLots.filter((x) => x.productId === line.productId)) {
+          for (const lot of lockedLots.filter((x) => x.productId === line.productId &&
+            (!(line.warehouseId ?? o.warehouseId) || x.warehouseId === (line.warehouseId ?? o.warehouseId)))) {
             const av = d(lot.quantityOnHand).sub(lot.quantityReserved);
             if (av.lte(0) || rem.lte(0)) continue;
             const q = av.lt(rem) ? av : rem;
@@ -476,17 +497,9 @@ export class OtcPtpService {
             sum.add(lineAmounts(allocation.salesOrderLine, allocation.quantity).total),
           d("0"),
         );
-        const receipts = await tx.customerReceipt.aggregate({
-          where: {
-            companyId: c,
-            fulfillmentBatchId: b.id,
-            state: "POSTED",
-            currency: b.salesOrder.currency,
-          },
-          _sum: { unallocatedAmount: true },
-        });
-        if ((receipts._sum.unallocatedAmount ?? d("0")).lt(required))
-          throw new ConflictException("PREPAYMENT_REQUIRED");
+        const funds = await availablePrepayFunds(tx, c, { id: b.id, salesOrderId: b.salesOrderId, currency: b.salesOrder.currency });
+        if (funds.lt(required)) throw new ConflictException("PREPAYMENT_REQUIRED");
+        await bindOrderAdvancesToBatch(tx, c, { id: b.id, salesOrderId: b.salesOrderId, currency: b.salesOrder.currency }, required);
       }
       for (const x of b.allocations) {
         if (x.quantity.lte(0)) continue;
@@ -1874,78 +1887,10 @@ export class OtcPtpService {
 
   async createCustomerReceipt(c: string, a: string, customerId: string, i: any, key: string) {
     return transactionCommand(c, a, `customers/${customerId}/receipt`, key, i, async (tx) => {
-      await lockCustomer(tx, c, customerId);
-      await requireEvidence(tx, c, i.evidence_id, "PAYMENT");
       if (!i.bank_reference?.trim()) throw new ConflictException("BANK_REFERENCE_REQUIRED");
-      const existing = await tx.customerReceipt.findUnique({
-        where: { companyId_idempotencyKey: { companyId: c, idempotencyKey: key } },
-        include: { allocations: true },
-      });
-      if (existing) return existing;
-      const customer = await tx.customer.findFirst({
-        where: { id: customerId, companyId: c, state: "ACTIVE" },
-      });
-      if (!customer) throw new NotFoundException("Pelanggan tidak ditemukan.");
-      if (i.fulfillment_batch_id) {
-        const batch = await tx.fulfillmentBatch.findFirst({
-          where: { id: i.fulfillment_batch_id, companyId: c, salesOrder: { customerId } },
-          include: { salesOrder: true },
-        });
-        if (!batch) throw new ConflictException("FULFILLMENT_CUSTOMER_MISMATCH");
-        if (batch.salesOrder.currency !== i.currency)
-          throw new ConflictException("FULFILLMENT_CURRENCY_MISMATCH");
-        if (["CANCELLED", "CLOSED"].includes(batch.salesOrder.state) || batch.state === "CANCELLED")
-          throw new ConflictException("FULFILLMENT_NOT_OPEN");
-      }
-      const receipt = await tx.customerReceipt.create({
-        data: {
-          companyId: c,
-          customerId,
-          fulfillmentBatchId: i.fulfillment_batch_id,
-          externalReference: i.external_reference,
-          bankReference: i.bank_reference,
-          bankAccountId: i.bank_account_id,
-          evidenceId: i.evidence_id,
-          receivedAt: i.received_at ? new Date(i.received_at) : new Date(),
-          amount: d(i.amount),
-          unallocatedAmount: d(i.amount),
-          currency: i.currency,
-          idempotencyKey: key,
-          createdById: a,
-        },
-      });
-      await postLedger(tx, a, {
-        data: [
-          {
-            companyId: c,
-            kind: "CASH_RECEIPT",
-            sourceType: "CUSTOMER_RECEIPT",
-            sourceId: receipt.id,
-            currency: receipt.currency,
-            debit: receipt.amount,
-            credit: d("0"),
-          },
-          {
-            companyId: c,
-            kind: "CUSTOMER_ADVANCE",
-            sourceType: "CUSTOMER_RECEIPT",
-            sourceId: receipt.id,
-            currency: receipt.currency,
-            debit: d("0"),
-            credit: receipt.amount,
-          },
-        ],
-      });
-      await this.audit.recordWith(tx, {
-        companyId: c,
-        actorId: a,
-        action: "customer_receipt.posted",
-        resourceType: "customer_receipt",
-        resourceId: receipt.id,
-        after: receipt,
-      });
-      await postAdvanceTax(tx, c, a, receipt.id);
-      return receipt;
+      return postCustomerReceiptTx(tx,c,a,{customerId,fulfillmentBatchId:i.fulfillment_batch_id,amount:i.amount,
+        receivedAt:i.received_at ? new Date(i.received_at) : new Date(), bankAccountId:i.bank_account_id,
+        bankReference:i.bank_reference,evidenceId:i.evidence_id,idempotencyKey:key,currency:i.currency,externalReference:i.external_reference});
     });
   }
 
@@ -1967,6 +1912,8 @@ export class OtcPtpService {
       });
       if (!invoice || invoice.customerId !== receipt.customerId)
         throw new ConflictException("RECEIPT_INVOICE_MISMATCH");
+      if (receipt.salesOrderId && invoice.salesOrderId !== receipt.salesOrderId)
+        throw new ConflictException("RECEIPT_FUNDS_BOUND_TO_ANOTHER_ORDER");
       if (receipt.fulfillmentBatchId && invoice.fulfillmentBatchId !== receipt.fulfillmentBatchId)
         throw new ConflictException("RECEIPT_FUNDS_BOUND_TO_ANOTHER_FULFILLMENT");
       if (

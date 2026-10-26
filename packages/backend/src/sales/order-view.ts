@@ -1,5 +1,8 @@
 import { Prisma } from "@evflow/database";
 import { lineAmounts } from "./pricing-controls";
+import type { SalesOrderState } from "@evflow/database";
+import { orderDisplayStatus, estimatedDueDate } from "./order-status";
+import type { PaymentTerm } from "./customer-credit";
 
 type Line = {
   orderedQuantity: Prisma.Decimal;
@@ -15,8 +18,9 @@ type Line = {
   }[];
 };
 /** Read projection only; never used as a command gate. No costs or exposure are exposed. */
-export function orderView(order: { state: string; lines: Line[] }) {
-  const zero = () => new Prisma.Decimal(0);
+export function orderView(order: { state: string; lines: Line[]; orderDate?: Date; pendingException?: boolean; paymentTerm?: PaymentTerm | null; downPayment?: string }) {
+  const Decimal = Prisma.Decimal.clone({ precision: 48 });
+  const zero = () => new Decimal(0);
   let subtotal = zero(),
     tax = zero(),
     shipped = zero(),
@@ -44,6 +48,12 @@ export function orderView(order: { state: string; lines: Line[] }) {
   });
   const taxKnown = order.lines.length > 0 && order.lines.every((l) => !!l.taxSnapshot);
   return {
+    displayStatus: orderDisplayStatus({ state: order.state as SalesOrderState, pendingException: order.pendingException ?? false,
+      lines: order.lines.map(l => ({ ordered: l.orderedQuantity, closed: l.closedQuantity,
+        accepted: l.allocations.reduce((s,a) => s.add(a.acceptedQuantity), zero()),
+        inTransit: l.allocations.reduce((s,a) => s.add(a.inTransitQuantity), zero()) })) }),
+    dueDateEstimate: order.orderDate ? estimatedDueDate(order.orderDate, order.paymentTerm ?? null) : null,
+    downPayment: order.downPayment ?? "0",
     subtotal: subtotal.toString(),
     taxAmount: taxKnown ? tax.toString() : null,
     total: taxKnown ? subtotal.add(tax).toString() : null,

@@ -1,5 +1,16 @@
 # Database — model relasional
 
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+SalesOrderAdvance menyimpan companyId, salesOrderId, amount numeric(24,8), currency, receivedAt, bankAccountId, bankReference, evidenceId, state PENDING_VERIFICATION/VERIFIED/REJECTED, pencatat/waktu, verifier/waktu, rejectionReason, customerReceiptId unik, version dan idempotencyKey unik per perusahaan. CustomerReceipt.salesOrderId nullable mempertahankan asal uang muka; fulfillmentBatchId diisi saat dana PREPAY diikat. Tidak mengubah nominal posted receipt. Dua migration mencatat pemberian izin baru kepada pemegang kemampuan sumber.
+
+## Model kepala SO — 25 Oktober 2026
+
+Migration 20261025100000_sales_order_header_fields menambah sales_orders.order_date (date), payment_term_code, salesperson_id, warehouse_id serta sales_order_lines.warehouse_id. Tanggal lama diisi dari created_at pada zona perusahaan dan salesperson dari created_by_id; gudang/termin lama tetap NULL. FK gudang memakai company_id + warehouse_id; pilihan salesperson memerlukan membership aktif pada command. Indeks company_id/order_date mendukung daftar. Command selalu menentukan tanggal perusahaan; default SQL CURRENT_DATE hanya kompatibilitas insert lama.
+
+Migration 20261025110000_sales_order_policy_defaults menyediakan OPS-FLX-10..13 secara idempoten dengan audit sistem tanpa mengganti policy yang ada. Status tampilan tidak disimpan: SQL per baris dan helper Decimal menghitung fakta POD/pengiriman/penutupan. Tidak ada saldo atau posted ledger yang dimigrasikan; pemulihan memakai forward-fix.
+
+
 ## Dampak keputusan 24 Oktober 2026 — rancangan
 
 Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Bentuk final tabel ditetapkan pada rencana implementasi dan mengikuti pola policy bertanggal efektif, audit dan outbox:

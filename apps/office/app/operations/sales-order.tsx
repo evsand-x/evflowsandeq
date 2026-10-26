@@ -1,24 +1,16 @@
 "use client";
 import { useRef, useState } from "react";
 import Link from "next/link";
-import Decimal from "decimal.js";
+import { SalesOrderDetail } from "./sales-order-detail";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   DataTable,
-  DetailTabs,
-  MetaItem,
   ActiveFilters,
   FilterChips,
   FilterPopover,
@@ -33,23 +25,9 @@ import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
 import { useListParams } from "../master-data/master-shared";
 import { type Row } from "./workspace";
-import { SalesExceptions } from "./extended-controls";
-import { SalesOrderForm, CloseRemainder } from "./sales-order-form";
-import {
-  amount,
-  terms,
-  orderStates,
-  taxLabel,
-  type Order,
-  type OrderCommand,
-} from "./sales-order-types";
-import {
-  DocumentsTab,
-  FulfillmentTab,
-  NextStep,
-  Tone,
-  useOrderJourney,
-} from "./sales-order-journey";
+import { SalesOrderForm } from "./sales-order-form";
+import { amount, orderStates, type Order, type OrderCommand } from "./sales-order-types";
+import { Tone } from "./sales-order-journey";
 import "./sales-order.css";
 import "./sales-order-modern.css";
 import "./sales-order-frame.css";
@@ -576,389 +554,29 @@ export function Totals({
   );
 }
 
-type Line = Order["lines"][number];
-const sum = (lines: Line[], pick: (line: Line) => Decimal.Value) =>
-  lines.reduce((total, line) => total.add(pick(line)), new Decimal(0));
-const shippedOf = (line: Line) =>
-  sum([line], () =>
-    (line.allocations ?? []).reduce(
-      (t, a) => t.add(a.acceptedQuantity).add(a.inTransitQuantity).add(a.returnedQuantity),
-      new Decimal(0),
-    ),
-  );
-const receivedOf = (line: Line) =>
-  (line.allocations ?? []).reduce((t, a) => t.add(a.acceptedQuantity), new Decimal(0));
-const pct = (part: Decimal, whole: Decimal) =>
-  whole.isZero() ? "0%" : `${part.div(whole).mul(100).toDecimalPlaces(2).toString()}%`;
-
 function OrderDetail({ row }: { row: Order }) {
   const can = useCan();
   const { command, pending, error, errorHref } = useOrderCommand();
-  const journey = useOrderJourney(row, can);
-  const [action, setAction] = useState<"close" | "cancel" | null>(null);
-  const editable =
-    ["DRAFT", "OPEN"].includes(row.state) &&
-    row.fulfillments?.every((b) => b.state === "CANCELLED") &&
-    row.lines.every((l) => /^0(?:\.0*)?$/.test(l.closedQuantity));
-  const closable = can("sales_order.close_remainder") && ["OPEN", "DRAFT"].includes(row.state);
-  const tracked = row.lines.every((line) => line.allocations);
-  const ordered = sum(row.lines, (l) => l.orderedQuantity),
-    shipped = sum(row.lines, shippedOf),
-    closed = sum(row.lines, (l) => l.closedQuantity),
-    backorder = sum(row.lines, (l) => l.backorderQuantity);
-  const unit =
-    new Set(row.lines.map((l) => l.product.baseUom?.name)).size === 1
-      ? (row.lines[0]?.product.baseUom?.name ?? "")
-      : "unit";
-  const customer = row.customer as { name?: string; channel?: { name: string } | null } | undefined;
-  const channel = customer?.channel?.name;
-  const rates = new Set(row.lines.map((l) => l.taxSnapshot?.rate ?? ""));
-  const taxTitle =
-    rates.size === 1 && row.lines[0]?.taxSnapshot
-      ? `PPN ${taxLabel(row.lines[0].taxSnapshot)}`
-      : "Pajak";
-  const submittedAt = (row as Order & { submittedAt?: string | null }).submittedAt;
-  const customerLink = (className: string) =>
-    customer?.name && can("master_customer.read") && row.customerId ? (
-      <Link className={className} href={`/master-data/customers/${row.customerId}`}>
-        {customer.name}
-      </Link>
-    ) : (
-      (customer?.name ?? "Pelanggan belum tersedia")
-    );
-  const items: ColumnDef<Line>[] = [
-    {
-      id: "product",
-      header: "Produk",
-      cell: ({ row: r }) => (
-        <span className="so-product">
-          <strong>{r.original.product.name}</strong>
-          <small>
-            {r.original.product.code} · {r.original.product.baseUom?.name ?? "—"}
-            {r.original.taxSnapshot ? ` · ${r.original.taxSnapshot.name}` : ""}
-          </small>
-        </span>
-      ),
-    },
-    ...(
-      [
-        ["orderedQuantity", "Dipesan"],
-        ["allocatedQuantity", "Teralokasi"],
-      ] as const
-    ).map(([key, label]) => ({
-      id: key,
-      header: label,
-      cell: ({ row: r }: { row: { original: Line } }) => (
-        <span className="so-num">{amount(r.original[key])}</span>
-      ),
-    })),
-    {
-      id: "shipped",
-      header: "Dikirim",
-      cell: ({ row: r }) => (
-        <span className="so-num">
-          {r.original.allocations ? amount(shippedOf(r.original).toString()) : "—"}
-        </span>
-      ),
-    },
-    {
-      id: "received",
-      header: "Diterima (POD)",
-      cell: ({ row: r }) => (
-        <span className="so-num">
-          {r.original.allocations ? amount(receivedOf(r.original).toString()) : "—"}
-        </span>
-      ),
-    },
-    {
-      id: "backorder",
-      header: "Backorder",
-      cell: ({ row: r }) => (
-        <span
-          className="so-num"
-          data-warn={new Decimal(r.original.backorderQuantity).gt(0) || undefined}
-        >
-          {amount(r.original.backorderQuantity)}
-        </span>
-      ),
-    },
-    {
-      id: "closed",
-      header: "Ditutup",
-      cell: ({ row: r }) => <span className="so-num">{amount(r.original.closedQuantity)}</span>,
-    },
-    {
-      id: "price",
-      header: "Harga",
-      cell: ({ row: r }) => (
-        <span className="so-num">{amount(r.original.unitPrice, row.currency)}</span>
-      ),
-    },
-    {
-      id: "subtotal",
-      header: "Subtotal",
-      cell: ({ row: r }) => (
-        <span className="so-num so-strong">{amount(r.original.subtotal, row.currency)}</span>
-      ),
-    },
-  ];
-  const summary = (
-    <div className="so-tab-stack">
-      <div className="so-summary">
-        <dl className="so-kv">
-          <div>
-            <dt>Pelanggan</dt>
-            <dd>{customerLink("page-frame-link")}</dd>
-          </div>
-          <div>
-            <dt>Channel</dt>
-            <dd data-empty={!channel || undefined}>{channel ?? "Belum ditetapkan"}</dd>
-          </div>
-          <div className="so-kv-span">
-            <dt>Alamat pengantaran</dt>
-            <dd>{row.deliveryAddress}</dd>
-          </div>
-          <div>
-            <dt>Ketentuan pembayaran (snapshot)</dt>
-            <dd data-empty={!row.paymentSnapshot || undefined}>
-              {row.paymentSnapshot ? terms(row.paymentSnapshot) : "Ditetapkan saat SO diajukan"}
-            </dd>
-          </div>
-          <div>
-            <dt>Ongkir</dt>
-            <dd data-empty={!row.freightTermsSnapshot || undefined}>
-              {!row.freightTermsSnapshot
-                ? "Belum ditetapkan"
-                : row.freightTermsSnapshot.payer === "COMPANY"
-                  ? "Ditanggung perusahaan"
-                  : row.freightTermsSnapshot.payer === "CARRIER"
-                    ? "Ditanggung ekspedisi"
-                    : "Ditagihkan per pengiriman"}
-              {row.freightEstimate != null
-                ? ` · estimasi ${amount(row.freightEstimate, row.currency)}`
-                : ""}
-            </dd>
-          </div>
-          <div>
-            <dt>Catatan</dt>
-            <dd data-empty={!row.notes || undefined}>{row.notes || "Tidak ada"}</dd>
-          </div>
-        </dl>
-        <aside className="so-summary-aside" aria-label="Nilai dan progres pesanan">
-          <div className="so-box">
-            <dl className="so-sums">
-              <div>
-                <dt>
-                  Nilai barang · {amount(ordered.toString())} {unit}
-                </dt>
-                <dd>{amount(row.subtotal, row.currency)}</dd>
-              </div>
-              <div>
-                <dt>{taxTitle}</dt>
-                <dd>
-                  {row.taxAmount == null
-                    ? "Ditetapkan saat evaluasi"
-                    : amount(row.taxAmount, row.currency)}
-                </dd>
-              </div>
-              <div className="so-sums-total">
-                <dt>Total barang</dt>
-                <dd>{row.total == null ? "Menunggu evaluasi" : amount(row.total, row.currency)}</dd>
-              </div>
-            </dl>
-            <p className="page-frame-subtitle">
-              Ongkir dihitung per pengiriman, terpisah dari nilai barang.
-            </p>
-          </div>
-          <div className="so-box">
-            <strong className="so-box-title">Progres jumlah</strong>
-            {tracked ? (
-              <>
-                <div
-                  className="so-progress"
-                  role="img"
-                  aria-label={`Dikirim ${amount(shipped.toString())} dari ${amount(ordered.toString())} ${unit}, backorder ${amount(backorder.toString())}, ditutup ${amount(closed.toString())}`}
-                >
-                  <span style={{ width: pct(shipped, ordered) }} />
-                  <span data-kind="closed" style={{ width: pct(closed, ordered) }} />
-                </div>
-                <div className="so-progress-legend">
-                  <span>Dikirim {amount(shipped.toString())}</span>
-                  <span>
-                    {backorder.gt(0)
-                      ? `Backorder ${amount(backorder.toString())}`
-                      : `Ditutup ${amount(closed.toString())}`}
-                  </span>
-                  <span>Dipesan {amount(ordered.toString())}</span>
-                </div>
-              </>
-            ) : (
-              <p className="page-frame-subtitle">
-                Jumlah terkirim tersedia setelah ada alokasi. Dipesan {amount(ordered.toString())}{" "}
-                {unit}.
-              </p>
-            )}
-          </div>
-        </aside>
-      </div>
-      <section>
-        <h3 className="so-section-title">Barang</h3>
-        <div className="so-embedded">
-          <DataTable
-            data={row.lines}
-            columns={items}
-            total={row.lines.length}
-            label="barang"
-            showColumns={false}
-          />
-        </div>
-        <p className="page-frame-subtitle so-footnote">
-          Jumlah ditutup tidak dihitung sebagai terkirim dan tidak menghapus jumlah pesanan asli.
-        </p>
-      </section>
-      <details className="so-exceptions">
-        <summary>Persetujuan unlock & harga khusus</summary>
-        <SalesExceptions row={row} command={command} pending={pending} can={can} />
-      </details>
-    </div>
-  );
   return (
-    <OfficePage
-      section="sales"
-      crumbs={[...crumbs, { label: row.number }]}
-      title={row.number}
-      subtitle={
-        <>
-          {customerLink("page-frame-band-link")}
-          {row.customerReference ? ` · SP ${row.customerReference}` : ""} ·{" "}
-          {submittedAt ? "diajukan" : "dibuat"}{" "}
-          {new Date(submittedAt ?? row.createdAt).toLocaleDateString("id-ID", {
-            dateStyle: "medium",
-          })}
-        </>
-      }
-      meta={
-        <>
-          <MetaItem label="Status pesanan">
-            <Tone>{orderStates[row.state] ?? row.state}</Tone>
-          </MetaItem>
-          <MetaItem label="Pemenuhan">
-            <Tone>{row.fulfillment}</Tone>
-          </MetaItem>
-          <MetaItem label="Sisa">
-            <Tone>{row.remainderStatus}</Tone>
-          </MetaItem>
-        </>
-      }
-      actions={
-        <>
-          {closable && backorder.gt(0) && (
-            <Button variant="outline" disabled={pending} onClick={() => setAction("close")}>
-              Tutup sisa
-            </Button>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">Lainnya</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {can("sales_order.update") && (
-                <DropdownMenuItem disabled={!editable || pending} asChild={!!editable}>
-                  {editable ? (
-                    <Link href={`${base}/${row.id}/edit`}>Revisi SO</Link>
-                  ) : (
-                    <span>Revisi SO tidak tersedia: pemenuhan sudah berjalan</span>
-                  )}
-                </DropdownMenuItem>
-              )}
-              {closable && (
-                <DropdownMenuItem disabled={pending} onSelect={() => setAction("cancel")}>
-                  Batalkan SO / sisa
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onSelect={() => window.print()}>Cetak SO</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {row.state === "DRAFT" && can("sales_order.submit") ? (
-            <Button
-              disabled={pending}
-              onClick={() => void command(`/sales-orders/${row.id}/submit`).catch(() => undefined)}
-            >
-              {pending ? "Memproses…" : "Ajukan SO"}
-            </Button>
-          ) : (
-            can("sales_order.create") && (
-              <Button asChild>
-                <Link href={`${base}/new`}>
-                  <IconPlus aria-hidden="true" />
-                  SO baru
-                </Link>
-              </Button>
-            )
-          )}
-        </>
-      }
-    >
-      {error && (
-        <PageNotice tone="error" settingsHref={errorHref}>
-          {error}
-        </PageNotice>
-      )}
-      <NextStep row={row} journey={journey} can={can} command={command} pending={pending} />
-      <DetailTabs
-        tabs={[
-          { id: "summary", label: "Ringkasan", content: summary },
-          {
-            id: "fulfillment",
-            label: "Pemenuhan",
-            count: journey.active.length,
-            content: (
-              <FulfillmentTab
-                row={row}
-                journey={journey}
-                can={can}
-                command={command}
-                pending={pending}
-                onCloseRemainder={() => setAction("close")}
-              />
-            ),
-          },
-          {
-            id: "documents",
-            label: "Dokumen",
-            count: journey.q.isSuccess ? journey.entries.length + 1 : undefined,
-            content: <DocumentsTab row={row} journey={journey} can={can} />,
-          },
-          {
-            id: "history",
-            label: "Riwayat",
-            content: can("audit_event.read") ? (
-              <History id={row.id} />
-            ) : (
-              <PageNotice>Anda tidak memiliki izin membaca riwayat.</PageNotice>
-            ),
-          },
-        ]}
-      />
-      {action && (
-        <CloseRemainder
-          row={row}
-          cancel={action === "cancel"}
-          command={command}
-          pending={pending}
-          onClose={() => setAction(null)}
-        />
-      )}
-    </OfficePage>
+    <SalesOrderDetail
+      row={row}
+      command={command}
+      pending={pending}
+      error={error}
+      errorHref={errorHref}
+      can={can}
+      history={<History id={row.id} />}
+    />
   );
 }
-
 const auditLabels: Record<string, string> = {
   "sales_order.created": "SO dibuat",
   "sales_order.submitted": "SO diajukan dan dievaluasi",
   "sales_order.revised": "SO direvisi",
   "sales_order.remainder_closed": "Sisa pesanan ditutup",
   "sales_order.cancelled": "SO dibatalkan",
+  "sales_order.duplicated": "SO disalin menjadi draft",
+  "sales_order.printed": "SO dicetak",
 };
 const auditTones: Record<string, string> = {
   "sales_order.created": "#5A6680",

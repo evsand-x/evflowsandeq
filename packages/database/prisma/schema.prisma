@@ -199,6 +199,7 @@ model User {
   memberships       CompanyMembership[]
   auditEvents       AuditEvent[]        @relation("AuditActor")
   savedPolicies     PolicyVersion[]     @relation("PolicySavedBy")
+  salesOrders       SalesOrder[]        @relation("SalesOrderSalesperson")
 
   @@map("users")
 }
@@ -1047,7 +1048,10 @@ model Warehouse {
   stockLots      StockLot[]
   purchaseOrders PurchaseOrder[]
   goodsReceipts  GoodsReceipt[]
+  salesOrders    SalesOrder[]
+  salesOrderLines SalesOrderLine[]
 
+  @@unique([companyId, id])
   @@unique([companyId, code])
   @@unique([companyId, normalizedName])
   @@index([companyId, state, name])
@@ -1260,10 +1264,16 @@ model InventoryMovement {
 }
 
 model SalesOrder {
+  advances SalesOrderAdvance[]
+  customerReceipts CustomerReceipt[]
   materialRevision Int @default(1) @map("material_revision")
   id               String             @id @default(uuid()) @db.Uuid
   companyId        String             @map("company_id") @db.Uuid
   customerId       String             @map("customer_id") @db.Uuid
+  orderDate        DateTime           @default(dbgenerated("CURRENT_DATE")) @map("order_date") @db.Date
+  paymentTermCode  String?            @map("payment_term_code")
+  salespersonId    String?            @map("salesperson_id") @db.Uuid
+  warehouseId      String?            @map("warehouse_id") @db.Uuid
   number           String
   state            SalesOrderState    @default(DRAFT)
   currency         String             @default("IDR") @db.Char(3)
@@ -1280,6 +1290,8 @@ model SalesOrder {
   createdById      String             @map("created_by_id") @db.Uuid
   company          Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   customer         Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesperson      User?              @relation("SalesOrderSalesperson", fields: [salespersonId], references: [id], onDelete: Restrict)
+  warehouse        Warehouse?         @relation(fields: [companyId, warehouseId], references: [companyId, id], onDelete: Restrict)
   lines            SalesOrderLine[]
   fulfillments     FulfillmentBatch[]
   purchaseRequests PurchaseRequest[]
@@ -1288,6 +1300,7 @@ model SalesOrder {
 
   @@unique([companyId, number])
   @@index([companyId, customerId, state])
+  @@index([companyId, orderDate])
   @@map("sales_orders")
 }
 
@@ -1297,6 +1310,7 @@ model SalesOrderLine {
   companyId         String                  @map("company_id") @db.Uuid
   salesOrderId      String                  @map("sales_order_id") @db.Uuid
   productId         String                  @map("product_id") @db.Uuid
+  warehouseId       String?                 @map("warehouse_id") @db.Uuid
   orderedQuantity   Decimal                 @map("ordered_quantity") @db.Decimal(24, 10)
   allocatedQuantity Decimal                 @default(0) @map("allocated_quantity") @db.Decimal(24, 10)
   backorderQuantity Decimal                 @default(0) @map("backorder_quantity") @db.Decimal(24, 10)
@@ -1305,6 +1319,7 @@ model SalesOrderLine {
   taxSnapshot       Json?                    @map("tax_snapshot")
   salesOrder        SalesOrder              @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
   product           Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
+  warehouse         Warehouse?              @relation(fields: [companyId, warehouseId], references: [companyId, id], onDelete: Restrict)
   allocations       FulfillmentAllocation[]
   Uom               Uom?                    @relation(fields: [uomId], references: [id])
   uomId             String?                 @db.Uuid
@@ -1519,6 +1534,9 @@ model CustomerRefund {
 }
 
 model CustomerReceipt {
+  salesOrderId String? @map("sales_order_id") @db.Uuid
+  salesOrder SalesOrder? @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  salesOrderAdvance SalesOrderAdvance?
   refundedAmount Decimal @default(0) @map("refunded_amount") @db.Decimal(24,8)
   bankAccountId       String? @map("bank_account_id") @db.Uuid
   id                 String                      @id @default(uuid()) @db.Uuid
@@ -2301,4 +2319,36 @@ model DeductionType {
   updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
   @@unique([companyId, name])
   @@map("deduction_types")
+}
+
+
+enum SalesOrderAdvanceState {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+}
+model SalesOrderAdvance {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @map("company_id") @db.Uuid
+  salesOrderId String @map("sales_order_id") @db.Uuid
+  amount Decimal @db.Decimal(24,8)
+  currency String @db.Char(3)
+  receivedAt DateTime @map("received_at") @db.Timestamptz(6)
+  bankAccountId String @map("bank_account_id") @db.Uuid
+  bankReference String? @map("bank_reference")
+  evidenceId String @map("evidence_id") @db.Uuid
+  state SalesOrderAdvanceState @default(PENDING_VERIFICATION)
+  recordedById String @map("recorded_by_id") @db.Uuid
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  verifiedById String? @map("verified_by_id") @db.Uuid
+  verifiedAt DateTime? @map("verified_at") @db.Timestamptz(6)
+  rejectionReason String? @map("rejection_reason")
+  customerReceiptId String? @unique @map("customer_receipt_id") @db.Uuid
+  version Int @default(1)
+  idempotencyKey String @map("idempotency_key")
+  salesOrder SalesOrder @relation(fields:[salesOrderId], references:[id], onDelete:Restrict)
+  customerReceipt CustomerReceipt? @relation(fields:[customerReceiptId], references:[id], onDelete:Restrict)
+  @@unique([companyId,idempotencyKey])
+  @@index([companyId,salesOrderId,state])
+  @@map("sales_order_advances")
 }

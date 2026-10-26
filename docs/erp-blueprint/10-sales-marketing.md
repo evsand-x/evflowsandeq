@@ -1,5 +1,20 @@
 # Domain Sales & Marketing
 
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+Detail SO menghitung progress setiap barang serta dokumen terkait, termasuk invoice ISSUED_WAITING_POD. DP sekarang mencakup receipt POSTED tertaut langsung SO atau batch SO, dikurangi refund tanpa hitung ganda. Catatan uang muka pending tidak masuk DP. Daftar/detail menyembunyikan DP tanpa izin receipt/advance; invoice dan dokumen warehouse mengikuti izin submenu masing-masing. Duplikat membuat draft baru dengan default kepala terbaru, referensi/bukti kosong dan harga diperiksa saat submit.
+
+## Backend daftar dan form SO — 25 Oktober 2026
+
+Tanggal dokumen tersimpan sebagai tanggal bisnis; default hari ini zona perusahaan, boleh di periode akuntansi terkunci. No. SP dan lampiran opsional dengan sakelar wajib pada OPS-FLX-12/13; lampiran yang disertakan tetap divalidasi perusahaan dan tujuan. Alamat bawaan dari alamat kirim utama/alamat pelanggan. Sales bawaan pembuat dan harus anggota aktif perusahaan. Termin dipilih dari daftar aktif OPS-FLX-03, disimpan di kepala SO dan disnapshot saat submit; perubahan katalog tidak mengubah snapshot SO yang sudah diajukan. Termin draft yang tidak lagi tersedia ditolak.
+
+Gudang dipilih pada kepala; kode gudang bawaan OPS-FLX-10, atau satu-satunya gudang aktif. Banyak gudang tanpa pilihan/default menghasilkan pesan Setting. Gudang per barang hanya jika OPS-FLX-11 aktif. Alokasi dan alokasi ulang mengikuti gudang baris/kepala serta FEFO/FIFO dan kelayakan lot; tanpa stok cukup, sisa tetap terbuka. SO lama tanpa gudang tetap mempertahankan perilaku lama lintas gudang sampai direvisi; tidak menulis ulang alokasi lama.
+
+Status tampilan tunggal mengikuti urutan CANCELLED, DRAFT dengan exception SUBMITTED belum kedaluwarsa, DRAFT, selesai/semua jumlah diterima setelah dikurangi jumlah ditutup, semua dikirim, sebagian dikirim, OPEN. Jumlah terkirim untuk status = diterima + dalam perjalanan; jumlah ditolak kembali menjadi kebutuhan. Filter tanggal menggunakan tanggal SO, bukan waktu record dibuat. Jatuh tempo perkiraan hanya untuk Tempo (tanggal SO + hari); invoice tetap memakai tanggal terbit + snapshot TOP.
+
+DP sementara berasal dari penerimaan POSTED yang terkait batch SO, dikurangi pengembalian dana; penerimaan tanpa tautan batch tidak ikut. Command penerimaan yang ada membukukan dana melalui akun uang muka. Pencatatan uang muka langsung dari SO dan verifikasi Finance ada pada bagian 2, belum dibangun dalam tahap ini. Daftar hanya mengirim field aman, tidak mengekspos snapshot limit kredit.
+
+
 ## Keputusan 24 Oktober 2026 — harga dan diskon
 
 Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md) dan OTC-18/19: harga otomatis dari harga khusus pelanggan atau harga umum; batas diskon per peran/orang/produk; Harga Khusus diajukan dan disetujui di Penawaran & Harga. Ketentuan versi penawaran dan harga khusus lama yang bertentangan diganti keputusan ini.

@@ -1,5 +1,14 @@
 # Domain Setting
 
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+Izin sales_order_advance.create/verify dimigrasikan hanya dari grant customer_receipt.post; sales_order.print hanya dari sales_order.read, scope dipertahankan dan pemberian diaudit. Peran lain tidak diperluas. Dokumen terkait Pick Slip memakai outbound_picking.read, Packing List outbound_checking.read, Surat Jalan outbound_shipping.read, POD delivery_receipt.read, Proforma proforma.read, invoice/nota kredit sales_invoice.read. Ini menyelaraskan rencana Bagian 2 dengan invariant izin submenu independen.
+
+## Konfigurasi kepala SO — backend 25 Oktober 2026
+
+CFG-08: OPS-FLX-10 (kode gudang bawaan, null), OPS-FLX-11 (gudang per barang, false), OPS-FLX-12 (No. SP wajib, false), OPS-FLX-13 (lampiran wajib, false) disimpan sebagai policy versi yang dapat diedit. Kelompok sales dimiliki izin terms_credit.read/update melalui API policy yang ada. Migration menyediakan nilai awal bagi perusahaan beranggota aktif tanpa menimpa pilihan lama, dengan audit sistem; perusahaan baru memakai provisioning. Opsi form SO hanya memuat metadata yang diperlukan dan tidak membuka konfigurasi pribadi/keuangan lain. Pesan konfigurasi menyediakan settings_href menuju /setting/sales. Kartu kontrol khusus baru masih pekerjaan frontend berikutnya.
+
+
 ## Keputusan 24 Oktober 2026 — konsolidasi pengaturan
 
 Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Submenu Setting: Profil Perusahaan, Pengguna, Peran (termasuk batas diskon per peran dan per orang), Kebijakan Umum (zona waktu, tahun buku, mata uang dari data perusahaan; format angka), Penomoran Dokumen (IAM-06), Pajak (FIN-17), Termin & Kredit (daftar termin, mode kredit, ongkir bawaan), Jenis Potongan (FIN-18), Pemetaan Akun, Persetujuan (persetujuan sementara P2P CFG-12 sejak tahap 5; mesin umum tahap 4). Setiap submenu memiliki izin sendiri (CFG-11). Kebijakan duplikat identitas perusahaan (`OPS-COMP-01..03`) dihentikan.

@@ -1,5 +1,14 @@
 # Design — web kantor dan aplikasi mobile sales/gudang
 
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+Detail SO satu halaman: kepala nomor/status/navigasi/Cetak/tindakan utama/Aksi/menu lainnya; atribut faktur; tabel barang bersisa di atas; kuantitas, subtotal, PPN, total dan sisa tagihan; panel uang muka; Transaksi; jejak perubahan/cetak. Tidak ada tab detail lama atau Bagikan/WhatsApp. Tindakan tanpa izin tidak dikirim, hambatan alur beralasan. Cetak menggunakan Profil Perusahaan dan audit sebelum dialog cetak. QA visual operasional belum lulus; lihat laporan eksekusi.
+
+## Kesiapan backend SO mudah — 25 Oktober 2026
+
+Arah layar mengikuti desain SO mudah 25 Oktober. Backend telah menyediakan kolom daftar dan status tunggal, opsi kepala form dan informasi stok per gudang. Tahap backend ini mempertahankan field lama agar Office berjalan; tidak menyatakan form faktur baru, tab status, tombol atau kartu Setting khusus sudah diterapkan/diverifikasi visual. UI harus memakai data/status/hitungan dari backend, bukan menyimpulkan ulang status dari invoice atau pembayaran.
+
+
 ## Keputusan 24 Oktober 2026 — konsolidasi
 
 Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Navigasi: setiap menu di satu modul; Setting berisi Profil Perusahaan, Pengguna, Peran, Kebijakan Umum, Penomoran Dokumen, Pajak, Termin & Kredit, Jenis Potongan, Pemetaan Akun. Form SO menampilkan "Diskon maks. untuk Anda" per baris. Form Terima Pembayaran memuat tabel Potongan. Dialog penomoran memuat prefix, format tahun, format bulan, panjang urut dan toggle reset bulanan/tahunan dengan pratinjau. Tombol persetujuan tampil di halaman dokumen.

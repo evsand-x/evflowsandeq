@@ -1,5 +1,14 @@
 # User Flow — lintas peran dan pengecualian
 
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+SO → Catat Uang Muka → Menunggu verifikasi → Finance pengguna berbeda memverifikasi atau menolak. Hanya verifikasi membuat penerimaan/jurnal dan menambah DP. Dispatch PREPAY mengikat dana SO yang dipakai ke satu batch sehingga batch lain tidak menghitung ulang. Detail menautkan dokumen asal; Buat Surat Jalan tetap melalui pengambilan dan pemeriksaan. Invoice dari Packing List menunggu POD tetap tampak di Transaksi bila izin invoice ada.
+
+## Form SO — kontrak backend 25 Oktober 2026
+
+Pilih pelanggan → alamat/termin bawaan → tentukan tanggal/sales/gudang → semua baris pesanan → simpan draft (No. SP/bukti hanya wajib bila Setting aktif) → submit memeriksa harga, termin, kredit dan stok → hanya gudang pilihan yang dialokasikan. Stock availability memberi informasi sisa dan locator lain tanpa perpindahan stok. Daftar menampilkan status turunan dari POD dan sisa ditutup; tanggal perkiraan jatuh tempo SO tidak mengganti tanggal resmi invoice. Implementasi layar baru, approval umum dan pengajuan pindah locator tetap bagian berikutnya.
+
+
 ## Keputusan 24 Oktober 2026 — konsolidasi
 
 Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Alur SO: pilih produk → harga otomatis (harga khusus pelanggan atau harga umum) → ubah harga/diskon dalam batas → pajak bawaan terisi → ajukan. Alur pembayaran: catat uang diterima → tambah baris potongan → potongan wajib bukti berstatus Menunggu bukti potong → unggah bukti → lunas. Harga khusus diajukan dan disetujui di Sales & Marketing pada halaman pengajuannya.

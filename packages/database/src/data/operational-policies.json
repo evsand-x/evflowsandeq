@@ -978,5 +978,45 @@
       "maximum": "100",
       "pattern": "^[0-9]{1,3}([.][0-9]{1,4})?$"
     }
+  },
+  {
+    "code": "OPS-FLX-10",
+    "name": "Gudang bawaan penjualan",
+    "group": "sales",
+    "domain": "administration",
+    "type": "string",
+    "unit": null,
+    "default": null,
+    "schema": { "type": ["string", "null"], "minLength": 1 }
+  },
+  {
+    "code": "OPS-FLX-11",
+    "name": "Gudang per barang di Sales Order",
+    "group": "sales",
+    "domain": "administration",
+    "type": "boolean",
+    "unit": null,
+    "default": false,
+    "schema": { "type": "boolean" }
+  },
+  {
+    "code": "OPS-FLX-12",
+    "name": "No. SP pelanggan wajib di Sales Order",
+    "group": "sales",
+    "domain": "administration",
+    "type": "boolean",
+    "unit": null,
+    "default": false,
+    "schema": { "type": "boolean" }
+  },
+  {
+    "code": "OPS-FLX-13",
+    "name": "Lampiran wajib di Sales Order",
+    "group": "sales",
+    "domain": "administration",
+    "type": "boolean",
+    "unit": null,
+    "default": false,
+    "schema": { "type": "boolean" }
   }
 ]

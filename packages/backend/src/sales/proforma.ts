@@ -9,22 +9,29 @@ import { issueDocument } from "./document-controls";
 import { lineAmounts, assertPriceGrants, rejectTaxChoice } from "./pricing-controls";
 import { defaultSalesTaxOn } from "../finance/operational-tax";
 import { lockCustomer, assertDispatchLots } from "./transaction-controls";
+import { availablePrepayFunds } from "./prepay-funds";
 
 type Tx = Prisma.TransactionClient;
 export const proformaKinds = { startsWith: "PROFORMA" } as const;
 
+export const proformaBatchInclude = {
+      salesOrder: { include: { customer: true, company: true } },
+      allocations: {
+        orderBy: { id: "asc" as const },
+        include: { salesOrderLine: { include: { product: { include: { baseUom: true } } } } },
+      },
+} satisfies Prisma.FulfillmentBatchInclude;
+
 async function source(tx: Tx, companyId: string, batchId: string) {
   const batch = await tx.fulfillmentBatch.findFirst({
     where: { id: batchId, companyId },
-    include: {
-      salesOrder: { include: { customer: true, company: true } },
-      allocations: {
-        orderBy: { id: "asc" },
-        include: { salesOrderLine: { include: { product: { include: { baseUom: true } } } } },
-      },
-    },
+    include: proformaBatchInclude,
   });
   if (!batch) throw new NotFoundException("Tahap pemenuhan tidak ditemukan.");
+  return proformaSource(batch);
+}
+
+export function proformaSource(batch: Prisma.FulfillmentBatchGetPayload<{ include: typeof proformaBatchInclude }>) {
   const order = batch.salesOrder;
   const allocations = batch.allocations
     .filter((a) => a.quantity.gt(0))
@@ -89,7 +96,7 @@ async function source(tx: Tx, companyId: string, batchId: string) {
 }
 
 // Legacy originals are kept and reused if their printed content still matches the allocation.
-function matches(saved: Prisma.JsonValue, current: Awaited<ReturnType<typeof source>>) {
+export function matchesProformaSource(saved: Prisma.JsonValue, current: ReturnType<typeof proformaSource>) {
   const value = saved as Record<string, unknown> | null;
   if (typeof value?.source_version === "string") return value.source_version === current.version;
   const compact = (v: Record<string, unknown>) =>
@@ -122,6 +129,8 @@ function matches(saved: Prisma.JsonValue, current: Awaited<ReturnType<typeof sou
     });
   return !!value && compact(value) === compact(current.snapshot);
 }
+
+const matches = matchesProformaSource;
 
 async function latest(tx: Tx, companyId: string, batchId: string) {
   return tx.fulfillmentDocument.findFirst({
@@ -160,16 +169,12 @@ async function lockedSource(tx: Tx, c: string, id: string) {
   if (!current.snapshot.allocations.length)
     throw new ConflictException("Proforma memerlukan alokasi dengan jumlah positif.");
   if (current.batch.reservationExpiresAt && current.batch.reservationExpiresAt <= new Date()) {
-    const funds = await tx.customerReceipt.aggregate({
-      where: {
-        companyId: c,
-        fulfillmentBatchId: id,
-        state: "POSTED",
-        currency: current.snapshot.currency,
-      },
-      _sum: { unallocatedAmount: true },
+    const funds = await availablePrepayFunds(tx, c, {
+      id,
+      salesOrderId: current.batch.salesOrderId,
+      currency: current.snapshot.currency,
     });
-    if ((funds._sum.unallocatedAmount ?? new Prisma.Decimal(0)).lt(current.snapshot.total))
+    if (funds.lt(current.snapshot.total))
       throw new ConflictException("Reservasi kedaluwarsa. Evaluasi kembali tahap pemenuhan.");
   }
   await assertPriceGrants(
