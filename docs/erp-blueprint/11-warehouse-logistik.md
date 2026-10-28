@@ -88,3 +88,13 @@ Mengikuti bagian 7 [desain konsolidasi](../superpowers/specs/2026-10-24-konsolid
 - **Biaya stok (FIN-04).** Batch, expiry dan locator tetap dilacak untuk FEFO/FIFO, recall dan karantina. Nilai keluar memakai rata-rata bergerak produk, bukan biaya per batch; penerimaan ulang batch yang sama dengan harga berbeda memperbarui rata-rata.
 - **Persetujuan PO dan retur supplier (CFG-12).** Sampai mesin persetujuan umum aktif, persetujuan PO dan retur supplier memakai toggle di Setting › Persetujuan dengan nilai bawaan nonaktif. Bila aktif, PO berstatus Menunggu Approval sebelum Disetujui/Diterbitkan. Persetujuan opname/penyesuaian dan pemusnahan wajib dan tidak dapat dimatikan.
 - **Urutan pembangunan.** Tahap 5 (P2P) dan 6 (Gudang) dikerjakan sebelum mesin persetujuan umum (tahap 4).
+
+## O2C Release 1 (29 Oktober 2026)
+
+Surat Jalan terbit adalah event handover dan pemindahan stok pada Release 1. Pengiriman parsial diperbolehkan secara kumulatif dan divalidasi ulang saat terbit.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

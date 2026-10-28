@@ -306,3 +306,13 @@ Halaman Pelanggan memiliki tab Pelanggan, Channel, Rayon dan Kontak. Kontak buka
 ## Capability submenu operasional — 16 Oktober 2026
 
 IAM-01/04: izin umum `master_data.*` diganti `master_product`, `master_customer`, `master_supplier`, `master_vendor`, `master_warehouse`, `master_locator`, `master_operational_item`, serta `master_product_category`, `master_uom`, `master_customer_channel`, `master_rayon` per tindakan yang sudah tersedia. Penamaan ini berlaku pada implementasi endpoint `/master-data` saat ini. Pengelolaan kontak tetap memakai `crm_contact`; Pelanggan CRM memakai `crm_customer` yang terpisah dari Master Pelanggan. Lookup referensi minimal pada formulir pelanggan tidak memberi akses halaman pengelolaan referensi. Tidak menambahkan hard delete atau mutasi saldo.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Atribut pelanggan dan produk yang dipakai O2C disnapshot pada SO/Surat Jalan/Invoice; perubahan master tidak mengubah dokumen terbit.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

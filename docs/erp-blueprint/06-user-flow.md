@@ -660,3 +660,13 @@ Admin Sistem membuat/mengubah/menghapus peran, memilih izin fitur dan tindakan t
 Admin Sistem → Peran → pilih peran → Matriks Hak Akses. Buka kelompok menu, pilih tindakan pada submenu, atau pilih semua anak melalui checkbox kelompok. Status sebagian menunjukkan sebagian grant anak dipilih. Tinjau perubahan → simpan → backend memeriksa snapshot grant, mengaudit diff dan mengelola sesi terdampak. Induk pengelompokan tidak menyimpan grant. Prospek, Kontak, Pelanggan CRM, Master Pelanggan dan tahapan barang keluar dapat diatur terpisah.
 
 Navigasi CRM 16 Oktober 2026: pengguna membuka CRM > Peluang untuk daftar/pencarian peluang; akses sumber Prospek dan Master Pelanggan mengikuti izin terpisah. URL Pelanggan CRM lama menuju Master Data > Pelanggan. Proses create/win/lost yang sudah tersedia tetap melalui Prospek. Lihat catatan navigasi pada Design dan kontrak daftar pada API.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Pada Release 1, pengguna membuat Surat Jalan langsung dari SO, dapat mengirim parsial kumulatif, mengisi waktu/penerima/bukti serah, menerbitkan, lalu membuat Invoice dari Surat Jalan terbit.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

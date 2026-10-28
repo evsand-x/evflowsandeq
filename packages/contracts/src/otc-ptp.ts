@@ -108,6 +108,58 @@ export const confirmPodSchema = z
   })
   .strict();
 export const postInvoiceSchema = z.object({ delivery_receipt_id: z.string().uuid() }).strict();
+
+/** Release 1 Surat Jalan draft: quantities are validated cumulatively against the SO on the server. */
+export const createSuratJalanSchema = z
+  .object({
+    sales_order_id: z.string().uuid(),
+    lines: z
+      .array(
+        z
+          .object({
+            sales_order_line_id: z.string().uuid(),
+            quantity: positiveDecimal,
+            warehouse_id: z.string().uuid().optional(),
+            locator_id: z.string().uuid().optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+
+/** Release 1 issue event: Surat Jalan is the handover, stock, revenue and HPP event. */
+export const issueSuratJalanSchema = z
+  .object({
+    handover_at: z.string().datetime(),
+    receiver_name: z.string().trim().min(1).max(200),
+    evidence_id: z.string().uuid().optional(),
+    lines: z
+      .array(
+        z
+          .object({
+            sales_order_line_id: z.string().uuid(),
+            delivered_quantity: nonNegativeDecimal,
+            rejected_quantity: nonNegativeDecimal.optional(),
+            discrepancy_reason: z.string().trim().max(1000).optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict();
+
+/** Invoice source contract: one posted invoice at most per issued Surat Jalan. */
+export const createInvoiceFromSuratJalanSchema = z
+  .object({ surat_jalan_id: z.string().uuid() })
+  .strict();
+
+export type CreateSuratJalanInput = z.infer<typeof createSuratJalanSchema>;
+export type IssueSuratJalanInput = z.infer<typeof issueSuratJalanSchema>;
+export type CreateInvoiceFromSuratJalanInput = z.infer<typeof createInvoiceFromSuratJalanSchema>;
 export const invoiceDraftSchema = z
   .object({
     delivery_receipt_id: z.string().uuid(),

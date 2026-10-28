@@ -274,3 +274,13 @@ P1 IAM mencakup peran fleksibel buat/ubah/hapus, penugasan beberapa peran, matri
 IAM-01/04 mencakup pemisahan CRM, Master Data, referensi, tahapan barang keluar, Proforma dan dua menu Backorder melalui katalog, migrasi grant, enforcement API serta matriks Office. Tidak menambahkan endpoint hapus yang belum ada atau mengubah menu belum operasional menjadi fitur selesai. Gate meliputi isolasi API antar submenu, data kontak terkait, audit/scope migrasi, sesi administrator dan QA visual pada sesi nyata. Bukti dan batas validasi pada catatan hak akses fleksibel.
 
 CRM-01/05, APP-03 (16 Oktober 2026): daftar Peluang tersedia sebagai submenu CRM tersendiri, dengan pencarian dan pagination server serta crm_opportunity.read. Submenu Pelanggan CRM dihapus untuk menghindari duplikasi Master Data; URL lama dialihkan. Tidak mengklaim seluruh pipeline/stage telah dibangun.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Release 1 mencakup SO → Surat Jalan → Invoice. Picking, checking, packing, POD terpisah dan backorder otomatis ditunda.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

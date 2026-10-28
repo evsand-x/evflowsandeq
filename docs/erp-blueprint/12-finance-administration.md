@@ -2917,3 +2917,13 @@ Draft Invoice berbasis POD dapat disimpan dan diperbarui sebelum posting. Endpoi
 
 ### Reversal akun nonaktif setelah migrasi master
 Reversal sumber yang sudah melalui otorisasi/approval boleh menggunakan akun historis nonaktif hanya jika setiap baris tepat membalik akun, ledger kind dan debit/kredit jurnal sumber dalam perusahaan/mata uang yang sama. Posting biasa tetap memerlukan akun Detail aktif. Ini menjaga koreksi historis tanpa mengaktifkan kembali akun uji untuk transaksi baru.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Finance menerima sumber Invoice dari Surat Jalan terbit. Penerbitan Surat Jalan memicu posting pendapatan/HPP secara atomik; snapshot TOP diwariskan untuk jatuh tempo Invoice.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

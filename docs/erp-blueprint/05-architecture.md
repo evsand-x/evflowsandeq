@@ -193,3 +193,13 @@ Penghapusan pengguna dijalankan dalam transaksi backend dengan kunci perusahaan 
 ## Otorisasi submenu — 16 Oktober 2026
 
 IAM-01/04: `PermissionGuard` mendukung metadata resource dinamis dengan allowlist server, pemeriksaan company/scope dan tanpa fallback induk. Perubahan ID resource atau query stage memilih pemeriksaan capability fitur yang benar, bukan membuktikan otorisasi dari asal menu klien. Query data terkait tetap memeriksa izin sumber. Migrasi grant tersimpan menjaga cakupan dan audit; matriks hanya menyimpan grant individual. Admin Sistem tetap menggunakan kewenangan bawaan.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Jalur Release 1 mempertahankan batas modular monolith: Surat Jalan menjadi transaksi handover yang atomik dengan stock movement dan posting pendapatan/HPP; Invoice mengonsumsi Surat Jalan terbit.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

@@ -467,3 +467,13 @@ IAM-01/04: migration `20261016210000_independent_submenu_permissions` memetakan 
 - `20261024160000_deduction_types`: tabel `deduction_types`.
 - `20261024170000_account_mapping` dan `20261024171000_bank_account_manage`: izin Pemetaan Akun dan `bank_account.manage`.
 - `20261024180000_discount_limits`: `roles.discount_limit`, `company_memberships.discount_limit`, `products.discount_limit` (DECIMAL(7,4), CHECK 0–100).
+
+## O2C Release 1 (29 Oktober 2026)
+
+Kontrak O2C Release 1: Surat Jalan draft tidak memutasi saldo; penerbitan immutable dan menyimpan bukti serah terima serta snapshot konfigurasi. Kunci kumulatif per SO-line mencegah kuantitas melebihi pesanan.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

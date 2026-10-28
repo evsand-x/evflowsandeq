@@ -488,3 +488,13 @@ IAM-01/04: Prospek memakai `crm_prospect`, Kontak `crm_contact`, Pelanggan CRM `
 ## Pintu masuk Peluang dan Pelanggan — 16 Oktober 2026
 
 CRM menampilkan Prospek, Peluang dan Kontak. Daftar Peluang perusahaan dapat dibuka dengan izin crm_opportunity.read tanpa izin Prospek. Pengguna berizin Prospek dapat membuka sumber untuk proses peluang yang sudah tersedia. Pelanggan tetap dikelola di Master Data; tautan dari prospek/kontak memeriksa izin Master Pelanggan. Sejak 23 Oktober 2026 data kontak yang sama juga tampil pada tab Kontak di Master Data › Pelanggan dengan izin `crm_contact`; kepemilikan aturan dan command kontak tetap di CRM. Tidak ada migrasi atau perubahan siklus bisnis peluang.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Sales Order menyimpan seluruh permintaan dan snapshot Termin/TOP yang dipilih. Penyerahan serta kuantitas yang dapat ditagih berasal dari Surat Jalan terbit.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

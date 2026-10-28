@@ -326,3 +326,13 @@ Uji wajib: dua SO merebut stok terakhir; dua order memakai sisa limit; retry pay
 
 
 
+
+## O2C Release 1 (29 Oktober 2026)
+
+OTC-R1: satu SO dapat memiliki beberapa Surat Jalan kumulatif; jumlah terbit per baris tidak boleh melebihi jumlah SO. Invoice hanya bersumber dari Surat Jalan terbit. Termin/TOP dipilih pada SO dan disnapshot.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

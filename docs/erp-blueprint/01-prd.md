@@ -115,3 +115,13 @@ Pimpinan menentukan approver/limit, target dan komisi. Finance menetapkan COA, a
 
 
 
+
+## O2C Release 1 (29 Oktober 2026)
+
+Release 1 mengirim alur Pelanggan → Sales Order → Surat Jalan → Invoice. Surat Jalan terbit adalah bukti serah terima dan event pendapatan/HPP.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

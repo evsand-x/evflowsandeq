@@ -1,7 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { outboundStatus } from "./outbound-read";
+import { resourcePermissions } from "../identity/resource-permissions";
+import {
+  createSuratJalanSchema,
+  issueSuratJalanSchema,
+  createInvoiceFromSuratJalanSchema,
+} from "@evflow/contracts";
 
 describe("outbound queue status", () => {
+  it("exposes the canonical Surat Jalan command contracts and existing outbound grants", () => {
+    expect(resourcePermissions.outbound.suratJalan).toEqual("outbound_shipping");
+    expect(resourcePermissions.outbound.suratJalanIssue).toEqual("outbound_shipping");
+    expect(() => createSuratJalanSchema.parse({
+      sales_order_id: "00000000-0000-4000-8000-000000000001",
+      lines: [{ sales_order_line_id: "00000000-0000-4000-8000-000000000002", quantity: "1" }],
+    })).not.toThrow();
+    expect(() => issueSuratJalanSchema.parse({
+      handover_at: "2026-10-29T08:00:00.000Z",
+      receiver_name: "Penerima",
+      lines: [{ sales_order_line_id: "00000000-0000-4000-8000-000000000002", delivered_quantity: "1" }],
+    })).not.toThrow();
+    expect(() => createInvoiceFromSuratJalanSchema.parse({
+      surat_jalan_id: "00000000-0000-4000-8000-000000000003",
+    })).not.toThrow();
+  });
   it("never advertises a cancelled batch as actionable", () => {
     for (const stage of ["picking", "checking", "shipping", "pod"]) {
       expect(

@@ -223,3 +223,13 @@ Setiap submenu Setting memiliki izin sendiri: `setting_general`, `terms_credit`,
 - Menu `/operations/controls` dihapus; satu menu hanya di satu modul; pesan galat menautkan halaman Setting terkait.
 
 Rencana: [2b](../superpowers/plans/2026-10-24-konsolidasi-pengaturan-2b.md). Catatan: [setting-consolidation-2026-10-24.md](../development/setting-consolidation-2026-10-24.md).
+
+## O2C Release 1 (29 Oktober 2026)
+
+Termin/TOP aktif dipilih pada SO dan disnapshot. Perubahan Setting hanya berlaku untuk SO baru; izin Surat Jalan memakai grant outbound yang telah ada dan tetap terpisah dari izin SO/Invoice.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

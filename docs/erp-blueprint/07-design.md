@@ -872,3 +872,13 @@ Baris mengikuti hierarki navigasi. Induk murni memiliki checkbox agregat per tin
 ## Keputusan navigasi CRM — 16 Oktober 2026
 
 CRM-01/05, MD-01, APP-03, IAM-04: Pelanggan dikelola melalui Master Data > Pelanggan. Submenu Pelanggan CRM dihapus; URL web lama /crm/customers dan turunannya dialihkan ke Master Pelanggan, dengan pemeriksaan izin tujuan. CRM menampilkan Prospek, Peluang, Kontak. Peluang memiliki daftar tersendiri dengan izin crm_opportunity.read; proses buat/hasil yang tersedia tetap melalui detail prospek. Matriks menempatkan Peluang sejajar Prospek; capability crm_customer tetap untuk proyeksi/registrasi institusi pendukung proses Prospek, pada baris Prospek > Institusi terkait, bukan submenu pelanggan kedua. Tidak menyalin grant menjadi master_customer maupun mengubah data. Bukti: docs/development/crm-navigation-2026-10-16.md.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Label dan tindakan Release 1 memakai Surat Jalan. Tombol Invoice hanya tersedia dari Surat Jalan terbit sesuai izin efektif; status dan sisa kuantitas menampilkan akumulasi seluruh Surat Jalan.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

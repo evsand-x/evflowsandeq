@@ -441,6 +441,16 @@ describe("independent submenu HTTP permissions", () => {
         .expect(403);
     }
   });
+  it("does not invent a delivery_note grant and keeps Surat Jalan on outbound shipping", async () => {
+    await request(app.getHttpServer())
+      .get("/operations/outbound/shipping/00000000-0000-4000-8000-000000000001")
+      .set("x-permissions", "delivery_note.read")
+      .expect(403);
+    await request(app.getHttpServer())
+      .get("/operations/outbound/shipping/00000000-0000-4000-8000-000000000001")
+      .set("x-permissions", "outbound_shipping.read")
+      .expect(200);
+  });
   it("requires independent Proforma and Backorder read capabilities", async () => {
     const id = "00000000-0000-4000-8000-000000000001";
     await request(app.getHttpServer())

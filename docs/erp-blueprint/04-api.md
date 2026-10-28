@@ -519,3 +519,13 @@ GET /crm/workspace/opportunities memerlukan crm_opportunity.read (scope perusaha
 - `POST /finance-controls/configuration/:kind` memeriksa izin per jenis: `profile` → `account_mapping.manage`, `account` → `account.create`, `period` → `finance_period.close`, `bank` → `bank_account.manage`. Pembaca `account_mapping.read` menerima opsi akun detail minimal (id, kode, nama).
 - `GET /settings/discount-limit/me?product_id=` (semua sesi): batas diskon efektif pemanggil (persen atau `UNLIMITED`). `PATCH /settings/discount-limit/roles/:id` dan `/users/:id`: Admin Sistem saja. Batas produk lewat master produk (`discount_limit.manage`).
 - Dihapus: `/operations/controls`, aturan pajak per pelanggan × produk, `CustomerPaymentPolicy` sebagai sumber tulis.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Command Release 1: createSuratJalan, issueSuratJalan, createInvoiceFromSuratJalan. Surat Jalan memakai family izin outbound yang sudah ada; tidak ada delivery_note.* baru.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

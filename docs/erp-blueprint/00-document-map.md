@@ -57,3 +57,13 @@ instruksi agent atau pengganti keputusan terbaru pengguna.
 
 
 ---
+
+## O2C Release 1 (29 Oktober 2026)
+
+Sumber lintas dokumen O2C Release 1 adalah desain 29 Oktober 2026: SO menjadi sumber permintaan, Surat Jalan terbit menjadi event penyerahan serta sumber kuantitas untuk Invoice.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+
