@@ -1008,6 +1008,8 @@ export class OtcPtpService {
       if (!policy?.mode || (policy.mode === "TEMPO" && policy.top_days == null))
         throw new ConflictException("PAYMENT_SNAPSHOT_REQUIRED");
       const snap = note.snapshot as {
+        company?: { name?: string };
+        products?: Record<string, { code?: string; name?: string; baseUom?: { name?: string } }>;
         freight_amount?: string;
         freight_tax_amount?: string;
         freight_tax_snapshot?: Prisma.JsonValue;
@@ -1034,6 +1036,7 @@ export class OtcPtpService {
       const issuedSnapshot = JSON.parse(JSON.stringify({
         status: "POSTED", source: "DELIVERY_NOTE", delivery_note_id: note.id,
         delivery_note_number: note.number, sales_order_number: order.number,
+        company: { name: snap.company?.name ?? company.name },
         customer: {
           id: order.customerId,
           code: order.customer.code,
@@ -1050,9 +1053,9 @@ export class OtcPtpService {
         payment: policy, freight: snap, handover_at: note.handoverAt,
         due_date: dueDate, lines: lines.map((row) => ({
           sales_order_line_id: row.line.salesOrderLineId,
-          product_code: row.line.salesOrderLine.product.code,
-          product: row.line.salesOrderLine.product.name,
-          unit: row.line.salesOrderLine.product.baseUom.name,
+          product_code: snap.products?.[row.line.salesOrderLineId]?.code ?? row.line.salesOrderLine.product.code,
+          product: snap.products?.[row.line.salesOrderLineId]?.name ?? row.line.salesOrderLine.product.name,
+          unit: snap.products?.[row.line.salesOrderLineId]?.baseUom?.name ?? row.line.salesOrderLine.product.baseUom.name,
           quantity: row.quantity.toString(), unit_price: row.line.unitPrice.toString(),
           tax_snapshot: row.line.taxSnapshot, amounts: row.amounts,
         })),

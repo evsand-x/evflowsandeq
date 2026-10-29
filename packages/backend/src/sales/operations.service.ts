@@ -706,6 +706,7 @@ export class OperationsService {
     } | null;
     const invoiceSnapshot = row.issuedSnapshot as {
       lines?: unknown[];
+      company?: string | { name?: string };
       customer?: { name?: string };
       delivery_address?: string;
       reference?: string;
@@ -714,7 +715,7 @@ export class OperationsService {
       row.state === "DRAFT"
         ? row.issuedSnapshot
         : {
-            company: postedSnapshot?.company ?? company.name,
+            company: postedSnapshot?.company ?? (typeof invoiceSnapshot?.company === "string" ? invoiceSnapshot.company : invoiceSnapshot?.company?.name) ?? company.name,
             customer: postedSnapshot?.customer ?? invoiceSnapshot?.customer?.name ?? row.customer.name,
             address: postedSnapshot?.address ?? invoiceSnapshot?.delivery_address ?? row.salesOrder.deliveryAddress,
             reference: draft?.reference ?? invoiceSnapshot?.reference ?? row.salesOrder.customerReference,

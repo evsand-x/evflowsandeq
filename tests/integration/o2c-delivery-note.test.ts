@@ -218,8 +218,12 @@ describe("Release 1 Surat Jalan", () => {
   it("creates one posted invoice from an issued Surat Jalan and replays idempotently", async () =>
     fixture(async (f) => {
       const service = new OtcPtpService(new AuditService());
+      const originalCode = f.p.code;
+      const originalName = f.p.name;
       const note = await createDeliveryNote(f.c, f.a, f.input("4"), randomUUID());
       await issueDeliveryNote(f.c, f.a, note.id, f.handover("4"), randomUUID());
+      await f.tx.company.update({ where: { id: f.c }, data: { name: "RENAMED AFTER SJ" } });
+      await f.tx.product.update({ where: { id: f.p.id }, data: { code: "MUTATED", name: "Mutated product" } });
 
       const key = randomUUID();
       const invoice = await service.createInvoiceFromDeliveryNote(
@@ -243,8 +247,9 @@ describe("Release 1 Surat Jalan", () => {
       ).toBe(1);
       expect(await f.tx.ledgerEntry.count({ where: { companyId: f.c, sourceId: invoice.id } })).toBe(2);
       const detail = await new OperationsService(new AuditService()).invoice(f.c, invoice.id, false, f.tx);
+      expect((detail.snapshot as { company?: string }).company).toBe("SJ TEST");
       expect((detail.snapshot as { allocations?: { product_code?: string; unit?: string }[] }).allocations).toMatchObject([
-        { product_code: f.p.code, product: f.p.name, unit: f.uom.name },
+        { product_code: originalCode, product: originalName, unit: f.uom.name },
       ]);
       expect(
         (await service.createInvoiceFromDeliveryNote(f.c, f.a, { surat_jalan_id: note.id }, key)).id,
