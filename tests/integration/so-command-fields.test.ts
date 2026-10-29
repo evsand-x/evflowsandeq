@@ -172,6 +172,17 @@ async function setup(tx: Tx) {
   return { tx, c, a, customer, wa, wb, product, input, policy };
 }
 describe("SO commands persist selected fields and isolate stock", () => {
+  it("submits demand without reservations or legacy credit gates", async()=>fixture(async f=>{
+    await f.tx.customer.update({where:{id:f.customer.id},data:{creditFrozen:true,freezeReason:"Historical freeze",creditLimit:"0"}});
+    const order=await service.createSalesOrder(f.c,f.a,f.input(),randomUUID());
+    const submitted=await service.submitSalesOrder(f.c,f.a,order.id,randomUUID(),order.version);
+    expect(submitted.state).toBe("OPEN");
+    expect(submitted.paymentSnapshot).toMatchObject({term_code:"NET30",top_days:30});
+    expect(await f.tx.fulfillmentBatch.count({where:{companyId:f.c,salesOrderId:order.id}})).toBe(0);
+    expect(await f.tx.inventoryMovement.count({where:{companyId:f.c,kind:"RESERVATION"}})).toBe(0);
+    expect((await f.tx.stockLot.findMany({where:{companyId:f.c}})).every(l=>l.quantityReserved.isZero())).toBe(true);
+    expect(submitted.lines.every(l=>l.allocatedQuantity.isZero())).toBe(true);
+  }));
   it("does not complete undelivered allocations when the shortage is closed", async () =>
     fixture(async (f) => {
       const order = await service.createSalesOrder(f.c, f.a, f.input(), randomUUID());
@@ -242,7 +253,7 @@ describe("SO commands persist selected fields and isolate stock", () => {
       expect((await listSalesOrders(randomUUID(), 1, "", undefined, {}, f.tx)).total).toBe(0);
       expect((await listSalesOrders(f.c, 2, "", undefined, {}, f.tx)).rows).toEqual([]);
     }));
-  it("creates minimally, replays once, revises fields, snapshots selected term and only allocates selected warehouse", async () =>
+  it("creates minimally, replays once, revises fields, snapshots selected term without reserving warehouse stock", async () =>
     fixture(async (f) => {
       const { tx, c, a, input, wa } = f;
       const key = randomUUID();
@@ -291,8 +302,8 @@ describe("SO commands persist selected fields and isolate stock", () => {
         mode: "TEMPO",
         top_days: 30,
       });
-      expect(submitted.lines[0]!.allocatedQuantity.toString()).toBe("10");
-      expect(submitted.lines[0]!.backorderQuantity.toString()).toBe("20");
+      expect(submitted.lines[0]!.allocatedQuantity.toString()).toBe("0");
+      expect(submitted.lines[0]!.backorderQuantity.toString()).toBe("0");
       expect(
         (
           await tx.stockLot.findFirstOrThrow({ where: { companyId: c, warehouseId: f.wb.id } })
@@ -342,7 +353,7 @@ describe("SO commands persist selected fields and isolate stock", () => {
         randomUUID(),
         order.version,
       );
-      expect(submitted.lines[0]!.allocatedQuantity.toString()).toBe("30");
+      expect(submitted.lines[0]!.allocatedQuantity.toString()).toBe("0");
       const legacy = await f.tx.salesOrder.create({
         data: {
           companyId: f.c,
@@ -366,7 +377,9 @@ describe("SO commands persist selected fields and isolate stock", () => {
         randomUUID(),
         legacy.version,
       );
-      expect(result.lines[0]!.allocatedQuantity.toString()).toBe("25");
+      expect(result.lines[0]!.allocatedQuantity.toString()).toBe("0");
       expect(result.paymentSnapshot).toMatchObject({ term_code: "COD" });
     }));
 });
+
+

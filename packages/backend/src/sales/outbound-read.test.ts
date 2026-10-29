@@ -45,7 +45,7 @@ describe("outbound queue status", () => {
       display_name: "Test User",
       email: "test@example.com",
       roles: [{ code: "SALES", name: "Sales" }],
-    } as const;
+    };
     const withSo = { ...base, permissions: [{ code: "sales_order.read", scope_type: "company", scope_id: null }] };
     const withSj = { ...base, permissions: [{ code: "outbound_shipping.read", scope_type: "company", scope_id: null }] };
     const withInvoice = { ...base, permissions: [{ code: "sales_invoice.post", scope_type: "company", scope_id: null }] };
@@ -100,3 +100,4 @@ describe("outbound queue status", () => {
     expect(outboundStatus("checking", row)).toBe("Ditahan");
   });
 });
+

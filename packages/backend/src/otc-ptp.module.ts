@@ -1,3 +1,4 @@
+import { DeliveryNoteController } from "./sales/delivery-note.controller";
 import { AccountsController } from "./finance/accounts.controller";
 import { Module } from "@nestjs/common";
 import { AuditService } from "./common/audit.service";
@@ -12,6 +13,7 @@ import { OperationalTaxController } from "./finance/operational-tax.controller";
 @Module({
   imports: [IdentityModule],
   controllers: [
+    DeliveryNoteController,
     AccountsController,
     OtcPtpController,
     OperationsController,
@@ -22,3 +24,4 @@ import { OperationalTaxController } from "./finance/operational-tax.controller";
   exports: [OtcPtpService],
 })
 export class OtcPtpModule {}
+

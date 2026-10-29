@@ -7,7 +7,7 @@ import { AuditService } from "./common/audit.service";
 import {
   assertDispatchLots,
   checkCredit,
-  eligibleLots,
+  currentPaymentPolicy,
   lockCustomer,
 } from "./sales/transaction-controls";
 import { customerCreditOmit } from "./sales/customer-credit";
@@ -24,7 +24,6 @@ import { transactionCommand } from "./common/transaction-command";
 import { lockFinance, postLedger } from "./finance/posting";
 import { consumeAdvanceTax } from "./finance/advance-tax";
 import { issueDocument, requireEvidence } from "./sales/document-controls";
-import { reservationExpiry } from "./sales/reservation-controls";
 import { nextDocumentNumber } from "./common/document-number";
 import {
   operationalTaxSnapshot,
@@ -256,92 +255,17 @@ export class OtcPtpService {
         if (version !== undefined && o.version !== version)
           throw new ConflictException("ORDER_VERSION_CHANGED");
         if (!["DRAFT", "OPEN"].includes(o.state)) throw new ConflictException("ORDER_NOT_OPEN");
-        if (o.state === "OPEN" && !o.lines.some((l) => l.backorderQuantity.gt(0))) {
+        if (o.state === "OPEN") {
           if (version !== undefined) {
             await assertPriceGrants(tx, c, o.lines);
-            await checkCredit(tx, c, o.customerId, o.currency, o.id);
           }
           return o;
         }
-        if (o.state === "OPEN" && version === undefined)
-          throw new ConflictException("REALLOCATION_COMMAND_REQUIRED");
+
         await validateOrderEvidence(tx, c, o.customerReference, o.evidenceId);
-        if (o.state === "DRAFT") await priceOrder(tx, c, o.customerId, o.currency, o.lines);
-        else await assertPriceGrants(tx, c, o.lines);
-        const policy = await checkCredit(tx, c, o.customerId, o.currency, o.id);
-        const lockedLots = await eligibleLots(
-          tx,
-          c,
-          o.lines.map((x) => x.productId),
-          o.lines.every(l => l.warehouseId ?? o.warehouseId)
-            ? [...new Set(o.lines.map(l => (l.warehouseId ?? o.warehouseId)!))]
-            : undefined,
-        );
-        const alloc: any[] = [];
-        const shortage: any[] = [];
-        for (const line of o.lines) {
-          const pending =
-            o.state === "DRAFT"
-              ? line.orderedQuantity.sub(line.closedQuantity)
-              : line.backorderQuantity;
-          let rem = d(pending);
-          for (const lot of lockedLots.filter((x) => x.productId === line.productId &&
-            (!(line.warehouseId ?? o.warehouseId) || x.warehouseId === (line.warehouseId ?? o.warehouseId)))) {
-            const av = d(lot.quantityOnHand).sub(lot.quantityReserved);
-            if (av.lte(0) || rem.lte(0)) continue;
-            const q = av.lt(rem) ? av : rem;
-            alloc.push({ lineId: line.id, lotId: lot.id, q });
-            rem = rem.sub(q);
-            await tx.stockLot.update({
-              where: { id: lot.id },
-              data: { quantityReserved: { increment: q } },
-            });
-            lot.quantityReserved = lot.quantityReserved.add(q);
-            await tx.inventoryMovement.create({
-              data: {
-                companyId: c,
-                stockLotId: lot.id,
-                kind: "RESERVATION",
-                quantity: q,
-                unitCost: lot.unitCost,
-                sourceType: "SALES_ORDER",
-                sourceId: o.id,
-                idempotencyKey: `${key}:${line.id}:${lot.id}`,
-              },
-            });
-          }
-          await tx.salesOrderLine.update({
-            where: { id: line.id },
-            data: { allocatedQuantity: { increment: pending.sub(rem) }, backorderQuantity: rem },
-          });
-          if (rem.gt(0)) shortage.push({ productId: line.productId, quantity: rem });
-        }
-        if (alloc.length) {
-          const reservation =
-            (o.paymentSnapshot as { mode?: string } | null)?.mode === "PREPAY" ||
-            (!o.paymentSnapshot && policy.mode === "PREPAY")
-              ? await reservationExpiry(tx, c)
-              : null;
-          await tx.fulfillmentBatch.create({
-            data: {
-              reservationExpiresAt: reservation?.expiresAt ?? null,
-              reservationSnapshot: reservation?.snapshot ?? Prisma.DbNull,
-              companyId: c,
-              salesOrderId: o.id,
-              number: await this.num(tx, c, "fulfillment", "FUL"),
-              allocations: {
-                create: alloc.map((x) => ({
-                  salesOrderLineId: x.lineId,
-                  stockLotId: x.lotId,
-                  quantity: x.q,
-                })),
-              },
-            },
-            include: { allocations: true },
-          });
-        }
-        // Backorder is a requirement for logistics review, not an automatic purchase request.
-        await checkCredit(tx, c, o.customerId, o.currency, o.id);
+        await priceOrder(tx, c, o.customerId, o.currency, o.lines);
+        const policy = await currentPaymentPolicy(tx, c, o.customerId, o.paymentTermCode);
+        // Release 1: SO records demand only. Stock is checked and consumed at SJ issue.
         const u = await tx.salesOrder.update({
           where: { id: o.id },
           data: {
@@ -2374,3 +2298,7 @@ export class OtcPtpService {
     });
   }
 }
+
+
+
+

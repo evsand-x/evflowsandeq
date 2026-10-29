@@ -1,3 +1,4 @@
+import { DeliveryNoteController } from "../../../packages/backend/src/sales/delivery-note.controller";
 import { AccountsController } from "../../../packages/backend/src/finance/accounts.controller";
 import { FinanceControlsController } from "../../../packages/backend/src/finance/controls.controller";
 import { OperationalTaxController } from "../../../packages/backend/src/finance/operational-tax.controller";
@@ -23,6 +24,7 @@ describe("independent submenu HTTP permissions", () => {
   beforeAll(async () => {
     const module = await Test.createTestingModule({
       controllers: [
+        DeliveryNoteController,
         AccountsController,
         FinanceControlsController,
         CrmController,
@@ -73,6 +75,36 @@ describe("independent submenu HTTP permissions", () => {
     await app.init();
   });
   afterAll(async () => app.close());
+  it("rejects SO-only principals on every Surat Jalan endpoint", async () => {
+    for (const grants of [
+      "sales_order.read,sales_order.create,sales_order.submit",
+      "sales_invoice.read,sales_invoice.post",
+    ]) {
+      await request(app.getHttpServer())
+        .get("/delivery-notes")
+        .set("x-permissions", grants)
+        .expect(403);
+      await request(app.getHttpServer())
+        .get("/delivery-notes/00000000-0000-4000-8000-000000000001")
+        .set("x-permissions", grants)
+        .expect(403);
+      await request(app.getHttpServer())
+        .post("/delivery-notes")
+        .set("x-permissions", grants)
+        .send({})
+        .expect(403);
+      await request(app.getHttpServer())
+        .patch("/delivery-notes/00000000-0000-4000-8000-000000000001")
+        .set("x-permissions", grants)
+        .send({})
+        .expect(403);
+      await request(app.getHttpServer())
+        .post("/delivery-notes/00000000-0000-4000-8000-000000000001/issue")
+        .set("x-permissions", grants)
+        .send({})
+        .expect(403);
+    }
+  });
   it("requires independent account permissions and scopes list queries", async () => {
     await request(app.getHttpServer())
       .post("/finance-controls/configuration/account")

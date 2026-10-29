@@ -49,6 +49,7 @@ const readPermission: Record<string, string> = {
   WAREHOUSE_CONTROL: "outbound_checking.read",
   SALES_ORDER: "sales_order.read",
   POD: "delivery_receipt.read",
+  SURAT_JALAN: "outbound_shipping.read",
   PAYMENT: "customer_receipt.read",
   TAX: "tax_component.read",
   TAX_OUTPUT: "tax_output.read",
@@ -61,6 +62,7 @@ const writePermission: Record<string, string> = {
   WAREHOUSE_CONTROL: "fulfillment.check",
   SALES_ORDER: "sales_order.create",
   POD: "delivery_receipt.confirm",
+  SURAT_JALAN: "fulfillment.dispatch",
   PAYMENT: "customer_receipt.post",
   TAX: "tax_component.create",
   TAX_OUTPUT: "tax_output.update",
@@ -339,6 +341,7 @@ export class OperationsController {
           "PRODUCT_MASTER",
           "SALES_ORDER",
           "POD",
+          "SURAT_JALAN",
           "PAYMENT",
           "TAX",
           "TAX_OUTPUT",
@@ -782,3 +785,4 @@ export class OperationsController {
     };
   }
 }
+

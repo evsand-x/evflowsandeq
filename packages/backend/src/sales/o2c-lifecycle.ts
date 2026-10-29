@@ -363,6 +363,7 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
     if (order.version !== input.version || !["DRAFT", "OPEN"].includes(order.state))
       throw new ConflictException("ORDER_STATE_OR_VERSION_CHANGED");
     if (
+      (await tx.deliveryNote.count({ where: { companyId:c, salesOrderId:id, state:"ISSUED" } })) > 0 ||
       order.fulfillments.some((b) => b.state !== "CANCELLED") ||
       order.lines.some((l) => l.closedQuantity.gt(0))
     )
@@ -457,3 +458,4 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
     return after;
   });
 }
+

@@ -202,7 +202,7 @@ export async function eligibleLots(tx: Tx, companyId: string, productIds: string
     include: {
       versions: {
         where: {
-          state: { in: ["ACTIVE", "SCHEDULED"] },
+          state: "ACTIVE",
           OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: new Date() } }],
         },
         orderBy: [{ effectiveFrom: "desc" }, { versionNo: "desc" }],
@@ -275,3 +275,4 @@ export async function assertDispatchLots(tx: Tx, companyId: string, lotIds: stri
     throw new ConflictException("STOCK_NOT_ELIGIBLE");
   return lots;
 }
+

@@ -168,6 +168,8 @@ model Company {
   salesOrders                SalesOrder[]
   fulfillmentBatches         FulfillmentBatch[]
   deliveryReceipts           DeliveryReceipt[]
+  deliveryNotes              DeliveryNote[]
+  deliveryNoteLines          DeliveryNoteLine[]
   salesInvoices              SalesInvoice[]
   customerPaymentPolicies    CustomerPaymentPolicy[]
   purchaseRequests           PurchaseRequest[]
@@ -1297,6 +1299,7 @@ model SalesOrder {
   purchaseRequests PurchaseRequest[]
   invoices         SalesInvoice[]
   DeliveryReceipt  DeliveryReceipt[]
+  deliveryNotes     DeliveryNote[]
 
   @@unique([companyId, number])
   @@index([companyId, customerId, state])
@@ -1321,6 +1324,7 @@ model SalesOrderLine {
   product           Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
   warehouse         Warehouse?              @relation(fields: [companyId, warehouseId], references: [companyId, id], onDelete: Restrict)
   allocations       FulfillmentAllocation[]
+  deliveryNoteLines  DeliveryNoteLine[]
   Uom               Uom?                    @relation(fields: [uomId], references: [id])
   uomId             String?                 @db.Uuid
   ProspectNeed      ProspectNeed?           @relation(fields: [prospectNeedId], references: [id])
@@ -2351,4 +2355,75 @@ model SalesOrderAdvance {
   @@unique([companyId,idempotencyKey])
   @@index([companyId,salesOrderId,state])
   @@map("sales_order_advances")
+}
+
+enum DeliveryNoteState {
+  DRAFT
+  ISSUED
+  CANCELLED
+}
+
+model DeliveryNote {
+  id             String           @id @default(uuid()) @db.Uuid
+  companyId      String           @map("company_id") @db.Uuid
+  salesOrderId   String           @map("sales_order_id") @db.Uuid
+  number         String
+  state          DeliveryNoteState @default(DRAFT)
+  notes          String?
+  handoverAt     DateTime?         @map("handover_at") @db.Timestamptz(6)
+  receiverName   String?           @map("receiver_name")
+  evidenceId     String?           @map("evidence_id") @db.Uuid
+  issuedAt       DateTime?         @map("issued_at") @db.Timestamptz(6)
+  issuedById     String?           @map("issued_by_id") @db.Uuid
+  snapshot       Json?
+  handoverSnapshot Json?           @map("handover_snapshot")
+  issueIdempotencyKey String?      @map("issue_idempotency_key")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById    String            @map("created_by_id") @db.Uuid
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  salesOrder     SalesOrder        @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  lines          DeliveryNoteLine[]
+
+  @@unique([companyId, number])
+  @@unique([companyId, issueIdempotencyKey])
+  @@index([companyId, salesOrderId, state])
+  @@map("delivery_notes")
+}
+
+model DeliveryNoteLine {
+  id               String       @id @default(uuid()) @db.Uuid
+  companyId        String       @map("company_id") @db.Uuid
+  deliveryNoteId   String       @map("delivery_note_id") @db.Uuid
+  salesOrderLineId String       @map("sales_order_line_id") @db.Uuid
+  quantity         Decimal      @db.Decimal(24, 10)
+  deliveredQuantity Decimal?    @map("delivered_quantity") @db.Decimal(24, 10)
+  rejectedQuantity Decimal       @default(0) @map("rejected_quantity") @db.Decimal(24, 10)
+  warehouseId      String?      @map("warehouse_id") @db.Uuid
+  locatorId        String?      @map("locator_id") @db.Uuid
+  unitPrice        Decimal      @map("unit_price") @db.Decimal(24, 8)
+  taxSnapshot      Json?        @map("tax_snapshot")
+  costSnapshot     Json?        @map("cost_snapshot")
+  deliveryNote     DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Restrict)
+  salesOrderLine   SalesOrderLine @relation(fields: [salesOrderLineId], references: [id], onDelete: Restrict)
+  company          Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([deliveryNoteId, salesOrderLineId])
+  @@index([companyId, salesOrderLineId])
+  @@map("delivery_note_lines")
+}
+
+
+model OutboxEvent {
+  id          String @id @default(uuid()) @db.Uuid
+  companyId   String @map("company_id") @db.Uuid
+  eventType   String @map("event_type")
+  aggregateId String @map("aggregate_id") @db.Uuid
+  payload     Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+
+  @@unique([companyId, eventType, aggregateId])
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
 }
