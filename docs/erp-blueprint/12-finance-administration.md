@@ -609,7 +609,7 @@ Default Release 1: pendapatan dan HPP diakui pada **Surat Jalan terbit dengan bu
 
 Jika PPN telah diakui sebelum invoice komersial diposting, posting invoice tidak mengakui PPN kedua kali. Jika profil pajak menetapkan saat terutang berbeda, bagian pajak memakai event dan akun transisi yang sesuai tanpa mengubah waktu pengakuan pendapatan secara otomatis.
 
-Invoice hanya dibuat setelah Surat Jalan terbit; tidak ada status menunggu POD pada Release 1. Nomor dan snapshot dokumen dipertahankan; jurnal invoice dilakukan setelah POD tervalidasi. Kekurangan/penolakan penerimaan menyesuaikan jumlah yang boleh diposting, bukan menghapus histori dokumen pengiriman.
+Pada Release 1, Invoice hanya dibuat dari Surat Jalan terbit. Bukti serah terima disimpan pada Surat Jalan; tidak ada status menunggu POD atau validasi POD sebagai prasyarat. Nomor dan snapshot dokumen dipertahankan, dan posting Invoice hanya mereklasifikasi saldo yang dibentuk saat Surat Jalan terbit tanpa mengakui pendapatan atau HPP kedua kali. Kekurangan atau penolakan yang dicatat pada proses lanjutan tidak menghapus histori Surat Jalan terbit.
 
 ### Contoh penjualan
 

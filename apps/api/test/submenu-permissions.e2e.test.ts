@@ -40,6 +40,7 @@ describe("independent submenu HTTP permissions", () => {
           useValue: {
             batch: vi.fn(async () => ({ id: "batch" })),
             proforma: vi.fn(async () => ({ id: "proforma" })),
+          list: vi.fn(async () => ({ rows: [], total: 0 })),
           },
         },
         { provide: OtcPtpService, useValue: {} },
@@ -482,6 +483,47 @@ describe("independent submenu HTTP permissions", () => {
       .get("/operations/outbound/shipping/00000000-0000-4000-8000-000000000001")
       .set("x-permissions", "outbound_shipping.read")
       .expect(200);
+  });
+  it("keeps SO, Surat Jalan and Invoice HTTP grants independent", async () => {
+    const find = vi.spyOn(prisma.deliveryNote, "findMany").mockResolvedValue([]);
+    const count = vi.spyOn(prisma.deliveryNote, "count").mockResolvedValue(0);
+    const matrix = [
+      {
+        name: "SO",
+        path: "/operations/lists/orders?page=1",
+        grant: "sales_order.read",
+        denied: ["outbound_shipping.read", "sales_invoice.read"],
+      },
+      {
+        name: "Surat Jalan",
+        path: "/delivery-notes?page=1",
+        grant: "outbound_shipping.read",
+        denied: ["sales_order.read", "sales_invoice.read"],
+      },
+      {
+        name: "Invoice",
+        path: "/operations/lists/invoices?page=1",
+        grant: "sales_invoice.read",
+        denied: ["sales_order.read", "outbound_shipping.read"],
+      },
+    ];
+    try {
+      for (const entry of matrix) {
+        await request(app.getHttpServer())
+          .get(entry.path)
+          .set("x-permissions", entry.grant)
+          .expect(200);
+        for (const denied of entry.denied) {
+          await request(app.getHttpServer())
+            .get(entry.path)
+            .set("x-permissions", denied)
+            .expect(403);
+        }
+      }
+    } finally {
+      find.mockRestore();
+      count.mockRestore();
+    }
   });
   it("requires independent Proforma and Backorder read capabilities", async () => {
     const id = "00000000-0000-4000-8000-000000000001";

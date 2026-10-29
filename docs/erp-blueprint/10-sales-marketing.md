@@ -440,7 +440,7 @@ Picking memilih batch/locator yang layak berdasarkan FEFO/FIFO. Expired, karanti
 
 Fulfillment batch dapat dibuat beberapa kali dari satu SO. Proforma dan picking hanya memuat allocated quantity. Packing/SJ hanya memuat picking yang lolos checking. POD mencatat tanggal/jam aktual, penerima, bukti, qty diterima, selisih dan alasan.
 
-Invoice Release 1 hanya mengacu qty Surat Jalan terbit yang belum ditagih. Jatuh tempo = waktu serah terima Surat Jalan terbit + TOP. Satu invoice hanya menggabungkan POD dengan pelanggan, mata uang, tax profile, TOP dan tanggal POD yang sama; POD berbeda tanggal dibuat menjadi invoice terpisah. Invoice asli dapat dibawa saat pengiriman dengan status menunggu POD; posting tetap menunggu POD tervalidasi. Invoice tidak boleh membuat pendapatan/HPP kedua.
+Pada Release 1, Invoice hanya mengacu kuantitas Surat Jalan terbit yang belum ditagih. Jatuh tempo dihitung dari waktu serah terima pada Surat Jalan terbit ditambah TOP yang disnapshot dari SO. Satu Surat Jalan terbit menghasilkan paling banyak satu Invoice; Invoice tidak menunggu POD dan tidak boleh membuat pendapatan atau HPP kedua. Penggabungan POD, invoice yang dibawa saat pengiriman, dan status menunggu POD adalah alur later scope yang tidak mengubah kontrak Release 1.
 
 Untuk prepay, masa reservasi mengikuti OPS-FIN-06 dengan nilai awal sampai akhir satu hari kerja berikutnya. Jika dana belum terverifikasi saat expiry, sistem mengevaluasi ulang dan melepas reservasi yang belum picking. Barang yang sudah picking tidak dilepas otomatis dan wajib dikembalikan melalui movement terkontrol sebelum reservasi ditutup.
 
