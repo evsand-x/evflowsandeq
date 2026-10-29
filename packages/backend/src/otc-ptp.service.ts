@@ -11,7 +11,7 @@ import {
   lockCustomer,
 } from "./sales/transaction-controls";
 import { customerCreditOmit } from "./sales/customer-credit";
-import { createSalesOrderSchema } from "@evflow/contracts";
+import { createSalesOrderSchema, createInvoiceFromDeliveryNoteSchema } from "@evflow/contracts";
 import { resolveOrderHeader, validateOrderEvidence } from "./sales/order-header";
 import {
   assertPriceGrants,
@@ -21,7 +21,7 @@ import {
 } from "./sales/pricing-controls";
 import { approvePr } from "./procurement/approval-controls";
 import { transactionCommand } from "./common/transaction-command";
-import { lockFinance, postLedger } from "./finance/posting";
+import { financeDate, lockFinance, postLedger } from "./finance/posting";
 import { consumeAdvanceTax } from "./finance/advance-tax";
 import { issueDocument, requireEvidence } from "./sales/document-controls";
 import { nextDocumentNumber } from "./common/document-number";
@@ -31,6 +31,7 @@ import {
   defaultSalesTaxOn,
 } from "./finance/operational-tax";
 import { availablePrepayFunds, bindOrderAdvancesToBatch } from "./sales/prepay-funds";
+import { getDeliveryNote } from "./sales/delivery-note";
 type Tx = Prisma.TransactionClient;
 const d = (v: string | Prisma.Decimal) => new Prisma.Decimal(v);
 type FreightTaxMode = "NON_TAXABLE" | "TAXABLE";
@@ -966,6 +967,109 @@ export class OtcPtpService {
       return invoice;
     });
   }
+
+  /** Release 1 invoice source: an issued Surat Jalan, exactly once. */
+  async createInvoiceFromDeliveryNote(c: string, a: string, input: unknown, key: string) {
+    const parsed = createInvoiceFromDeliveryNoteSchema.parse(input);
+    const noteId = parsed.surat_jalan_id;
+    return transactionCommand(c, a, `sales-invoices/from-delivery-note/${noteId}`, key, parsed, async (tx) => {
+      await tx.$queryRaw`SELECT id FROM delivery_notes WHERE id=${noteId}::uuid AND company_id=${c}::uuid FOR UPDATE`;
+      const note = await getDeliveryNote(c, noteId, tx);
+      if (note.state !== "ISSUED" || !note.handoverAt)
+        throw new ConflictException("DELIVERY_NOTE_NOT_ISSUED");
+      const order = await tx.salesOrder.findFirst({
+        where: { id: note.salesOrderId, companyId: c },
+        include: { customer: true, lines: true },
+      });
+      if (!order) throw new NotFoundException("SO tidak ditemukan.");
+      await lockCustomer(tx, c, order.customerId);
+      await lockFinance(tx, c);
+      const existing = await tx.salesInvoice.findFirst({
+        where: { companyId: c, deliveryNoteId: note.id },
+      });
+      if (existing) return existing;
+      const policy = (note.snapshot as { payment?: { mode?: string; top_days?: number | null } } | null)?.payment;
+      if (!policy?.mode || (policy.mode === "TEMPO" && policy.top_days == null))
+        throw new ConflictException("PAYMENT_SNAPSHOT_REQUIRED");
+      const snap = note.snapshot as {
+        freight_amount?: string;
+        freight_tax_amount?: string;
+        freight_tax_snapshot?: Prisma.JsonValue;
+      } | null;
+      const lines = note.lines
+        .filter((line) => d(line.deliveredQuantity ?? "0").gt(0))
+        .map((line) => ({
+          line,
+          quantity: d(line.deliveredQuantity!),
+          amounts: lineAmounts(line, d(line.deliveredQuantity!)),
+        }));
+      const subtotal = lines.reduce((sum, row) => sum.add(row.amounts.net), d("0"));
+      const tax = lines.reduce((sum, row) => sum.add(row.amounts.tax), d("0"));
+      const freight = d(snap?.freight_amount ?? "0");
+      const freightTax = d(snap?.freight_tax_amount ?? "0");
+      const total = subtotal.add(tax).add(freight).add(freightTax);
+      if (total.lte(0)) throw new ConflictException("INVOICE_QUANTITY_REQUIRED");
+      const company = await tx.company.findUniqueOrThrow({ where: { id: c } });
+      const dueDate = new Date(new Intl.DateTimeFormat("en-CA", {
+        timeZone: company.timezone,
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(note.handoverAt));
+      dueDate.setUTCDate(dueDate.getUTCDate() + (policy.top_days ?? 0));
+      const issuedSnapshot = JSON.parse(JSON.stringify({
+        status: "POSTED", source: "DELIVERY_NOTE", delivery_note_id: note.id,
+        delivery_note_number: note.number, sales_order_number: order.number,
+        customer_id: order.customerId, currency: order.currency,
+        payment: policy, freight: snap, handover_at: note.handoverAt,
+        due_date: dueDate, lines: lines.map((row) => ({
+          sales_order_line_id: row.line.salesOrderLineId,
+          quantity: row.quantity.toString(), unit_price: row.line.unitPrice.toString(),
+          tax_snapshot: row.line.taxSnapshot, amounts: row.amounts,
+        })),
+      }));
+      const invoice = await tx.salesInvoice.create({
+        data: {
+          companyId: c, customerId: order.customerId, salesOrderId: order.id,
+          deliveryNoteId: note.id, number: await this.num(tx, c, "sales_invoice", "INV"),
+          state: "POSTED", currency: order.currency, subtotal, taxAmount: tax,
+          total, freightAmount: freight, freightTaxAmount: freightTax,
+          freightSnapshot: { amount: freight.toString(), tax: freightTax.toString(), tax_snapshot: snap?.freight_tax_snapshot ?? null },
+          outstandingAmount: total, dueDate, postedAt: new Date(), issuedSnapshot,
+        },
+      });
+      await issueDocument(tx, c, a, note.id, `INVOICE:${invoice.id}`, {
+        number: invoice.number, company: company.name, customer: order.customer.name,
+        order: order.number, delivery_note: note.number, currency: invoice.currency,
+        due_date: dueDate, subtotal, tax, total, lines,
+      });
+      await postLedger(tx, a, {
+        businessDate: await financeDate(tx, c, note.handoverAt),
+        data: [
+          { companyId: c, kind: "AR", sourceType: "SALES_INVOICE", sourceId: invoice.id, currency: invoice.currency, debit: total, credit: d("0") },
+          { companyId: c, kind: "UNBILLED_AR", sourceType: "SALES_INVOICE", sourceId: invoice.id, currency: invoice.currency, debit: d("0"), credit: total },
+        ],
+      });
+      const receipts = await tx.customerReceipt.findMany({
+        where: { companyId: c, customerId: order.customerId, salesOrderId: order.id, state: "POSTED", unallocatedAmount: { gt: 0 } },
+        orderBy: { receivedAt: "asc" }, include: { allocations: true },
+      });
+      let remaining = total;
+      for (const receipt of receipts) {
+        if (remaining.lte(0)) break;
+        if (receipt.allocations.length > 0 || receipt.currency !== invoice.currency) continue;
+        const amount = receipt.unallocatedAmount.lt(remaining) ? receipt.unallocatedAmount : remaining;
+        const allocation = await tx.customerReceiptAllocation.create({ data: { companyId: c, receiptId: receipt.id, invoiceId: invoice.id, amount } });
+        await tx.customerReceipt.update({ where: { id: receipt.id }, data: { unallocatedAmount: { decrement: amount } } });
+        await tx.salesInvoice.update({ where: { id: invoice.id }, data: { outstandingAmount: { decrement: amount } } });
+        await postLedger(tx, a, { data: [
+          { companyId: c, kind: "CUSTOMER_ADVANCE", sourceType: "CUSTOMER_RECEIPT_ALLOCATION", sourceId: allocation.id, currency: invoice.currency, debit: amount, credit: d("0") },
+          { companyId: c, kind: "AR", sourceType: "CUSTOMER_RECEIPT_ALLOCATION", sourceId: allocation.id, currency: invoice.currency, debit: d("0"), credit: amount },
+        ] });
+        remaining = remaining.sub(amount);
+      }
+      await this.audit.recordWith(tx, { companyId: c, actorId: a, action: "sales_invoice.posted", resourceType: "sales_invoice", resourceId: invoice.id, after: invoice });
+      return tx.salesInvoice.findUniqueOrThrow({ where: { id: invoice.id } });
+    });
+  }
   async saveInvoiceDraft(
     c: string,
     a: string,
@@ -1828,6 +1932,7 @@ export class OtcPtpService {
       await tx.$queryRaw`SELECT id FROM customer_receipts WHERE id = ${receiptId}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
       const receipt = await tx.customerReceipt.findFirst({
         where: { id: receiptId, companyId: c },
+        include: { allocations: true },
       });
       if (!receipt) throw new NotFoundException("Penerimaan pelanggan tidak ditemukan.");
       await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${i.invoice_id}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
@@ -1846,6 +1951,10 @@ export class OtcPtpService {
         receipt.currency !== invoice.currency
       )
         throw new ConflictException("RECEIPT_INVOICE_STATE_OR_CURRENCY_MISMATCH");
+      const priorAllocation = receipt.allocations.find((row) => row.invoiceId === invoice.id);
+      if (priorAllocation) return tx.salesInvoice.findUniqueOrThrow({ where: { id: invoice.id } });
+      if (receipt.allocations.length > 0)
+        throw new ConflictException("RECEIPT_ALREADY_ALLOCATED");
       const amount = d(i.amount);
       if (
         amount.lte(0) ||

@@ -7,6 +7,7 @@ import {
   pickListCheckSchema,
   pickListConfirmSchema,
   postInvoiceSchema,
+  createInvoiceFromDeliveryNoteSchema,
   invoiceDraftSchema,
   createSupplierInvoiceSchema,
   createCustomerReceiptSchema,
@@ -340,6 +341,22 @@ export class OtcPtpController {
         req.auth.company_id,
         req.auth.user_id,
         parse(postInvoiceSchema, body).delivery_receipt_id,
+        commandKey(key),
+      )
+      .then((data) => ({ data }));
+  }
+  @Post("sales-invoices/from-delivery-note")
+  @RequirePermissions("sales_invoice.post")
+  invoiceFromDeliveryNote(
+    @Body() body: unknown,
+    @Headers("idempotency-key") key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service
+      .createInvoiceFromDeliveryNote(
+        req.auth.company_id,
+        req.auth.user_id,
+        parse(createInvoiceFromDeliveryNoteSchema, body),
         commandKey(key),
       )
       .then((data) => ({ data }));

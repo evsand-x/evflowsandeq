@@ -1404,6 +1404,7 @@ model DeliveryReceipt {
 
 model SalesInvoice {
   fulfillmentBatchId String? @map("fulfillment_batch_id") @db.Uuid
+  deliveryNoteId     String? @map("delivery_note_id") @db.Uuid
   issuedSnapshot Json? @map("issued_snapshot")
   id                 String                      @id @default(uuid()) @db.Uuid
   companyId          String                      @map("company_id") @db.Uuid
@@ -1427,6 +1428,7 @@ model SalesInvoice {
   customer           Customer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
   salesOrder         SalesOrder                  @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
   deliveryReceipt    DeliveryReceipt?            @relation(fields: [deliveryReceiptId], references: [id], onDelete: Restrict)
+  deliveryNote       DeliveryNote?              @relation(fields: [deliveryNoteId], references: [id], onDelete: Restrict)
   ledgerEntries      LedgerEntry[]
   receiptAllocations CustomerReceiptAllocation[]
   customerReturns    CustomerReturn[]
@@ -1434,6 +1436,7 @@ model SalesInvoice {
 
   @@unique([companyId, number])
   @@index([deliveryReceiptId])
+  @@unique([companyId, deliveryNoteId])
   @@map("sales_invoices")
 }
 
@@ -2384,6 +2387,7 @@ model DeliveryNote {
   company        Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
   salesOrder     SalesOrder        @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
   lines          DeliveryNoteLine[]
+  invoices       SalesInvoice[]
 
   @@unique([companyId, number])
   @@unique([companyId, issueIdempotencyKey])
