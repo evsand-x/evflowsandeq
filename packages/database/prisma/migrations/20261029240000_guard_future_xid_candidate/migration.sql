@@ -1,0 +1,16 @@
+CREATE OR REPLACE FUNCTION validate_finance_line_scope() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE current_xid bigint; xmin_value bigint; candidate bigint; status text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM finance_journals j WHERE j.id=NEW.journal_id AND j.company_id=NEW.company_id)
+    OR NOT EXISTS (SELECT 1 FROM finance_accounts a WHERE a.id=NEW.account_id AND a.company_id=NEW.company_id)
+  THEN RAISE EXCEPTION 'JOURNAL_LINE_COMPANY_SCOPE_INVALID' USING ERRCODE='23514'; END IF;
+  SELECT txid_current(), j.xmin::text::bigint INTO current_xid, xmin_value FROM finance_journals j WHERE j.id=NEW.journal_id;
+  candidate := ((current_xid >> 32) << 32) + xmin_value;
+  status := pg_xact_status(candidate::text::xid8);
+  IF status <> 'in progress' AND candidate >= 4294967296
+     AND pg_xact_status((candidate - 4294967296)::text::xid8) = 'in progress' THEN status := 'in progress'; END IF;
+  IF status <> 'in progress' AND candidate + 4294967296 <= current_xid
+     AND pg_xact_status((candidate + 4294967296)::text::xid8) = 'in progress' THEN status := 'in progress'; END IF;
+  IF status <> 'in progress' THEN RAISE EXCEPTION 'POSTED_FINANCE_IMMUTABLE' USING ERRCODE='23514'; END IF;
+  RETURN NEW;
+END $$;
