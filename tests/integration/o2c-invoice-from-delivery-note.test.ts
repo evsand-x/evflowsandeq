@@ -15,4 +15,11 @@ describe("Release 1 invoice source", () => {
     expect(() => createInvoiceFromDeliveryNoteSchema.parse({ sales_order_id: "00000000-0000-4000-8000-000000000003" })).toThrow();
     expect(() => createInvoiceFromDeliveryNoteSchema.parse({ delivery_receipt_id: "00000000-0000-4000-8000-000000000003" })).toThrow();
   });
+
+  it("gates legacy service commands so POD and Packing List cannot issue Release 1 invoices", async () => {
+    const service = new OtcPtpService(undefined as never);
+    await expect(service.postInvoice("c", "a", "rid", "key")).rejects.toThrow("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
+    await expect(service.issueInvoice("c", "a", "batch", "key")).rejects.toThrow("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
+    await expect(service.saveInvoiceDraft("c", "a", undefined, { delivery_receipt_id: "rid", notes: "", billing_reference: "" }, "key")).rejects.toThrow("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
+  });
 });

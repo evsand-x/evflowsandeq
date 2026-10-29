@@ -15,6 +15,9 @@ Implementation is present and statically verified. Database-backed acceptance re
 - Posted AR against UNBILLED_AR exactly once for the invoice and settled eligible customer receipts through existing settlement ledger entries.
 - Limited automatic/manual customer receipt allocation to one invoice per payment; a retry against the same invoice is replay-safe and a second invoice is rejected.
 - Added `POST /sales-invoices/from-delivery-note` using the existing `sales_invoice.post` permission family.
+- Disabled legacy Packing List/POD invoice commands and drafts for Release 1 with an explicit source error; historical records remain readable.
+- Extended the immutable invoice snapshot with customer code/name/legal name, billing/shipping/primary addresses, tax identity, and the SO delivery address.
+- Kept payment allocation explicit for Release 1 because customer receipts are currently linked by SO/fulfillment batch rather than Delivery Note; invoice outstanding remains unchanged until allocation to the invoice ID.
 - Added focused contract tests rejecting direct SO and legacy POD source payloads.
 
 ## Verification

@@ -928,6 +928,7 @@ export class OtcPtpService {
     });
   }
   async issueInvoice(c: string, a: string, id: string, key: string) {
+    throw new ConflictException("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
     return transactionCommand(c, a, `fulfillments/${id}/issue-invoice`, key, { id }, async (tx) => {
       const batch = await tx.fulfillmentBatch.findFirst({
         where: { id, companyId: c },
@@ -1018,7 +1019,19 @@ export class OtcPtpService {
       const issuedSnapshot = JSON.parse(JSON.stringify({
         status: "POSTED", source: "DELIVERY_NOTE", delivery_note_id: note.id,
         delivery_note_number: note.number, sales_order_number: order.number,
-        customer_id: order.customerId, currency: order.currency,
+        customer: {
+          id: order.customerId,
+          code: order.customer.code,
+          name: order.customer.name,
+          legal_name: order.customer.legalName,
+          primary_address: order.customer.primaryAddress,
+          shipping_address: order.customer.shippingAddress,
+          billing_address: order.customer.billingAddress,
+          tax_identity: order.customer.taxIdentity,
+        },
+        customer_id: order.customerId,
+        delivery_address: order.deliveryAddress,
+        currency: order.currency,
         payment: policy, freight: snap, handover_at: note.handoverAt,
         due_date: dueDate, lines: lines.map((row) => ({
           sales_order_line_id: row.line.salesOrderLineId,
@@ -1048,24 +1061,8 @@ export class OtcPtpService {
           { companyId: c, kind: "UNBILLED_AR", sourceType: "SALES_INVOICE", sourceId: invoice.id, currency: invoice.currency, debit: d("0"), credit: total },
         ],
       });
-      const receipts = await tx.customerReceipt.findMany({
-        where: { companyId: c, customerId: order.customerId, salesOrderId: order.id, state: "POSTED", unallocatedAmount: { gt: 0 } },
-        orderBy: { receivedAt: "asc" }, include: { allocations: true },
-      });
-      let remaining = total;
-      for (const receipt of receipts) {
-        if (remaining.lte(0)) break;
-        if (receipt.allocations.length > 0 || receipt.currency !== invoice.currency) continue;
-        const amount = receipt.unallocatedAmount.lt(remaining) ? receipt.unallocatedAmount : remaining;
-        const allocation = await tx.customerReceiptAllocation.create({ data: { companyId: c, receiptId: receipt.id, invoiceId: invoice.id, amount } });
-        await tx.customerReceipt.update({ where: { id: receipt.id }, data: { unallocatedAmount: { decrement: amount } } });
-        await tx.salesInvoice.update({ where: { id: invoice.id }, data: { outstandingAmount: { decrement: amount } } });
-        await postLedger(tx, a, { data: [
-          { companyId: c, kind: "CUSTOMER_ADVANCE", sourceType: "CUSTOMER_RECEIPT_ALLOCATION", sourceId: allocation.id, currency: invoice.currency, debit: amount, credit: d("0") },
-          { companyId: c, kind: "AR", sourceType: "CUSTOMER_RECEIPT_ALLOCATION", sourceId: allocation.id, currency: invoice.currency, debit: d("0"), credit: amount },
-        ] });
-        remaining = remaining.sub(amount);
-      }
+      // Release 1 keeps payment allocation explicit through the receipt command. The
+      // invoice remains outstanding until a receipt is allocated to this invoice ID.
       await this.audit.recordWith(tx, { companyId: c, actorId: a, action: "sales_invoice.posted", resourceType: "sales_invoice", resourceId: invoice.id, after: invoice });
       return tx.salesInvoice.findUniqueOrThrow({ where: { id: invoice.id } });
     });
@@ -1082,6 +1079,7 @@ export class OtcPtpService {
     },
     key: string,
   ) {
+    throw new ConflictException("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
     return transactionCommand(c, a, `invoice-drafts/${id ?? "new"}`, key, input, async (tx) => {
       const ref = await tx.deliveryReceipt.findFirst({
         where: { companyId: c, id: input.delivery_receipt_id },
@@ -1207,6 +1205,7 @@ export class OtcPtpService {
     });
   }
   async postInvoice(c: string, a: string, rid: string, key?: string) {
+    throw new ConflictException("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
     return transactionCommand(
       c,
       a,
