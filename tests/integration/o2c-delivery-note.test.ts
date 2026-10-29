@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { prisma, type Prisma } from "@evflow/database";
+import { prisma, Prisma, type Prisma as PrismaTypes } from "@evflow/database";
 import {
   createDeliveryNote,
   updateDeliveryNoteDraft,
   issueDeliveryNote,
   getDeliveryNote,
 } from "../../packages/backend/src/sales/delivery-note";
+import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
+import { AuditService } from "../../packages/backend/src/common/audit.service";
 
 const realTransaction = prisma.$transaction.bind(prisma);
 const rollback = new Error("rollback SJ fixture");
@@ -42,7 +44,7 @@ async function fixture(run: (f: Awaited<ReturnType<typeof setup>>) => Promise<vo
     if (e !== rollback) throw e;
   });
 }
-async function setup(tx: Prisma.TransactionClient) {
+async function setup(tx: PrismaTypes.TransactionClient) {
   const c = (await tx.company.create({ data: { name: "SJ TEST" } })).id;
   const a = (
     await tx.user.create({
@@ -53,6 +55,7 @@ async function setup(tx: Prisma.TransactionClient) {
       },
     })
   ).id;
+  await tx.companyMembership.create({ data: { companyId: c, userId: a } });
   const master = () => ({
     companyId: c,
     code: randomUUID(),
@@ -104,7 +107,7 @@ async function setup(tx: Prisma.TransactionClient) {
       state: "OPEN",
       warehouseId: w.id,
       createdById: a,
-      paymentSnapshot: { term_code: "N30", top_days: 30 },
+      paymentSnapshot: { term_code: "N30", mode: "TEMPO", top_days: 30 },
       lines: {
         create: {
           companyId: c,
@@ -122,6 +125,17 @@ async function setup(tx: Prisma.TransactionClient) {
       companyId: c,
       documentKind: "document_SURAT_JALAN",
       prefix: "SJ",
+      digits: 4,
+      effectiveFrom: new Date("2000-01-01"),
+      effectiveTo: new Date("2999-01-01"),
+      createdById: a,
+    },
+  });
+  await tx.documentNumberRule.create({
+    data: {
+      companyId: c,
+      documentKind: "sales_invoice",
+      prefix: "INV",
       digits: 4,
       effectiveFrom: new Date("2000-01-01"),
       effectiveTo: new Date("2999-01-01"),
@@ -168,6 +182,7 @@ async function setup(tx: Prisma.TransactionClient) {
           "INVENTORY",
           "SALE_COGS",
           "UNBILLED_AR",
+          "AR",
           "SALE_REVENUE",
           "SALES_TAX",
           "SALE_FREIGHT_REVENUE",
@@ -199,6 +214,37 @@ async function setup(tx: Prisma.TransactionClient) {
   return { tx, c, a, w, p, lot, order, input, handover };
 }
 describe("Release 1 Surat Jalan", () => {
+  it("creates one posted invoice from an issued Surat Jalan and replays idempotently", async () =>
+    fixture(async (f) => {
+      const service = new OtcPtpService(new AuditService());
+      const note = await createDeliveryNote(f.c, f.a, f.input("4"), randomUUID());
+      await issueDeliveryNote(f.c, f.a, note.id, f.handover("4"), randomUUID());
+
+      const key = randomUUID();
+      const invoice = await service.createInvoiceFromDeliveryNote(
+        f.c,
+        f.a,
+        { surat_jalan_id: note.id },
+        key,
+      );
+      expect(invoice).toMatchObject({
+        state: "POSTED",
+        deliveryNoteId: note.id,
+        subtotal: new Prisma.Decimal("40"),
+        taxAmount: new Prisma.Decimal("4"),
+        total: new Prisma.Decimal("44"),
+        outstandingAmount: new Prisma.Decimal("44"),
+      });
+      expect(
+        await f.tx.financeJournal.count({
+          where: { companyId: f.c, sourceType: "SALES_INVOICE", sourceId: invoice.id },
+        }),
+      ).toBe(1);
+      expect(
+        (await service.createInvoiceFromDeliveryNote(f.c, f.a, { surat_jalan_id: note.id }, key)).id,
+      ).toBe(invoice.id);
+    }));
+
   it("rolls stock, document, ledger, audit and outbox back when posting configuration fails", async () =>
     fixture(async (f) => {
       const note = await createDeliveryNote(f.c, f.a, f.input(), randomUUID());
@@ -268,7 +314,7 @@ describe("Release 1 Surat Jalan", () => {
       await expect(createDeliveryNote(f.c, f.a, f.input("11"), randomUUID())).rejects.toThrow(
         "DELIVERY_NOTE_QTY_EXCEEDED",
       );
-      await expect(createDeliveryNote(f.c, f.a, f.input("0"), randomUUID())).rejects.toThrow();
+      expect(() => createDeliveryNote(f.c, f.a, f.input("0"), randomUUID())).toThrow();
       const note = await createDeliveryNote(f.c, f.a, f.input("7"), randomUUID());
       await expect(
         issueDeliveryNote(

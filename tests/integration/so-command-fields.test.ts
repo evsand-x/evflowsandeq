@@ -205,7 +205,9 @@ describe("SO commands persist selected fields and isolate stock", () => {
         randomUUID(),
       );
       const result = await listSalesOrders(f.c, 1, "", undefined, {}, f.tx);
-      expect(result.rows[0]).toMatchObject({ state: "CLOSED", displayStatus: "OPEN" });
+      // Release 1 does not auto allocate stock. Closing only 20 of the 30
+      // undelivered units leaves the order open with an explicit remainder.
+      expect(result.rows[0]).toMatchObject({ state: "OPEN", displayStatus: "OPEN" });
     }));
   it("lists business dates and status tabs consistently with filtered totals and exact search", async () =>
     fixture(async (f) => {

@@ -1064,11 +1064,6 @@ export class OtcPtpService {
           outstandingAmount: total, dueDate, postedAt: new Date(), issuedSnapshot,
         },
       });
-      await issueDocument(tx, c, a, note.id, `INVOICE:${invoice.id}`, {
-        number: invoice.number, company: company.name, customer: order.customer.name,
-        order: order.number, delivery_note: note.number, currency: invoice.currency,
-        due_date: dueDate, subtotal, tax, total, lines,
-      });
       await postLedger(tx, a, {
         businessDate: await financeDate(tx, c, note.handoverAt),
         data: [
