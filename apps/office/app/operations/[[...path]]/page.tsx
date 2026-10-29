@@ -5,6 +5,7 @@ import { SalesOrderWorkspace } from "../sales-order";
 import { OutboundWorkspace } from "../outbound";
 import { TaxWorkspace } from "../tax-workspace";
 import { AccountsWorkspace } from "../accounts-workspace";
+import { SuratJalanWorkspace } from "../surat-jalan";
 
 export default async function Page({
   params,
@@ -24,6 +25,7 @@ export default async function Page({
   if (path[0] === "controls") redirect("/setting");
   if (["tax-documents", "tax-input"].includes(path[0] ?? ""))
     return <TaxWorkspace key={path.join("/")} path={path} />;
+  if (path[0] === "delivery-notes") return <SuratJalanWorkspace key={path.join("/")} path={path} />;
   if (["pick-slips", "warehouse", "returns"].includes(path[0] ?? ""))
     return (
       <OutboundWorkspace

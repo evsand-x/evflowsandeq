@@ -327,6 +327,13 @@ export function SalesOrderDetail({
                 Cetak
               </Button>
             )}
+            {row.state === "OPEN" && can("fulfillment.dispatch") && (
+              <Button variant="outline" asChild>
+                <Link href={`/operations/delivery-notes/from-order/${row.id}`}>
+                  Buat Surat Jalan
+                </Link>
+              </Button>
+            )}
             {primary && (
               <Button
                 disabled={pending || !primary.enabled}

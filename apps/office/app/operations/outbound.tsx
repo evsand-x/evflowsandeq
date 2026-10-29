@@ -145,6 +145,9 @@ const stages: { key: Stage; label: string; description: string }[] = [
     description: "Penerimaan barang retur dan tindak lanjut pemeriksaan mutu",
   },
 ];
+const releaseOneStages = stages.filter(
+  (stage) => stage.key === "shipping" || stage.key === "returns",
+);
 const href = (stage: Stage, id = "", form = false) =>
   `${stage === "picking" ? "/operations/pick-slips" : stage === "returns" ? "/operations/returns" : "/operations/warehouse"}${id ? `/${id}` : ""}?stage=${stage}${form ? "&view=form" : ""}`;
 const date = (s?: string | null) =>
@@ -485,20 +488,9 @@ export function OutboundWorkspace({
     {
       id: "actions",
       header: "Tindakan",
-      cell: ({ row: r }) =>
-        stage === "picking" && !r.original.pickList && can(actionPermission) ? (
-          <Button
-            disabled={pending}
-            onClick={() =>
-              run(async () => {
-                await command(`/fulfillment-batches/${r.original.id}/create-picking`);
-                router.push(href(stage, r.original.id, true));
-              })
-            }
-          >
-            Buat Pick Slip
-          </Button>
-        ) : (
+      cell: ({ row: r }) => {
+        if (stage !== "shipping" && stage !== "returns") return null;
+        return (
           <Button
             variant={canEdit(r.original) && can(actionPermission) ? "default" : "outline"}
             asChild
@@ -507,7 +499,8 @@ export function OutboundWorkspace({
               {can(actionPermission) ? action(r.original) : "Lihat detail"}
             </Link>
           </Button>
-        ),
+        );
+      },
     },
   ];
   const labels =
@@ -555,7 +548,7 @@ export function OutboundWorkspace({
               </p>
             </div>
             <nav className="ob-tabs" aria-label="Barang Keluar">
-              {stages.map((s) => (
+              {releaseOneStages.map((s) => (
                 <Link
                   key={s.key}
                   href={href(s.key)}
@@ -1056,7 +1049,8 @@ function BatchDetail({
                   : "POD"}
           </Button>
         )}
-        {stage === "picking" &&
+        {false &&
+          stage === "picking" &&
           row.state === "ALLOCATED" &&
           !row.pickList &&
           can("fulfillment.pick") && (
@@ -1069,7 +1063,8 @@ function BatchDetail({
               Buat Pick Slip
             </Button>
           )}
-        {stage === "picking" &&
+        {false &&
+          stage === "picking" &&
           row.state === "ALLOCATED" &&
           row.pickList?.state === "OPEN" &&
           can("fulfillment.pick") && (
@@ -1077,7 +1072,8 @@ function BatchDetail({
               <Link href={href(stage, row.id, true)}>Mulai picking</Link>
             </Button>
           )}
-        {stage === "picking" &&
+        {false &&
+          stage === "picking" &&
           row.state === "ALLOCATED" &&
           row.pickList?.state === "PICKED" &&
           !shortage &&
@@ -1086,7 +1082,8 @@ function BatchDetail({
               <Link href={href("checking", row.id, true)}>Lanjut ke Checking</Link>
             </Button>
           )}
-        {stage === "checking" &&
+        {false &&
+          stage === "checking" &&
           row.state === "ALLOCATED" &&
           row.pickList?.state === "PICKED" &&
           can("fulfillment.check") && (
@@ -1094,7 +1091,8 @@ function BatchDetail({
               <Link href={href(stage, row.id, true)}>Mulai checking</Link>
             </Button>
           )}
-        {stage === "checking" &&
+        {false &&
+          stage === "checking" &&
           row.pickList?.state === "CHECKED" &&
           can("fulfillment.dispatch") && (
             <Button asChild>
@@ -1106,7 +1104,8 @@ function BatchDetail({
             <Link href={href(stage, row.id, true)}>Atur pengiriman</Link>
           </Button>
         )}
-        {["shipping", "pod"].includes(stage) &&
+        {false &&
+          ["shipping", "pod"].includes(stage) &&
           ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
           can("delivery_receipt.confirm") && (
             <Button asChild>

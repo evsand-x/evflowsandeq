@@ -346,10 +346,7 @@ const warehouseStageTitles: Record<string, string> = {
 };
 
 const outboundStages = [
-  { key: "picking", label: "Picking", href: "/operations/pick-slips" },
-  { key: "checking", label: "Checking / Packing", href: "/operations/warehouse?stage=checking" },
-  { key: "shipping", label: "Pengiriman", href: "/operations/warehouse?stage=shipping" },
-  { key: "pod", label: "POD", href: "/operations/warehouse?stage=pod" },
+  { key: "shipping", label: "Surat Jalan", href: "/operations/warehouse?stage=shipping" },
   { key: "returns", label: "Retur", href: "/operations/returns" },
 ] as const;
 
@@ -1401,7 +1398,8 @@ function Warehouse({
   const isPicking = stage === "picking";
   const isShipping = stage === "shipping";
   const isPod = stage === "pod";
-  const canManualInvoice = row.state === "ALLOCATED" && can("sales_invoice.issue");
+  const isLegacyStageVisible: boolean = false;
+
   const [driver, setDriver] = useState(""),
     [vehicle, setVehicle] = useState(""),
     [receiver, setReceiver] = useState(""),
@@ -1444,7 +1442,7 @@ function Warehouse({
         </p>
         <p>{row.salesOrder?.deliveryAddress}</p>
       </Panel>
-      {isPicking ? (
+      {isLegacyStageVisible && isPicking ? (
         <form
           className="web-form"
           onSubmit={(event) => {
@@ -1562,7 +1560,7 @@ function Warehouse({
           ]}
         />
       )}
-      {isChecking && (
+      {isLegacyStageVisible && isChecking && (
         <form
           className="web-form"
           onSubmit={(event) => {
@@ -1749,19 +1747,8 @@ function Warehouse({
           </Panel>
         </form>
       )}
-      {canManualInvoice && (
-        <Panel title="Invoice">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={pending}
-            onClick={() => run(`/fulfillment-batches/${row.id}/issue-invoice`)}
-          >
-            Buat Invoice manual
-          </Button>
-        </Panel>
-      )}
-      {isPod &&
+      {false &&
+        isPod &&
         ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
         can("delivery_receipt.confirm") && (
           <form
@@ -1809,7 +1796,7 @@ function Warehouse({
           ))}
         </Panel>
       )}
-      {isPod && (
+      {false && isPod && (
         <Panel title="POD & penagihan">
           {row.deliveryReceipts?.map((pod) => (
             <div key={pod.id}>
