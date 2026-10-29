@@ -7,7 +7,7 @@ import {
   HandoffStatus,
   InvoiceProgress,
 } from "./sales-experience";
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1395,35 +1395,17 @@ function Warehouse({
   stage?: string;
 }) {
   const isChecking = stage === "checking";
-  const isPicking = stage === "picking";
   const isShipping = stage === "shipping";
   const isPod = stage === "pod";
-  const isLegacyStageVisible: boolean = false;
 
   const [driver, setDriver] = useState(""),
-    [vehicle, setVehicle] = useState(""),
-    [receiver, setReceiver] = useState(""),
-    [proof, setProof] = useState("");
-  const [accepted, setAccepted] = useState<Record<string, string>>({});
-  const [picked, setPicked] = useState<Record<string, string>>({});
-  const [checkCondition, setCheckCondition] = useState<Record<string, string>>({});
-  const [packageCount, setPackageCount] = useState("");
-  const [totalWeight, setTotalWeight] = useState("");
-  const [packageType, setPackageType] = useState("Dus");
-  const [packingNotes, setPackingNotes] = useState("");
-  const [labelAttached, setLabelAttached] = useState(false);
+    [vehicle, setVehicle] = useState("");
   const [freightEnabled, setFreightEnabled] = useState(false),
     [freightAmount, setFreightAmount] = useState(""),
     [freightTaxable, setFreightTaxable] = useState(false);
   const run = (url: string, data?: unknown) => {
     void command(url, data).catch(() => undefined);
   };
-  useEffect(() => {
-    if (!row.pickList) return;
-    setPicked(
-      Object.fromEntries(row.pickList.lines.map((line) => [line.id, line.assignedQuantity])),
-    );
-  }, [row.pickList]);
   return (
     <>
       <Panel
@@ -1442,245 +1424,16 @@ function Warehouse({
         </p>
         <p>{row.salesOrder?.deliveryAddress}</p>
       </Panel>
-      {isLegacyStageVisible && isPicking ? (
-        <form
-          className="web-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!row.pickList) return;
-            run(`/pick-lists/${row.pickList.id}/confirm-pick`, {
-              lines: row.pickList.lines.map((line) => ({
-                pick_list_line_id: line.id,
-                picked_quantity: picked[line.id] ?? "0",
-              })),
-            });
-          }}
-        >
-          <Panel title="Barang yang diambil">
-            <DataTable
-              formTable
-              showColumns={false}
-              data={(row.allocations ?? []).map((allocation) => ({
-                ...allocation,
-                pickLine: row.pickList?.lines.find(
-                  (line) => line.fulfillmentAllocationId === allocation.id,
-                ),
-              }))}
-              total={row.allocations?.length ?? 0}
-              columns={[
-                {
-                  id: "product",
-                  header: "Produk",
-                  cell: ({ row: r }) => r.original.stockLot.product.name,
-                },
-                {
-                  id: "batch",
-                  header: "Batch · ED",
-                  cell: ({ row: r }) =>
-                    `${r.original.stockLot.batchNo} · ${r.original.stockLot.expiryDate?.slice(0, 7) ?? "—"}`,
-                },
-                {
-                  id: "locator",
-                  header: "Locator",
-                  cell: ({ row: r }) => r.original.stockLot.locator?.code ?? "—",
-                },
-                { accessorKey: "quantity", header: "Alokasi" },
-                {
-                  id: "picked",
-                  header: "Diambil",
-                  cell: ({ row: r }) => (
-                    <Input
-                      inputMode="decimal"
-                      aria-label={`Jumlah diambil ${r.original.stockLot.product.name}`}
-                      value={picked[r.original.pickLine?.id ?? ""] ?? ""}
-                      onChange={(event) =>
-                        setPicked((old) => ({
-                          ...old,
-                          [r.original.pickLine?.id ?? ""]: event.target.value,
-                        }))
-                      }
-                      disabled={!r.original.pickLine || row.pickList?.state !== "OPEN"}
-                    />
-                  ),
-                },
-                {
-                  id: "difference",
-                  header: "Selisih",
-                  cell: ({ row: r }) => (
-                    <Badge variant="outline">
-                      {r.original.pickLine &&
-                      picked[r.original.pickLine.id] === r.original.pickLine.assignedQuantity
-                        ? "Sesuai"
-                        : "Perlu ditinjau"}
-                    </Badge>
-                  ),
-                },
-              ]}
-            />
-            <p className="so-help">
-              Jumlah diambil tidak boleh melebihi alokasi. Selisih membutuhkan tindak lanjut sesuai
-              aturan backorder.
-            </p>
-          </Panel>
-          <div className="so-footer so-detail-actions">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                setPicked(
-                  Object.fromEntries(
-                    (row.pickList?.lines ?? []).map((line) => [line.id, line.assignedQuantity]),
-                  ),
-                )
-              }
-            >
-              Isi semua sesuai alokasi
-            </Button>
-            <Button
-              type="submit"
-              disabled={pending || !row.pickList || row.pickList.state !== "OPEN"}
-            >
-              Konfirmasi picking
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <DataTable
-          data={row.allocations ?? []}
-          total={row.allocations?.length ?? 0}
-          columns={[
-            {
-              id: "product",
-              header: "Produk",
-              cell: ({ row: r }) => r.original.stockLot.product.name,
-            },
-            { id: "batch", header: "Batch", cell: ({ row: r }) => r.original.stockLot.batchNo },
-            { accessorKey: "quantity", header: "Dialokasikan" },
-            { accessorKey: "inTransitQuantity", header: "Dalam perjalanan" },
-          ]}
-        />
-      )}
-      {isLegacyStageVisible && isChecking && (
-        <form
-          className="web-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            run(`/pick-lists/${row.pickList!.id}/confirm-check`, {
-              checks: (row.pickList?.lines ?? []).map((line) => ({
-                pick_list_line_id: line.id,
-                condition: checkCondition[line.id] ?? "BAIK",
-              })),
-              packing: {
-                package_count: packageCount || undefined,
-                total_weight_kg: totalWeight || undefined,
-                package_type: packageType || undefined,
-                notes: packingNotes || undefined,
-                label_attached: labelAttached,
-              },
-            });
-          }}
-        >
-          <Panel title="Checking & Packing">
-            <p className="so-help">
-              Checking memverifikasi hasil picking. Packing List diterbitkan server setelah jumlah
-              picking lengkap.
-            </p>
-            <DataTable
-              formTable
-              showColumns={false}
-              data={(row.allocations ?? []).map((allocation) => ({
-                ...allocation,
-                pickLine: row.pickList?.lines.find(
-                  (line) => line.fulfillmentAllocationId === allocation.id,
-                ),
-              }))}
-              total={row.allocations?.length ?? 0}
-              columns={[
-                {
-                  id: "product",
-                  header: "Produk",
-                  cell: ({ row: r }) => r.original.stockLot.product.name,
-                },
-                {
-                  id: "picked",
-                  header: "Diambil",
-                  cell: ({ row: r }) => r.original.pickLine?.assignedQuantity ?? "—",
-                },
-                {
-                  id: "checked",
-                  header: "Dicek",
-                  cell: ({ row: r }) => r.original.pickLine?.assignedQuantity ?? "—",
-                },
-                {
-                  id: "condition",
-                  header: "Kondisi",
-                  cell: ({ row: r }) => (
-                    <select
-                      aria-label={`Kondisi ${r.original.stockLot.product.name}`}
-                      value={checkCondition[r.original.pickLine?.id ?? ""] ?? "BAIK"}
-                      onChange={(event) =>
-                        setCheckCondition((old) => ({
-                          ...old,
-                          [r.original.pickLine?.id ?? ""]: event.target.value,
-                        }))
-                      }
-                    >
-                      <option value="BAIK">Baik</option>
-                      <option value="RUSAK">Rusak</option>
-                      <option value="KURANG">Kurang</option>
-                    </select>
-                  ),
-                },
-              ]}
-            />
-            <div className="otc-form-grid">
-              <TextField label="Jumlah koli" value={packageCount} onChange={setPackageCount} />
-              <TextField label="Berat total (kg)" value={totalWeight} onChange={setTotalWeight} />
-              <TextField label="Jenis kemasan" value={packageType} onChange={setPackageType} />
-              <TextField label="Catatan packing" value={packingNotes} onChange={setPackingNotes} />
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={labelAttached}
-                onChange={(event) => setLabelAttached(event.target.checked)}
-              />{" "}
-              Label koli sudah ditempel
-            </label>
-            <Button
-              type="submit"
-              disabled={pending || !row.pickList || row.pickList.state !== "PICKED"}
-            >
-              Konfirmasi checking & terbitkan Packing List
-            </Button>
-          </Panel>
-          <div className="crm-actions">
-            {row.state === "ALLOCATED" && !row.pickList && can("fulfillment.pick") && (
-              <Button
-                disabled={pending}
-                onClick={() => run(`/fulfillment-batches/${row.id}/create-picking`)}
-              >
-                Buat Picking Slip
-              </Button>
-            )}
-            {row.pickList?.state === "OPEN" && can("fulfillment.pick") && (
-              <Button
-                disabled={pending}
-                onClick={() =>
-                  run(`/pick-lists/${row.pickList!.id}/confirm-pick`, {
-                    lines: row.pickList!.lines.map((l) => ({
-                      pick_list_line_id: l.id,
-                      picked_quantity: l.assignedQuantity,
-                    })),
-                  })
-                }
-              >
-                Konfirmasi seluruh picking
-              </Button>
-            )}
-          </div>
-        </form>
-      )}
+      <DataTable
+        data={row.allocations ?? []}
+        total={row.allocations?.length ?? 0}
+        columns={[
+          { id: "product", header: "Produk", cell: ({ row: r }) => r.original.stockLot.product.name },
+          { id: "batch", header: "Batch", cell: ({ row: r }) => r.original.stockLot.batchNo },
+          { accessorKey: "quantity", header: "Dialokasikan" },
+          { accessorKey: "inTransitQuantity", header: "Dalam perjalanan" },
+        ]}
+      />
       {isShipping && row.state === "ALLOCATED" && can("fulfillment.dispatch") && (
         <form
           className="web-form"
@@ -1747,44 +1500,6 @@ function Warehouse({
           </Panel>
         </form>
       )}
-      {false &&
-        isPod &&
-        ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
-        can("delivery_receipt.confirm") && (
-          <form
-            className="web-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              run(`/fulfillment-batches/${row.id}/pod`, {
-                receiver_name: receiver,
-                evidence_id: proof,
-                lines: (row.allocations ?? [])
-                  .filter((l) => accepted[l.id] && !/^0+(\.0*)?$/.test(accepted[l.id]!))
-                  .map((l) => ({
-                    fulfillment_allocation_id: l.id,
-                    accepted_quantity: accepted[l.id],
-                  })),
-              });
-            }}
-          >
-            <Panel title="Bukti penerimaan pelanggan (POD)">
-              <FieldGroup>
-                <TextField label="Nama penerima" value={receiver} onChange={setReceiver} />
-                {row.allocations?.map((l) => (
-                  <TextField
-                    key={l.id}
-                    label={`Diterima ${l.stockLot.product.name} (${l.stockLot.batchNo})`}
-                    value={accepted[l.id] ?? ""}
-                    onChange={(v) => setAccepted({ ...accepted, [l.id]: v })}
-                    required={false}
-                  />
-                ))}
-                <Upload purpose="POD" onChange={setProof} />
-                <Button disabled={pending || !proof}>Konfirmasi POD</Button>
-              </FieldGroup>
-            </Panel>
-          </form>
-        )}
       {isShipping && (
         <Panel title="Surat Jalan">
           {row.documents?.map((doc) => (
@@ -1793,27 +1508,6 @@ function Warehouse({
                 {doc.number}
               </Link>
             </p>
-          ))}
-        </Panel>
-      )}
-      {false && isPod && (
-        <Panel title="POD & penagihan">
-          {row.deliveryReceipts?.map((pod) => (
-            <div key={pod.id}>
-              <p>Penerima: {pod.receiverName}</p>
-              {can("delivery_receipt.read") && <Evidence id={pod.evidenceId} />}
-              {pod.invoices.length ? (
-                pod.invoices.map((i) => (
-                  <p key={i.id}>
-                    <Link href={`/operations/invoices/${i.id}`} className="text-primary underline">
-                      {i.number}
-                    </Link>
-                  </p>
-                ))
-              ) : (
-                <p className="sales-notice">Belum ada invoice.</p>
-              )}
-            </div>
           ))}
         </Panel>
       )}

@@ -343,9 +343,6 @@ export function OutboundWorkspace({
       setPending(false);
     }
   };
-  const run = (fn: () => Promise<unknown>) => {
-    void fn().catch(() => undefined);
-  };
   if (!principal)
     return (
       <main className="ob-auth">
@@ -1051,69 +1048,11 @@ function BatchDetail({
                   : "POD"}
           </Button>
         )}
-        {false &&
-          stage === "picking" &&
-          row.state === "ALLOCATED" &&
-          !row.pickList &&
-          can("fulfillment.pick") && (
-            <Button
-              disabled={pending}
-              onClick={() =>
-                void command(`/fulfillment-batches/${row.id}/create-picking`).catch(() => undefined)
-              }
-            >
-              Buat Pick Slip
-            </Button>
-          )}
-        {false &&
-          stage === "picking" &&
-          row.state === "ALLOCATED" &&
-          row.pickList?.state === "OPEN" &&
-          can("fulfillment.pick") && (
-            <Button asChild>
-              <Link href={href(stage, row.id, true)}>Mulai picking</Link>
-            </Button>
-          )}
-        {false &&
-          stage === "picking" &&
-          row.state === "ALLOCATED" &&
-          row.pickList?.state === "PICKED" &&
-          !shortage &&
-          can("fulfillment.check") && (
-            <Button asChild>
-              <Link href={href("checking", row.id, true)}>Lanjut ke Checking</Link>
-            </Button>
-          )}
-        {false &&
-          stage === "checking" &&
-          row.state === "ALLOCATED" &&
-          row.pickList?.state === "PICKED" &&
-          can("fulfillment.check") && (
-            <Button asChild>
-              <Link href={href(stage, row.id, true)}>Mulai checking</Link>
-            </Button>
-          )}
-        {false &&
-          stage === "checking" &&
-          row.pickList?.state === "CHECKED" &&
-          can("fulfillment.dispatch") && (
-            <Button asChild>
-              <Link href={href("shipping", row.id, true)}>Atur pengiriman</Link>
-            </Button>
-          )}
         {stage === "shipping" && row.state === "ALLOCATED" && can("fulfillment.dispatch") && (
           <Button asChild>
             <Link href={href(stage, row.id, true)}>Atur pengiriman</Link>
           </Button>
         )}
-        {false &&
-          ["shipping", "pod"].includes(stage) &&
-          ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
-          can("delivery_receipt.confirm") && (
-            <Button asChild>
-              <Link href={href("pod", row.id, true)}>Konfirmasi POD</Link>
-            </Button>
-          )}
       </Actions>
     </>
   );
