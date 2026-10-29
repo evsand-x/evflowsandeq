@@ -109,7 +109,14 @@ async function lockOrder(tx: Tx, c: string, id: string) {
   await tx.$queryRaw`SELECT id FROM sales_order_lines WHERE sales_order_id=${id}::uuid AND company_id=${c}::uuid ORDER BY id FOR UPDATE`;
   const order = await tx.salesOrder.findFirstOrThrow({
     where: { id, companyId: c },
-    include: { lines: { include: { product: { select: { code: true, name: true } } } } },
+    include: {
+      lines: {
+        include: {
+          product: { select: { code: true, name: true, baseUom: { select: { name: true } } } },
+          Uom: { select: { name: true } },
+        },
+      },
+    },
   });
   if (order.state !== "OPEN") throw new ConflictException("ORDER_NOT_OPEN");
   return order;
@@ -176,7 +183,9 @@ async function orderSnapshot(tx: Tx, c: string, order: Awaited<ReturnType<typeof
   });
   return json({
     company,
-    products: Object.fromEntries(order.lines.map((l) => [l.id, l.product])),
+    products: Object.fromEntries(
+      order.lines.map((l) => [l.id, { ...l.product, unit: l.Uom?.name ?? l.product.baseUom.name }]),
+    ),
     payment: order.paymentSnapshot,
     freight: order.freightTermsSnapshot,
     freight_amount: amount.toString(),

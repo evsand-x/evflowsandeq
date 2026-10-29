@@ -73,6 +73,7 @@ async function setup(tx: PrismaTypes.TransactionClient) {
     data: { ...master(), warehouseId: w.id, locatorType: "STORAGE" },
   });
   const uom = await tx.uom.create({ data: master() });
+  const altUom = await tx.uom.create({ data: master() });
   const cat = await tx.productCategory.create({ data: master() });
   const p = await tx.product.create({
     data: { ...master(), baseUomId: uom.id, categoryId: cat.id, expiryRequired: false },
@@ -212,7 +213,7 @@ async function setup(tx: PrismaTypes.TransactionClient) {
     evidence_id: evidence.id,
     lines: [{ sales_order_line_id: order.lines[0]!.id, delivered_quantity: quantity }],
   });
-  return { tx, c, a, w, p, uom, lot, order, input, handover };
+  return { tx, c, a, w, p, uom, altUom, lot, order, input, handover };
 }
 describe("Release 1 Surat Jalan", () => {
   it("creates one posted invoice from an issued Surat Jalan and replays idempotently", async () =>
@@ -220,6 +221,7 @@ describe("Release 1 Surat Jalan", () => {
       const service = new OtcPtpService(new AuditService());
       const originalCode = f.p.code;
       const originalName = f.p.name;
+      await f.tx.salesOrderLine.update({ where: { id: f.order.lines[0]!.id }, data: { uomId: f.altUom.id } });
       const note = await createDeliveryNote(f.c, f.a, f.input("4"), randomUUID());
       await issueDeliveryNote(f.c, f.a, note.id, f.handover("4"), randomUUID());
       await f.tx.company.update({ where: { id: f.c }, data: { name: "RENAMED AFTER SJ" } });
@@ -249,7 +251,7 @@ describe("Release 1 Surat Jalan", () => {
       const detail = await new OperationsService(new AuditService()).invoice(f.c, invoice.id, false, f.tx);
       expect((detail.snapshot as { company?: string }).company).toBe("SJ TEST");
       expect((detail.snapshot as { allocations?: { product_code?: string; unit?: string }[] }).allocations).toMatchObject([
-        { product_code: originalCode, product: originalName, unit: f.uom.name },
+        { product_code: originalCode, product: originalName, unit: f.altUom.name },
       ]);
       expect(
         (await service.createInvoiceFromDeliveryNote(f.c, f.a, { surat_jalan_id: note.id }, key)).id,
