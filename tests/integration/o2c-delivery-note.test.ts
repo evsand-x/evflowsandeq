@@ -8,6 +8,7 @@ import {
 } from "../../packages/backend/src/sales/delivery-note";
 import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
 import { AuditService } from "../../packages/backend/src/common/audit.service";
+import { OperationsService } from "../../packages/backend/src/sales/operations.service";
 
 const realTransaction = prisma.$transaction.bind(prisma);
 const rollback = new Error("rollback SJ fixture");
@@ -240,9 +241,15 @@ describe("Release 1 Surat Jalan", () => {
           where: { companyId: f.c, sourceType: "SALES_INVOICE", sourceId: invoice.id },
         }),
       ).toBe(1);
+      expect(await f.tx.ledgerEntry.count({ where: { companyId: f.c, sourceId: invoice.id } })).toBe(2);
+      const detail = await new OperationsService(new AuditService()).invoice(f.c, invoice.id, false, f.tx);
+      expect((detail.snapshot as { allocations?: unknown[] }).allocations).toHaveLength(1);
       expect(
         (await service.createInvoiceFromDeliveryNote(f.c, f.a, { surat_jalan_id: note.id }, key)).id,
       ).toBe(invoice.id);
+      expect(await f.tx.salesInvoice.count({ where: { companyId: f.c, deliveryNoteId: note.id } })).toBe(1);
+      expect(await f.tx.financeJournal.count({ where: { companyId: f.c, sourceType: "SALES_INVOICE", sourceId: invoice.id } })).toBe(1);
+      expect(await f.tx.ledgerEntry.count({ where: { companyId: f.c, sourceId: invoice.id } })).toBe(2);
     }));
 
   it("rolls stock, document, ledger, audit and outbox back when posting configuration fails", async () =>

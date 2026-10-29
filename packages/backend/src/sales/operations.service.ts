@@ -552,12 +552,13 @@ export class OperationsService {
       outstandingAmount: Prisma.Decimal;
       taxAmount: Prisma.Decimal;
     },
+    db: Prisma.TransactionClient | typeof prisma = prisma,
   ) {
     if (invoice.state === "DRAFT") return "Draft — belum membentuk piutang";
     if (invoice.state === "ISSUED_WAITING_POD") return "Menunggu POD";
     if (invoice.state === "VOID") return "Dibatalkan";
     const notes: string[] = [];
-    const credits = await prisma.creditNote.count({
+    const credits = await db.creditNote.count({
       where: { companyId: c, salesInvoiceId: invoice.id, state: "POSTED" },
     });
     if (invoice.outstandingAmount.eq(0))
@@ -565,7 +566,7 @@ export class OperationsService {
     else if (invoice.outstandingAmount.gt(0) && invoice.outstandingAmount.eq(invoice.taxAmount))
       notes.push("DPP Lunas");
     else notes.push("Belum lunas");
-    const components = await prisma.receiptTaxComponent.findMany({
+    const components = await db.receiptTaxComponent.findMany({
       where: { companyId: c, invoiceId: invoice.id },
       select: { kind: true, state: true },
     });
@@ -649,8 +650,8 @@ export class OperationsService {
     });
     return { ...row, documents };
   }
-  async invoice(c: string, id: string, receiptsAllowed = false) {
-    const row = await prisma.salesInvoice.findFirst({
+  async invoice(c: string, id: string, receiptsAllowed = false, db: Prisma.TransactionClient | typeof prisma = prisma) {
+    const row = await db.salesInvoice.findFirst({
       where: { companyId: c, id },
       include: {
         customer: { select: { name: true } },
@@ -686,15 +687,15 @@ export class OperationsService {
       },
     });
     if (!row) throw new NotFoundException();
-    const receipts = receiptsAllowed ? await prisma.customerReceipt.findMany({
+    const receipts = receiptsAllowed ? await db.customerReceipt.findMany({
       where: { companyId: c, customerId: row.customerId },
       orderBy: { receivedAt: "desc" },
       take: 100,
     }) : [];
-    const document = await prisma.fulfillmentDocument.findFirst({
+    const document = await db.fulfillmentDocument.findFirst({
       where: { companyId: c, kind: `INVOICE:${id}` },
     });
-    const company = await prisma.company.findUniqueOrThrow({ where: { id: c } });
+    const company = await db.company.findUniqueOrThrow({ where: { id: c } });
     const draft = row.issuedSnapshot as { notes?: string; reference?: string } | null;
     const postedSnapshot = document?.snapshot as {
       lines?: unknown[];
@@ -703,14 +704,20 @@ export class OperationsService {
       address?: string;
       reference?: string;
     } | null;
+    const invoiceSnapshot = row.issuedSnapshot as {
+      lines?: unknown[];
+      customer?: { name?: string };
+      delivery_address?: string;
+      reference?: string;
+    } | null;
     const snapshot =
       row.state === "DRAFT"
         ? row.issuedSnapshot
         : {
             company: postedSnapshot?.company ?? company.name,
-            customer: postedSnapshot?.customer ?? row.customer.name,
-            address: postedSnapshot?.address ?? row.salesOrder.deliveryAddress,
-            reference: draft?.reference ?? row.salesOrder.customerReference,
+            customer: postedSnapshot?.customer ?? invoiceSnapshot?.customer?.name ?? row.customer.name,
+            address: postedSnapshot?.address ?? invoiceSnapshot?.delivery_address ?? row.salesOrder.deliveryAddress,
+            reference: draft?.reference ?? invoiceSnapshot?.reference ?? row.salesOrder.customerReference,
             payment: row.salesOrder.paymentSnapshot,
             currency: row.currency,
             subtotal: row.subtotal,
@@ -718,7 +725,7 @@ export class OperationsService {
             total: row.total,
             freight: { amount: row.freightAmount, tax: row.freightTaxAmount },
             allocations:
-              postedSnapshot?.lines ??
+              postedSnapshot?.lines ?? invoiceSnapshot?.lines ??
               row.deliveryReceipt?.lines.map((line) => ({
                 product_code: line.allocation.salesOrderLine.product.code,
                 product: line.allocation.salesOrderLine.product.name,
@@ -737,7 +744,7 @@ export class OperationsService {
       receipts,
       document,
       snapshot,
-      description: await this.invoiceDescription(c, row),
+      description: await this.invoiceDescription(c, row, db),
     };
   }
   async lookups(c: string) {
