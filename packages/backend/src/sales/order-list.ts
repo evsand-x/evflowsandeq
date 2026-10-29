@@ -4,6 +4,16 @@ import { orderStatusRows } from "./order-status";
 import { orderReadFacts } from "./order-summary";
 import { orderView } from "./order-view";
 import type { OrderListFilters } from "./order-list-filters";
+import {
+  deliveredLineSql,
+  orderBilling,
+  orderDeliveryFacts,
+  orderShipping,
+  uninvoicedOrderSql,
+  withDeliveredQuantities,
+} from "./order-delivery-facts";
+
+const toShipStatuses = Prisma.sql`('OPEN','PARTIALLY_SHIPPED','IN_DELIVERY')`;
 
 /** Page, counts and row facts share one repeatable-read snapshot; no company-wide id arrays. */
 export async function listSalesOrders(
@@ -14,6 +24,7 @@ export async function listSalesOrders(
   filters: OrderListFilters,
   db?: Prisma.TransactionClient,
   includeFinancial = true,
+  includeBilling = false,
 ): Promise<{
   rows: Record<string, unknown>[];
   total: number;
@@ -24,7 +35,17 @@ export async function listSalesOrders(
 }> {
   if (!db)
     return prisma.$transaction(
-      (tx) => listSalesOrders(companyId, page, search, state, filters, tx, includeFinancial),
+      (tx) =>
+        listSalesOrders(
+          companyId,
+          page,
+          search,
+          state,
+          filters,
+          tx,
+          includeFinancial,
+          includeBilling,
+        ),
       { isolationLevel: "RepeatableRead", timeout: 30000 },
     );
   const conditions: Prisma.Sql[] = [Prisma.sql`o.company_id=${companyId}::uuid`];
@@ -50,7 +71,8 @@ export async function listSalesOrders(
       Prisma.sql`o.state NOT IN ('DRAFT','CLOSED','CANCELLED') AND NOT ${hasBackorder}`,
     );
   if (filters.fulfillment) {
-    const sent = Prisma.sql`(SELECT COALESCE(SUM(a.accepted_quantity+a.in_transit_quantity+a.returned_quantity),0) FROM fulfillment_allocations a JOIN sales_order_lines l ON l.id=a.sales_order_line_id WHERE l.sales_order_id=o.id)`;
+    const sent = Prisma.sql`((SELECT COALESCE(SUM(a.accepted_quantity+a.in_transit_quantity+a.returned_quantity),0) FROM fulfillment_allocations a JOIN sales_order_lines l ON l.id=a.sales_order_line_id WHERE l.sales_order_id=o.id)
+      + (SELECT COALESCE(SUM(d.delivered),0) FROM (${deliveredLineSql(companyId)}) d JOIN sales_order_lines l ON l.id=d.sales_order_line_id WHERE l.sales_order_id=o.id))`;
     const ordered = Prisma.sql`(SELECT COALESCE(SUM(l.ordered_quantity),0) FROM sales_order_lines l WHERE l.sales_order_id=o.id)`;
     conditions.push(
       filters.fulfillment === "NOT_SHIPPED"
@@ -60,14 +82,29 @@ export async function listSalesOrders(
           : Prisma.sql`${ordered}>0 AND ${sent}>=${ordered}`,
     );
   }
-  const selectedStatus = filters.status
-    ? Prisma.sql`display_status=${filters.status}`
-    : Prisma.sql`TRUE`;
+  const selectedStatus = Prisma.join(
+    [
+      filters.status ? Prisma.sql`display_status=${filters.status}` : Prisma.sql`TRUE`,
+      filters.queue === "TO_SHIP"
+        ? Prisma.sql`display_status IN ${toShipStatuses}`
+        : filters.queue === "UNINVOICED"
+          ? Prisma.sql`uninvoiced`
+          : Prisma.sql`TRUE`,
+    ],
+    " AND ",
+  );
   const [result] = await db.$queryRaw<
-    { ids: string[]; total: number; counts: Record<string, number>; backorder: number }[]
+    {
+      ids: string[];
+      total: number;
+      counts: Record<string, number>;
+      backorder: number;
+      to_ship: number;
+      uninvoiced: number;
+    }[]
   >`
     WITH statuses AS (${orderStatusRows(companyId)}), filtered AS (
-      SELECT o.id,o.order_date,o.number,s.display_status,${hasBackorder} AS backorder
+      SELECT o.id,o.order_date,o.number,s.display_status,${hasBackorder} AS backorder,${uninvoicedOrderSql()} AS uninvoiced
       FROM sales_orders o JOIN statuses s ON s.id=o.id JOIN customers c ON c.id=o.customer_id AND c.company_id=o.company_id
       WHERE ${Prisma.join(conditions, " AND ")}
     ), selected AS (
@@ -76,7 +113,9 @@ export async function listSalesOrders(
     SELECT COALESCE((SELECT jsonb_agg(id ORDER BY order_date DESC,number DESC,id ASC) FROM selected),'[]'::jsonb) AS ids,
       (SELECT count(*)::int FROM filtered WHERE ${selectedStatus}) AS total,
       COALESCE((SELECT jsonb_object_agg(display_status,n) FROM (SELECT display_status,count(*)::int n FROM filtered GROUP BY display_status) grouped),'{}'::jsonb) AS counts,
-      (SELECT count(*)::int FROM filtered WHERE backorder) AS backorder`;
+      (SELECT count(*)::int FROM filtered WHERE backorder) AS backorder,
+      (SELECT count(*)::int FROM filtered WHERE display_status IN ${toShipStatuses}) AS to_ship,
+      (SELECT count(*)::int FROM filtered WHERE uninvoiced) AS uninvoiced`;
   const rows = await db.salesOrder.findMany({
     where: { companyId, id: { in: result!.ids } },
     orderBy: [{ orderDate: "desc" }, { number: "desc" }, { id: "asc" }],
@@ -98,11 +137,19 @@ export async function listSalesOrders(
           allocations: {
             select: { acceptedQuantity: true, inTransitQuantity: true, returnedQuantity: true },
           },
+          product: { select: { baseUom: { select: { name: true } } } },
+          Uom: { select: { name: true } },
         },
       },
     },
   });
   const facts = await orderReadFacts(companyId, rows, db, includeFinancial);
+  const deliveries = await orderDeliveryFacts(
+    companyId,
+    rows.map((row) => row.id),
+    db,
+    includeBilling,
+  );
   const customerRows = await db.salesOrder.findMany({
     where: { companyId },
     distinct: ["customerId"],
@@ -114,11 +161,31 @@ export async function listSalesOrders(
     salesOrderDisplayStatusSchema.options.map((status) => [status, result!.counts[status] ?? 0]),
   );
   return {
-    rows: rows.map(({ lines, paymentSnapshot, ...row }) => {
+    rows: rows.map(({ lines: storedLines, paymentSnapshot, ...row }) => {
       void paymentSnapshot;
-      const view = orderView({ ...row, lines, ...facts.get(row.id) });
+      const delivery = deliveries.get(row.id);
+      const lines = withDeliveredQuantities(storedLines, delivery);
+      const fact = facts.get(row.id);
+      const view = orderView({ ...row, lines, ...fact });
       const { downPayment, ...publicView } = view;
-      return { ...row, ...publicView, ...(includeFinancial ? { downPayment } : {}) };
+      return {
+        ...row,
+        lines: lines.map(({ product, Uom, ...line }) => ({
+          ...line,
+          unit: Uom?.name ?? product.baseUom.name,
+        })),
+        ...publicView,
+        paymentTerm: fact?.paymentTerm
+          ? { code: fact.paymentTerm.code, label: fact.paymentTerm.label }
+          : null,
+        shipping: orderShipping(
+          row.state,
+          lines.map((line) => ({ ...line, unit: line.Uom?.name ?? line.product.baseUom.name })),
+          delivery,
+        ),
+        ...(includeBilling ? { billing: orderBilling(row.state, delivery) } : {}),
+        ...(includeFinancial ? { downPayment } : {}),
+      };
     }),
     total: result!.total,
     pageSize: 25,
@@ -130,6 +197,8 @@ export async function listSalesOrders(
       partial: counts.PARTIALLY_SHIPPED!,
       creditHold: counts.WAITING_APPROVAL!,
       backorder: result!.backorder,
+      toShip: result!.to_ship,
+      ...(includeBilling ? { uninvoiced: result!.uninvoiced } : {}),
     },
     filters: {
       customers: customerRows

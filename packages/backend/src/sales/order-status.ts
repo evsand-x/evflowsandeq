@@ -1,6 +1,7 @@
 import { Prisma, type SalesOrderState } from "@evflow/database";
 import type { SalesOrderDisplayStatus } from "@evflow/contracts";
 import type { PaymentTerm } from "./customer-credit";
+import { deliveredLineSql } from "./order-delivery-facts";
 
 const Quantity = Prisma.Decimal.clone({ precision: 48 });
 
@@ -43,12 +44,14 @@ export function orderDisplayStatus(input: {
 
 /** One company-scoped SQL relation for filtering, pagination and status counts in one snapshot. */
 export function orderStatusRows(companyId: string): Prisma.Sql {
-  return Prisma.sql`    WITH line_progress AS (
+  // Issued Surat Jalan (Release 1 handover) counts as accepted, like a confirmed delivery.
+  return Prisma.sql`    WITH delivered AS (${deliveredLineSql(companyId)}), line_progress AS (
       SELECT l.sales_order_id, l.id,
         l.ordered_quantity - l.closed_quantity AS need,
-        COALESCE(SUM(a.accepted_quantity), 0) AS accepted,
-        COALESCE(SUM(a.accepted_quantity + a.in_transit_quantity), 0) AS sent
+        COALESCE(SUM(a.accepted_quantity), 0) + COALESCE(MAX(d.delivered), 0) AS accepted,
+        COALESCE(SUM(a.accepted_quantity + a.in_transit_quantity), 0) + COALESCE(MAX(d.delivered), 0) AS sent
       FROM sales_order_lines l
+      LEFT JOIN delivered d ON d.sales_order_line_id = l.id
       LEFT JOIN fulfillment_allocations a ON a.sales_order_line_id = l.id
         AND EXISTS (
           SELECT 1 FROM fulfillment_batches b

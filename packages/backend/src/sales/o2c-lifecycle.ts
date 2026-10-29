@@ -1,8 +1,8 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
 import { z } from "zod";
-import { createSalesOrderSchema } from "@evflow/contracts";
-import { resolveOrderHeader } from "./order-header";
+import { createSalesOrderSchema, salesOrderNumberSchema } from "@evflow/contracts";
+import { resolveOrderHeader, resolveOrderNumber } from "./order-header";
 import { rejectTaxChoice } from "./pricing-controls";
 import { freightValues } from "./proforma";
 import { transactionCommand } from "../common/transaction-command";
@@ -324,6 +324,7 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
     .object({
       version: z.number().int().positive(),
       reason,
+      number: salesOrderNumberSchema.optional(),
       evidence_id: createSalesOrderSchema.shape.evidence_id.nullable(),
       customer_reference: createSalesOrderSchema.shape.customer_reference,
       delivery_address: createSalesOrderSchema.shape.delivery_address,
@@ -373,6 +374,18 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
       new Set(input.lines.map((l) => l.line_id)).size !== input.lines.length
     )
       throw new ConflictException("REVISION_LINES_REQUIRED");
+    // The SO number may only change while the order is still a draft.
+    const number =
+      input.number && input.number !== order.number
+        ? order.state === "DRAFT"
+          ? await resolveOrderNumber(tx, c, input.number)
+          : (() => {
+              throw new ConflictException({
+                code: "ORDER_NUMBER_LOCKED",
+                message: "Nomor SO hanya dapat diubah saat SO masih Draft.",
+              });
+            })()
+        : null;
     const customer = await tx.customer.findFirstOrThrow({ where: { id: order.customerId, companyId: c } });
     const { lineWarehouseIds, ...header } = await resolveOrderHeader(tx, c, a, {
       customer_id: order.customerId,
@@ -428,6 +441,7 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
         materialRevision: { increment: 1 },
         paymentSnapshot: Prisma.DbNull,
         ...header,
+        ...(number ? { number } : {}),
         ...(input.freight !== undefined
           ? {
               freightEstimate: input.freight?.estimate ?? null,

@@ -50,6 +50,36 @@ export async function nextDocumentNumber(
   return formatDocumentNumber(rule as FormatRule, day, seq.nextValue - 1n);
 }
 
+/** Next number shown to the user before saving; reading it never consumes the sequence. */
+export async function previewDocumentNumber(
+  tx: Prisma.TransactionClient,
+  c: string,
+  kind: string,
+  at: Date = new Date(),
+) {
+  const company = await tx.company.findUniqueOrThrow({ where: { id: c } }),
+    day = dayOf(company.timezone, at);
+  const rules = await tx.documentNumberRule.findMany({
+    where: {
+      companyId: c,
+      documentKind: kind,
+      effectiveFrom: { lte: new Date(day) },
+      effectiveTo: { gt: new Date(day) },
+    },
+  });
+  if (rules.length !== 1) return null;
+  const rule = rules[0]!;
+  const seq = await tx.masterCodeSequence.findUnique({
+    where: {
+      companyId_entityType: {
+        companyId: c,
+        entityType: sequenceKey(kind, rule.resetPeriod as ResetPeriod, day),
+      },
+    },
+  });
+  return formatDocumentNumber(rule as FormatRule, day, seq?.nextValue ?? 1n);
+}
+
 /** `Prefix.Year.Month.Sequence`; `day` is the company-timezone date (YYYY-MM-DD). */
 export function formatDocumentNumber(rule: FormatRule, day: string, value: bigint) {
   const digits = value.toString();

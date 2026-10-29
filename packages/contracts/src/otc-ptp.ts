@@ -37,9 +37,17 @@ export const salesOrderDisplayStatusSchema = z.enum([
 ]);
 export type SalesOrderDisplayStatus = z.infer<typeof salesOrderDisplayStatusSchema>;
 
+export const salesOrderNumberSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9./_-]*$/, "Nomor SO hanya huruf, angka, titik, garis miring, garis bawah dan tanda hubung.");
 export const createSalesOrderSchema = z
   .object({
     customer_id: z.string().uuid(),
+    /** Optional user-edited SO number; omitted means the next number from Setting › Penomoran Dokumen. */
+    number: salesOrderNumberSchema.optional(),
     customer_reference: z.string().trim().max(100).optional(),
     delivery_address: z.string().trim().max(1000).optional(),
     evidence_id: z.string().uuid().optional(),

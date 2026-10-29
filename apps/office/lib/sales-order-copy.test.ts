@@ -4,13 +4,16 @@ import {
   relatedKindLabel,
   orderStatusLabel,
   documentStatusLabel,
+  orderDocumentStatus,
+  shippingLabel,
+  billingLabel,
 } from "./sales-order-copy";
 
 describe("SO detail plain language", () => {
   it.each([
     ["DRAFT", "Draft"],
     ["WAITING_APPROVAL", "Menunggu persetujuan"],
-    ["OPEN", "Open"],
+    ["OPEN", "Diajukan"],
     ["PARTIALLY_SHIPPED", "Dikirim sebagian"],
     ["IN_DELIVERY", "Dalam pengiriman"],
     ["COMPLETED", "Selesai"],
@@ -46,4 +49,49 @@ describe("SO detail plain language", () => {
     expect(relatedKindLabel(code)).not.toBe("Dokumen");
     expect(relatedKindLabel(code)).not.toMatch(/snapshot|invariant|fallback|allocation/i);
   });
+});
+
+describe("SO list columns", () => {
+  it("keeps submitted orders as Diajukan while delivery progress has its own column", () => {
+    expect(orderDocumentStatus("PARTIALLY_SHIPPED").label).toBe("Diajukan");
+    expect(orderDocumentStatus("COMPLETED").label).toBe("Diajukan");
+    expect(orderDocumentStatus("DRAFT").label).toBe("Draft");
+    expect(orderDocumentStatus("CANCELLED")).toEqual({ label: "Dibatalkan", tone: "danger" });
+  });
+  it("formats shipping from the server summary", () => {
+    expect(shippingLabel(null).label).toBe("—");
+    expect(
+      shippingLabel({
+        status: "PARTIAL",
+        remainingQuantity: "1064.5000",
+        remainingUnit: "Box",
+        draftDeliveryNotes: 0,
+      }).label,
+    ).toBe("Sebagian · sisa 1.064,5 Box");
+    expect(
+      shippingLabel({
+        status: "NOT_SHIPPED",
+        remainingQuantity: "10",
+        remainingUnit: "Box",
+        draftDeliveryNotes: 1,
+      }).label,
+    ).toBe("Belum dikirim · ada draft SJ");
+    expect(
+      shippingLabel({
+        status: "SHIPPED",
+        remainingQuantity: "0",
+        remainingUnit: null,
+        draftDeliveryNotes: 0,
+      }).label,
+    ).toBe("Terkirim penuh");
+  });
+  it.each([
+    ["UNINVOICED", "Belum diinvoice"],
+    ["UNPAID", "Belum dibayar"],
+    ["PARTIAL", "Dibayar sebagian"],
+    ["PAID", "Lunas"],
+    ["NONE", "—"],
+  ] as const)("labels billing %s", (status, label) =>
+    expect(billingLabel({ status, invoiceCount: 1, uninvoicedDeliveryNotes: 0 }).label).toBe(label),
+  );
 });

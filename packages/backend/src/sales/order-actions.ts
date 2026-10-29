@@ -226,11 +226,16 @@ export async function orderActions(
     (draft || open) && free,
     "Tidak ada sisa yang dapat ditutup; lepaskan alokasi terlebih dahulu.",
   );
+  // Release 1: an issued Surat Jalan commits quantities, so the order can no longer be revised.
+  const issuedDeliveryNotes = await db.deliveryNote.count({
+    where: { companyId: c, salesOrderId: id, state: "ISSUED" },
+  });
   add(
     "revise",
     "Ubah",
     "sales_order.update",
     (draft || open) &&
+      !issuedDeliveryNotes &&
       !order.fulfillments.some((b) => b.state !== "CANCELLED") &&
       !order.lines.some((l) => l.closedQuantity.gt(0)),
     "Pesanan yang sudah diproses atau ditutup tidak dapat diubah.",

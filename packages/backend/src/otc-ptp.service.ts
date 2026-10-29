@@ -12,7 +12,7 @@ import {
 } from "./sales/transaction-controls";
 import { customerCreditOmit } from "./sales/customer-credit";
 import { createSalesOrderSchema, createInvoiceFromDeliveryNoteSchema } from "@evflow/contracts";
-import { resolveOrderHeader, validateOrderEvidence } from "./sales/order-header";
+import { resolveOrderHeader, resolveOrderNumber, validateOrderEvidence } from "./sales/order-header";
 import {
   assertPriceGrants,
   lineAmounts,
@@ -200,7 +200,7 @@ export class OtcPtpService {
         data: {
           companyId: c,
           customerId: cust.id,
-          number: await this.num(tx, c, "sales_order", "SO"),
+          number: await resolveOrderNumber(tx, c, duplicate ? null : i.number),
           currency: i.currency,
           createdById: a,
           ...header,

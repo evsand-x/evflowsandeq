@@ -303,6 +303,7 @@ export class OperationsService {
     view?: string,
     orderFilters: OrderListFilters = {},
     includeFinancial = true,
+    includeBilling = false,
   ) {
     const skip = (page - 1) * 25,
       query = { contains: search, mode: "insensitive" as const };
@@ -403,7 +404,17 @@ export class OperationsService {
       const filtered = combined.filter((r) => !view || view === "ALL" || r.status === view);
       return { rows: filtered.slice(skip, skip + 25), total: filtered.length, summary };
     }
-    if (kind === "orders") return listSalesOrders(c, page, search, state, orderFilters, undefined, includeFinancial);
+    if (kind === "orders")
+      return listSalesOrders(
+        c,
+        page,
+        search,
+        state,
+        orderFilters,
+        undefined,
+        includeFinancial,
+        includeBilling,
+      );
     if (kind === "warehouse") {
       const where: Prisma.FulfillmentBatchWhereInput = {
         companyId: c,

@@ -12,6 +12,13 @@ GET /operations/lists/orders menerima status DRAFT|WAITING_APPROVAL|OPEN|PARTIAL
 
 GET /operations/order-options (sales_order.create atau update) menambah warehouses, salespeople (hanya id/nama anggota aktif), terms, defaults dan closedThrough. GET /operations/stock-availability?warehouse_id=UUID&product_ids=UUID,UUID (sales_order.create) menerima maksimal 100 produk; data lain perusahaan ditolak. Respons data berisi productId, available string decimal dan elsewhere[{locatorType,locatorName,quantity}]. Pembacaan tidak mengubah reservasi.
 
+Release 1 (29 Oktober 2026), read model dan nomor SO:
+
+- POST /sales-orders menerima `number` opsional (huruf, angka, `.`, `/`, `_`, `-`; maks. 60). Tanpa `number` server memakai urutan Setting › Penomoran Dokumen. Nomor yang sama dengan usulan memakai urutan tersebut; nomor lain tidak memakai urutan dan harus unik per perusahaan (409 `ORDER_NUMBER_TAKEN`). Revisi menerima `number` hanya selama SO Draft (409 `ORDER_NUMBER_LOCKED`).
+- GET /operations/order-options menambah `nextNumber` (usulan nomor SO; membaca tanpa memakai urutan, null bila aturan penomoran belum aktif).
+- Surat Jalan terbit dihitung sebagai serah terima pada status tampilan, filter dan progress SO. GET /operations/lists/orders menambah per baris `paymentTerm {code,label}`, `shipping {status NOT_SHIPPED|PARTIAL|SHIPPED, remainingQuantity, remainingUnit, draftDeliveryNotes}` dan, bila pemanggil memiliki `sales_invoice.read`, `billing {status NONE|UNINVOICED|UNPAID|PARTIAL|PAID, invoiceCount, uninvoicedDeliveryNotes}`. Query `queue=TO_SHIP|UNINVOICED`; UNINVOICED tanpa `sales_invoice.read` ditolak 403. Summary menambah `toShip` dan (bila boleh) `uninvoiced`.
+- GET /operations/orders/:id menambah `customer.primaryAddress`, `paymentTerm`, `shipping`, per baris `delivered` dan (dengan `sales_invoice.read`) `invoiced`, `billing` serta `invoiceSummaries [{id,number,total,outstanding,paymentStatus}]`; `deliveryNotes [{id,number,state,issuedAt}]` hanya dengan `outbound_shipping.read`. Aksi `revise` tidak lagi ditawarkan setelah ada Surat Jalan terbit.
+
 Error konfigurasi memuat kode pada errors.code, pesan manusia pada detail dan settings_href di root problem response. Scope perusahaan tetap berasal dari sesi; izin per submenu tetap diperiksa server.
 
 

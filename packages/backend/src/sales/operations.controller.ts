@@ -649,15 +649,20 @@ export class OperationsController {
         fulfillment: z.string().optional(),
         remainder: z.string().optional(),
         status: z.string().optional(),
+        queue: z.string().optional(),
       })
       .strict()
       .parse(query);
-    const { customer_id, from, to, fulfillment, remainder, status, ...base } = q;
+    const { customer_id, from, to, fulfillment, remainder, status, queue, ...base } = q;
     // Filter pelanggan/periode/pemenuhan/sisa hanya berlaku untuk daftar Sales Order.
     const orderFilters =
       type === "orders"
-        ? orderListFilterSchema.parse({ customer_id, from, to, fulfillment, remainder, status })
+        ? orderListFilterSchema.parse({ customer_id, from, to, fulfillment, remainder, status, queue })
         : undefined;
+    // Billing status of an SO is invoice data: only for readers of sales invoices.
+    const billing = type === "orders" && hasPermission(req, "sales_invoice.read");
+    if (orderFilters?.queue === "UNINVOICED" && !billing)
+      throw new ForbiddenException("Izin atau scope tidak mencukupi.");
     return {
       data: await (orderFilters
         ? this.service.list(
@@ -670,6 +675,7 @@ export class OperationsController {
             base.view,
             orderFilters,
             ["sales_order_advance.create", "sales_order_advance.verify", "customer_receipt.read"].some(permission => hasPermission(req, permission)),
+            billing,
           )
         : this.service.list(
             req.auth.company_id,

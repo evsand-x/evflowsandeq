@@ -4,6 +4,7 @@ import type { Prisma } from "@evflow/database";
 import { activePolicyValue } from "../common/policy-value";
 import { paymentTerms } from "./customer-credit";
 import { requireEvidence } from "./document-controls";
+import { nextDocumentNumber, previewDocumentNumber } from "../common/document-number";
 
 type Tx = Prisma.TransactionClient;
 type Customer = {
@@ -132,4 +133,24 @@ export async function resolveOrderHeader(
     customerReference,
     evidenceId,
   };
+}
+
+/**
+ * SO number: the Setting sequence by default. A number typed by the user must be unique in the
+ * company; typing exactly the suggested number consumes the sequence so it is not offered again.
+ */
+export async function resolveOrderNumber(tx: Tx, companyId: string, requested?: string | null) {
+  if (!requested) return nextDocumentNumber(tx, companyId, "sales_order");
+  const suggested = await previewDocumentNumber(tx, companyId, "sales_order");
+  const number =
+    suggested === requested ? await nextDocumentNumber(tx, companyId, "sales_order") : requested;
+  if (
+    number !== requested ||
+    (await tx.salesOrder.findFirst({ where: { companyId, number }, select: { id: true } }))
+  )
+    throw new ConflictException({
+      code: "ORDER_NUMBER_TAKEN",
+      message: `Nomor ${requested} sudah dipakai SO lain. Gunakan nomor lain.`,
+    });
+  return number;
 }

@@ -11,12 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   DataTable,
-  ActiveFilters,
-  FilterChips,
-  FilterPopover,
+  MetaItem,
   OfficePage,
   PageNotice,
-  SubNav,
+  RecordBadge,
 } from "@/components/web/page-frame";
 import { IconPlus, IconSearch } from "@/components/web/icons";
 import { SelectionField } from "@/components/web/selection-field";
@@ -26,71 +24,58 @@ import { useSession } from "../session-provider";
 import { useListParams } from "../master-data/master-shared";
 import { type Row } from "./workspace";
 import { SalesOrderForm } from "./sales-order-form";
-import { amount, orderStates, type Order, type OrderCommand } from "./sales-order-types";
-import { Tone } from "./sales-order-journey";
+import { amount, type Order, type OrderCommand } from "./sales-order-types";
+import {
+  billingLabel,
+  orderDocumentStatus,
+  shippingLabel,
+  type OrderBilling,
+  type OrderShipping,
+} from "@/lib/sales-order-copy";
 import "./sales-order.css";
 import "./sales-order-modern.css";
 import "./sales-order-frame.css";
+import "./sales-order-r1.css";
 type OrderList = {
-  rows: Order[];
+  rows: (Order & {
+    displayStatus: string;
+    orderDate: string;
+    paymentTerm: { code: string; label: string } | null;
+    shipping: OrderShipping;
+    billing?: OrderBilling;
+  })[];
   total: number;
-  summary: {
-    draft: number;
-    open: number;
-    partial: number;
-    creditHold: number | null;
-    backorder: number;
-  };
+  summary: Record<string, number>;
   filters?: { customers: { id: string; name: string }[] };
   asOf: string;
 };
-const orderStateFilters: Record<string, string> = {
-  ALL: "Semua status",
-  DRAFT: "Draft",
-  OPEN: "Open",
-  CLOSED: "Closed",
-  CANCELLED: "Dibatalkan",
-};
-const fulfillmentFilters: Record<string, string> = {
-  ALL: "Semua pemenuhan",
-  NOT_SHIPPED: "Belum Dikirim",
-  PARTIAL: "Sebagian",
-  SHIPPED: "Terkirim Semua",
-};
-const remainderFilters: Record<string, string> = {
-  ALL: "Semua sisa",
-  BACKORDER: "Backorder",
-  IN_PROGRESS: "Proses Pemenuhan",
-  NOT_EVALUATED: "Belum dievaluasi",
-  CLOSED: "Ditutup",
-};
-const filterKeys = ["customer_id", "from", "to", "fulfillment", "remainder"] as const;
 const base = "/operations/orders";
-const crumbs = [
-  { label: "Sales & Marketing" },
-  { label: "Pesanan Pelanggan" },
-  { label: "Sales Order", href: base },
+const crumbs = [{ label: "Sales & Marketing" }, { label: "Pesanan Pelanggan", href: base }];
+// Tab di pita (canvas SO-list): status dokumen atau daftar kerja dari ringkasan server.
+type Tab = {
+  id: string;
+  label: string;
+  param: Record<string, string>;
+  count: string;
+  billing?: boolean;
+};
+const listTabs: Tab[] = [
+  { id: "ALL", label: "Semua", param: {}, count: "all" },
+  { id: "DRAFT", label: "Draft", param: { status: "DRAFT" }, count: "DRAFT" },
+  { id: "TO_SHIP", label: "Perlu dikirim", param: { queue: "TO_SHIP" }, count: "toShip" },
+  {
+    id: "UNINVOICED",
+    label: "Belum diinvoice",
+    param: { queue: "UNINVOICED" },
+    count: "uninvoiced",
+    billing: true,
+  },
+  { id: "COMPLETED", label: "Terkirim penuh", param: { status: "COMPLETED" }, count: "COMPLETED" },
 ];
 
 function useCan() {
   const { principal } = useSession();
   return (p: string) => !!principal && hasCompanyPermission(principal, p);
-}
-
-// Sub-menu Pesanan Pelanggan; tiap item memakai izin read submenu masing-masing.
-function OrderSubNav() {
-  const can = useCan();
-  return (
-    <SubNav
-      items={[
-        ["Sales Order", base, "sales_order.read"],
-        ["Proforma", "/operations/proformas", "proforma.read"],
-        ["Backorder & Sisa Pesanan", "/operations/backorders", "sales_backorder.read"],
-      ]
-        .filter(([, , permission]) => can(permission!))
-        .map(([label, href]) => ({ label: label!, href: href!, active: href === base }))}
-    />
-  );
 }
 
 // Perintah SO memakai Idempotency-Key per isi permintaan; backend tetap otoritas status dan izin.
@@ -153,11 +138,15 @@ function OrderListPage() {
   const { principal } = useSession(),
     can = useCan(),
     list = useListParams();
-  const state = list.get("state");
-  const value = (key: string) => (list.get(key) === "ALL" ? "" : list.get(key));
-  const params = new URLSearchParams({ page: String(list.page), search: list.q });
-  if (state !== "ALL") params.set("state", state);
-  for (const key of filterKeys) if (value(key)) params.set(key, value(key));
+  const billing = can("sales_invoice.read");
+  const tabs = listTabs.filter((tab) => !tab.billing || billing);
+  const active =
+    tabs.find(
+      (tab) => Object.entries(tab.param).every(([k, v]) => list.get(k) === v) && tab.id !== "ALL",
+    ) ?? tabs[0]!;
+  const customerId = list.get("customer_id");
+  const params = new URLSearchParams({ page: String(list.page), search: list.q, ...active.param });
+  if (customerId !== "ALL") params.set("customer_id", customerId);
   const endpoint = `/operations/lists/orders?${params}`;
   const allowed = can("sales_order.read");
   const query = useQuery({
@@ -167,59 +156,120 @@ function OrderListPage() {
     placeholderData: (previous) => previous,
   });
   const listing = query.data?.data;
-  const stateCount = (id: string) =>
-    id === "DRAFT" ? listing?.summary.draft : id === "OPEN" ? listing?.summary.open : undefined;
-  const clear = (key: string) => () => list.set({ [key]: "ALL", page: 1 });
-  const customerName = listing?.filters?.customers.find(
-    (c) => c.id === list.get("customer_id"),
-  )?.name;
-  const period = [value("from"), value("to")].map((d) =>
-    d ? new Date(`${d}T00:00:00`).toLocaleDateString("id-ID", { dateStyle: "medium" }) : "",
-  );
-  const active = [
-    state !== "ALL" && {
-      key: "state",
-      label: `Status: ${orderStateFilters[state]}`,
-      onRemove: clear("state"),
+  const summary = listing?.summary;
+  const tabHref = (tab: Tab) => {
+    const next = new URLSearchParams(tab.param);
+    if (customerId !== "ALL") next.set("customer_id", customerId);
+    if (list.q) next.set("q", list.q);
+    return `${base}${next.size ? `?${next}` : ""}`;
+  };
+  const columns: ColumnDef<OrderList["rows"][number]>[] = [
+    {
+      id: "number",
+      header: "Nomor",
+      cell: ({ row }) => (
+        <Link className="page-frame-link" href={`${base}/${row.original.id}`}>
+          {row.original.number}
+        </Link>
+      ),
     },
-    value("customer_id") && {
-      key: "customer_id",
-      label: `Pelanggan: ${customerName ?? "terpilih"}`,
-      onRemove: clear("customer_id"),
+    {
+      id: "date",
+      header: "Tanggal",
+      cell: ({ row }) =>
+        new Date(row.original.orderDate ?? row.original.createdAt).toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        }),
     },
-    (value("from") || value("to")) && {
-      key: "period",
-      label: `Periode: ${period[0] || "awal"} – ${period[1] || "sekarang"}`,
-      onRemove: () => list.set({ from: "ALL", to: "ALL", page: 1 }),
+    {
+      id: "customer",
+      header: "Pelanggan",
+      cell: ({ row }) => <span className="sor-strong">{row.original.customer?.name ?? "—"}</span>,
     },
-    value("fulfillment") && {
-      key: "fulfillment",
-      label: `Pemenuhan: ${fulfillmentFilters[value("fulfillment")]}`,
-      onRemove: clear("fulfillment"),
+    {
+      id: "term",
+      header: "Termin",
+      cell: ({ row }) => row.original.paymentTerm?.label ?? "—",
     },
-    value("remainder") && {
-      key: "remainder",
-      label: `Sisa: ${remainderFilters[value("remainder")]}`,
-      onRemove: clear("remainder"),
+    {
+      id: "value",
+      header: () => <span className="sor-num">Nilai</span>,
+      cell: ({ row }) => (
+        <span className="sor-num sor-strong" style={{ display: "block" }}>
+          {row.original.total == null
+            ? "Menunggu evaluasi"
+            : amount(row.original.total, row.original.currency)}
+        </span>
+      ),
     },
-  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[];
-  // Angka di tombol Filter hanya menghitung filter di popup; status/pemenuhan tampil di toolbar.
-  const popupCount = active.filter((item) =>
-    ["customer_id", "period", "remainder"].includes(item.key),
-  ).length;
+    {
+      id: "shipping",
+      header: "Pengiriman",
+      cell: ({ row }) => {
+        const value = shippingLabel(row.original.shipping);
+        return row.original.shipping ? (
+          <RecordBadge state={value.tone} label={value.label} />
+        ) : (
+          <span className="sor-hint">—</span>
+        );
+      },
+    },
+    ...(billing
+      ? [
+          {
+            id: "billing",
+            header: "Tagihan",
+            cell: ({ row }) => {
+              const value = billingLabel(row.original.billing);
+              return row.original.billing && row.original.billing.status !== "NONE" ? (
+                <RecordBadge state={value.tone} label={value.label} />
+              ) : (
+                <span className="sor-hint">—</span>
+              );
+            },
+          } satisfies ColumnDef<OrderList["rows"][number]>,
+        ]
+      : []),
+    {
+      id: "documentStatus",
+      // Header sebagai fungsi: badge status dibuat kolom ini sendiri, bukan pembungkus tabel.
+      header: () => "Status",
+      cell: ({ row }) => {
+        const value = orderDocumentStatus(row.original.displayStatus);
+        return <RecordBadge state={value.tone} label={value.label} />;
+      },
+    },
+  ];
   return (
     <OfficePage
       section="sales"
-      crumbs={[...crumbs.slice(0, 2), { label: "Sales Order" }]}
-      title="Sales Order"
-      subtitle="Pesanan pelanggan dan pemenuhannya. Approval hanya untuk pengecualian."
-      tabs={<OrderSubNav />}
+      crumbs={[crumbs[0]!, { label: "Pesanan Pelanggan" }]}
+      title="Pesanan Pelanggan"
+      subtitle="Semua SO beserta kemajuan pengiriman (Surat Jalan) dan tagihannya."
+      tabs={
+        allowed && (
+          <nav className="page-frame-subnav" aria-label="Daftar Sales Order">
+            {tabs.map((tab) => (
+              <Link
+                key={tab.id}
+                href={tabHref(tab)}
+                aria-current={active.id === tab.id ? "page" : undefined}
+              >
+                {tab.label}
+                {summary && <span className="sor-count">{summary[tab.count] ?? 0}</span>}
+              </Link>
+            ))}
+          </nav>
+        )
+      }
       actions={
         can("sales_order.create") && (
           <Button asChild>
             <Link href={`${base}/new`}>
               <IconPlus aria-hidden="true" />
-              Buat Sales Order
+              SO baru
             </Link>
           </Button>
         )
@@ -234,194 +284,99 @@ function OrderListPage() {
               {query.error.message}
             </PageNotice>
           )}
+          {!!summary?.toShip && (
+            <section className="sor-next sor-next-compact" aria-label="Perlu tindakan">
+              <svg width="20" height="22" viewBox="0 0 12 14" aria-hidden="true" focusable="false">
+                <path
+                  d="M8 1C4 1.4 1 4.4 1 7.9 1 11 3.3 13.2 6.5 13 4.3 12.3 2.8 10.3 2.8 7.8 2.8 4.9 4.9 2.3 8 1z"
+                  fill="#1F7FE0"
+                />
+              </svg>
+              <div>
+                <span>{summary.toShip} SO masih punya sisa yang belum dikirim.</span>
+              </div>
+              {can("outbound_shipping.read") && (
+                <Link className="page-frame-link sor-next-link" href="/operations/delivery-notes">
+                  Lihat Surat Jalan
+                </Link>
+              )}
+            </section>
+          )}
           <DataTable
             data={listing?.rows ?? []}
-            columns={listColumns}
+            columns={columns}
             total={listing?.total ?? 0}
             pageSize={25}
             page={list.page}
             onPage={(page) => list.set({ page })}
             busy={query.isFetching}
             label="Sales Order"
+            showColumns={false}
             toolbar={
               <>
                 <div className="page-frame-search">
                   <IconSearch />
                   <Input
-                    aria-label="Cari nomor SO atau pelanggan"
-                    placeholder="Cari nomor SO atau nama pelanggan"
+                    type="search"
+                    aria-label="Cari nomor SO, SP atau pelanggan"
+                    placeholder="Cari nomor SO, SP atau pelanggan"
                     value={list.search}
                     onChange={(event) => list.setSearch(event.target.value)}
                   />
                 </div>
-                <FilterPopover
-                  count={popupCount}
-                  onReset={() =>
-                    list.set({
-                      customer_id: "ALL",
-                      from: "ALL",
-                      to: "ALL",
-                      remainder: "ALL",
-                      page: 1,
-                    })
-                  }
-                  resultLabel={`Tampilkan ${listing?.total ?? 0} SO`}
-                >
-                  <fieldset className="page-frame-chip-group">
-                    <legend>Pelanggan</legend>
-                    <SelectionField
-                      label="Pelanggan"
-                      hideLabel
-                      value={[list.get("customer_id")]}
-                      options={[
-                        { id: "ALL", name: "Semua pelanggan" },
-                        ...(listing?.filters?.customers ?? []),
-                      ]}
-                      onChange={(v) => list.set({ customer_id: v[0] ?? "ALL", page: 1 })}
-                    />
-                  </fieldset>
-                  <fieldset className="page-frame-chip-group">
-                    <legend>Periode tanggal SO</legend>
-                    <div className="so-period">
-                      <Input
-                        type="date"
-                        aria-label="Dari tanggal"
-                        value={value("from")}
-                        max={value("to") || undefined}
-                        onChange={(e) => list.set({ from: e.target.value, page: 1 })}
-                      />
-                      <Input
-                        type="date"
-                        aria-label="Sampai tanggal"
-                        value={value("to")}
-                        min={value("from") || undefined}
-                        onChange={(e) => list.set({ to: e.target.value, page: 1 })}
-                      />
-                    </div>
-                  </fieldset>
-                  <FilterChips
-                    legend="Sisa pesanan"
-                    value={list.get("remainder")}
-                    options={Object.entries(remainderFilters)
-                      .filter(([id]) => id !== "ALL")
-                      .map(([id, label]) => ({
-                        id,
-                        label,
-                        count: id === "BACKORDER" ? listing?.summary.backorder : undefined,
-                      }))}
-                    onChange={(v) => list.set({ remainder: v, page: 1 })}
+                <div className="sor-list-filter">
+                  <SelectionField
+                    label="Filter pelanggan"
+                    hideLabel
+                    value={[customerId]}
+                    options={[
+                      { id: "ALL", name: "Semua pelanggan" },
+                      ...(listing?.filters?.customers ?? []),
+                    ]}
+                    onChange={(v) => list.set({ customer_id: v[0] ?? "ALL", page: 1 })}
                   />
-                </FilterPopover>
-                <SelectionField
-                  label="Status pesanan"
-                  hideLabel
-                  value={[state]}
-                  options={Object.entries(orderStateFilters).map(([id, name]) => ({
-                    id,
-                    name: stateCount(id) != null ? `${name} (${stateCount(id)})` : name,
-                  }))}
-                  onChange={(v) => list.set({ state: v[0] ?? "ALL", page: 1 })}
-                />
-                <SelectionField
-                  label="Pemenuhan"
-                  hideLabel
-                  value={[list.get("fulfillment")]}
-                  options={Object.entries(fulfillmentFilters).map(([id, name]) => ({ id, name }))}
-                  onChange={(v) => list.set({ fulfillment: v[0] ?? "ALL", page: 1 })}
-                />
-                <ActiveFilters items={active} />
+                </div>
+                {listing && (
+                  <span className="sor-range">
+                    {listing.rows.length} dari {listing.total} dokumen
+                  </span>
+                )}
               </>
             }
           />
-          {listing && (
-            <p className="page-frame-subtitle">
-              Cakupan perusahaan · Diperbarui {new Date(listing.asOf).toLocaleString("id-ID")}
-            </p>
-          )}
         </>
       )}
     </OfficePage>
   );
 }
-// Kolom daftar SO sesuai urutan pengguna: No. SO, Tanggal SO, Pelanggan, Nilai SO, Status, Pemenuhan, Sisa.
-const listColumns: ColumnDef<Order>[] = [
-  {
-    id: "number",
-    header: "No. SO",
-    cell: ({ row }) => (
-      <Link className="page-frame-link" href={`${base}/${row.original.id}`}>
-        {row.original.number}
-      </Link>
-    ),
-  },
-  {
-    id: "date",
-    header: "Tanggal SO",
-    cell: ({ row }) =>
-      new Date(row.original.createdAt).toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-  },
-  {
-    id: "customer",
-    header: "Pelanggan",
-    cell: ({ row }) => <span className="so-cell">{row.original.customer?.name ?? "—"}</span>,
-  },
-  {
-    id: "value",
-    header: "Nilai SO",
-    cell: ({ row }) => (
-      <span
-        className="so-num"
-        title={
-          row.original.total == null
-            ? "Total belum tersedia; pajak belum ditetapkan."
-            : "Total termasuk pajak"
-        }
-      >
-        {row.original.total == null
-          ? "Menunggu evaluasi"
-          : amount(row.original.total, row.original.currency)}
-      </span>
-    ),
-  },
-  {
-    id: "state",
-    header: "Status",
-    cell: ({ row }) => <Tone>{orderStates[row.original.state] ?? row.original.state}</Tone>,
-  },
-  {
-    id: "fulfillment",
-    header: "Pemenuhan",
-    cell: ({ row }) => <Tone>{row.original.fulfillment}</Tone>,
-  },
-  {
-    id: "remainder",
-    header: "Sisa",
-    cell: ({ row }) => <Tone>{row.original.remainderStatus}</Tone>,
-  },
-];
 
 function OrderFormPage({ row }: { row?: Order }) {
   const can = useCan(),
     router = useRouter();
   const { command, pending, error, errorHref } = useOrderCommand();
   const allowed = row ? can("sales_order.update") : can("sales_order.create");
+  const status = row ? (row.displayStatus ?? row.state) : null;
   return (
     <OfficePage
       section="sales"
       crumbs={[
         ...crumbs,
         ...(row ? [{ label: row.number, href: `${base}/${row.id}` }] : []),
-        { label: row ? "Revisi" : "Baru" },
+        { label: row ? "Ubah" : "Baru" },
       ]}
-      title={row ? `Revisi ${row.number}` : "Sales Order baru"}
-      subtitle={
-        row
-          ? "Perbarui rincian pesanan dan catat alasan revisi. Revisi memerlukan pengajuan ulang."
-          : "Catat barang dan jumlah sesuai SP. Setelah diajukan, server memeriksa harga, satuan, kredit dan stok tanpa approval rutin."
+      title={row ? row.number : "Sales Order baru"}
+      meta={
+        <MetaItem label="Status">
+          <RecordBadge
+            state={status ? orderDocumentStatus(status).tone : "neutral"}
+            label={status ? orderDocumentStatus(status).label : "Belum disimpan"}
+          />
+        </MetaItem>
+      }
+      actions={
+        <Button variant="outline" asChild>
+          <Link href={base}>Kembali</Link>
+        </Button>
       }
     >
       {!allowed ? (

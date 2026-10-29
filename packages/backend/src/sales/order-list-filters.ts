@@ -11,6 +11,8 @@ export const orderListFilterSchema = z
     to: z.string().date().optional(),
     fulfillment: z.enum(["NOT_SHIPPED", "PARTIAL", "SHIPPED"]).optional(),
     remainder: z.enum(["BACKORDER", "IN_PROGRESS", "NOT_EVALUATED", "CLOSED"]).optional(),
+    /** Daftar kerja: SO diajukan yang masih punya sisa kirim, atau punya Surat Jalan terbit belum diinvoice. */
+    queue: z.enum(["TO_SHIP", "UNINVOICED"]).optional(),
   })
   .refine((v) => !v.from || !v.to || v.from <= v.to, {
     message: "Tanggal awal tidak boleh setelah tanggal akhir.",

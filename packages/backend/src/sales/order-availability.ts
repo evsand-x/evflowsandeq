@@ -1,3 +1,4 @@
+import { previewDocumentNumber } from "../common/document-number";
 import { ConflictException } from "@nestjs/common";
 import { prisma, Prisma } from "@evflow/database";
 import { paymentTerms } from "./customer-credit";
@@ -135,5 +136,7 @@ export async function orderFormOptions(companyId: string, db: Tx = prisma) {
       evidenceRequired: settings.evidenceRequired,
     },
     closedThrough: period?.endsOn.toISOString().slice(0, 10) ?? null,
+    // Suggested SO number; null when Setting › Penomoran Dokumen has no active SO rule.
+    nextNumber: await previewDocumentNumber(db, companyId, "sales_order"),
   };
 }

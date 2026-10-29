@@ -169,9 +169,18 @@ describe("SO form and list HTTP authorization", () => {
         undefined,
         { status },
         false,
+        false,
       );
     },
   );
+
+  it("refuses the uninvoiced queue without sales invoice access", async () => {
+    await request(app.getHttpServer())
+      .get("/operations/lists/orders?queue=UNINVOICED")
+      .set("x-test-access", "read")
+      .expect(403);
+    expect(service.list).not.toHaveBeenCalled();
+  });
 
   it.each(["create", "read:self", "read:foreign"])(
     "rejects list access with %s",

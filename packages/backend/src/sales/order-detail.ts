@@ -3,6 +3,12 @@ import { prisma, Prisma } from "@evflow/database";
 import { orderReadFacts } from "./order-summary";
 import { orderView } from "./order-view";
 import {
+  orderBilling,
+  orderDeliveryFacts,
+  orderShipping,
+  withDeliveredQuantities,
+} from "./order-delivery-facts";
+import {
   orderLineProgress,
   orderNeighbors,
   orderRelated,
@@ -22,7 +28,14 @@ export async function orderDetail(
   const row = await db.salesOrder.findFirst({
     where: { companyId, id },
     include: {
-      customer: { select: { id: true, name: true, channel: { select: { name: true } } } },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          primaryAddress: true,
+          channel: { select: { name: true } },
+        },
+      },
       salesperson: { select: { id: true, displayName: true } },
       warehouse: { select: { id: true, code: true, name: true } },
       lines: {
@@ -49,7 +62,10 @@ export async function orderDetail(
     can("sales_order_advance.verify") ||
     can("customer_receipt.read");
   const facts = await orderReadFacts(companyId, [row], db, financial);
-  const view = orderView({ ...row, ...facts.get(row.id) });
+  const billingAllowed = can("sales_invoice.read");
+  const delivery = (await orderDeliveryFacts(companyId, [row.id], db, billingAllowed)).get(row.id);
+  const progressLines = withDeliveredQuantities(row.lines, delivery);
+  const view = orderView({ ...row, lines: progressLines, ...facts.get(row.id) });
   const receipts = financial
     ? await db.customerReceipt.findMany({
         where: {
@@ -79,11 +95,16 @@ export async function orderDetail(
           })),
         )
       : null;
-  const lines = row.lines
+  const lines = progressLines
     .map((line, index) => ({
       ...line,
       ...view.lineValues[index],
       ...orderLineProgress(line),
+      // Release 1: issued Surat Jalan quantity and the part of it already invoiced.
+      delivered: (delivery?.delivered.get(line.id) ?? new D(0)).toString(),
+      ...(billingAllowed
+        ? { invoiced: (delivery?.invoiced.get(line.id) ?? new D(0)).toString() }
+        : {}),
       product: line.product,
       uom: line.Uom,
     }))
@@ -170,6 +191,32 @@ export async function orderDetail(
     ...(financial && can("sales_invoice.read") ? { remainingBill } : {}),
     related,
     neighbors,
+    paymentTerm: facts.get(row.id)?.paymentTerm
+      ? {
+          code: facts.get(row.id)!.paymentTerm!.code,
+          label: facts.get(row.id)!.paymentTerm!.label,
+        }
+      : null,
+    shipping: orderShipping(
+      row.state,
+      progressLines.map((line) => ({
+        ...line,
+        unit: line.Uom?.name ?? line.product.baseUom.name,
+      })),
+      delivery,
+    ),
+    ...(billingAllowed
+      ? { billing: orderBilling(row.state, delivery), invoiceSummaries: delivery?.invoices ?? [] }
+      : {}),
+    ...(can("outbound_shipping.read")
+      ? {
+          deliveryNotes: await db.deliveryNote.findMany({
+            where: { companyId, salesOrderId: id, state: { in: ["DRAFT", "ISSUED"] } },
+            select: { id: true, number: true, state: true, issuedAt: true },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          }),
+        }
+      : {}),
     lastChanged: auditRows.find((event) => event.action !== "sales_order.printed")
       ? (() => {
           const event = auditRows.find((item) => item.action !== "sales_order.printed")!;

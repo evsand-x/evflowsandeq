@@ -8,6 +8,7 @@
     "seed-full-development.ts",
     "../packages/database/prisma/dev-seed-guard.ts",
     "grant-development-review.ts",
-    "seed-crm-development.ts"
+    "seed-crm-development.ts",
+    "seed-o2c-demo-order.ts"
   ]
 }

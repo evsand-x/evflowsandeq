@@ -247,6 +247,8 @@ describe("SO stock availability and form options", () => {
           evidenceRequired: true,
         },
         closedThrough: "2026-01-31",
+        // No SO numbering rule in this fixture company, so no number is suggested.
+        nextNumber: null,
       });
     }));
 });

@@ -90,6 +90,7 @@ describe("Sales Order list filters", () => {
       undefined,
       { customer_id: customer, from: "2026-10-01", fulfillment: "PARTIAL", remainder: "BACKORDER" },
       false,
+      false,
     );
     await controller.list("proformas", {}, req);
     expect(list.mock.lastCall).toEqual([

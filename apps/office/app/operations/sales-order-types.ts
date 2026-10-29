@@ -14,6 +14,9 @@ export type Order = Omit<Row, "lines" | "total" | "taxAmount"> & {
   lines: OrderLine[];
   createdAt: string;
   createdByName: string | null;
+  orderDate?: string;
+  paymentTermCode?: string | null;
+  displayStatus?: string;
   notes?: string | null;
   freightEstimate?: string | null;
   freightTermsSnapshot?: {
