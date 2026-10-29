@@ -1,5 +1,8 @@
 # Domain Finance
 
+> **Batas Finance Release 1 O2C:** Pendapatan dan HPP diposting saat Surat Jalan terbit dengan bukti serah terima. Invoice dibuat dari Surat Jalan terbit dan membentuk AR dengan TOP yang disnapshot dari SO. Model unbilled AR, POD dan Packing List tetap menjadi scope lanjutan.
+
+
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
 Catat uang muka SO hanya pada DRAFT/OPEN, jumlah positif, total tersedia dan kumulatif catatan pending/verified tidak melampaui total. Bukti PAYMENT dan rekening perusahaan aktif wajib. Verifikasi pengguna berbeda mengunci catatan/versi, memeriksa periode tanggal penerimaan lalu memposting Kas/Bank–Uang Muka Pelanggan melalui posting profile dan pajak uang muka yang berlaku. Penolakan menyimpan alasan tanpa jurnal. Receipt SO-bound tidak boleh dialokasikan ke invoice SO lain. Sisa tagihan = total SO − receipt unallocated POSTED terkait − pembayaran invoice POSTED; nilai ini tidak menggandakan uang muka yang sudah dialokasikan.

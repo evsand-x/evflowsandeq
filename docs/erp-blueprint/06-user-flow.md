@@ -1,5 +1,8 @@
 # User Flow — lintas peran dan pengecualian
 
+> **Alur Release 1 O2C:** SO → Surat Jalan draft → isi bukti serah terima dan jumlah kirim → terbitkan Surat Jalan (stok, pendapatan, HPP) → Invoice dari Surat Jalan. Alur picking, checking, Packing List, POD dan dispatch lama di dokumen ini adalah scope lanjutan.
+
+
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
 SO → Catat Uang Muka → Menunggu verifikasi → Finance pengguna berbeda memverifikasi atau menolak. Hanya verifikasi membuat penerimaan/jurnal dan menambah DP. Dispatch PREPAY mengikat dana SO yang dipakai ke satu batch sehingga batch lain tidak menghitung ulang. Detail menautkan dokumen asal; Buat Surat Jalan tetap melalui pengambilan dan pemeriksaan. Invoice dari Packing List menunggu POD tetap tampak di Transaksi bila izin invoice ada.

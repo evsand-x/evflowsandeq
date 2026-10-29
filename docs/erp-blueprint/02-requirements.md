@@ -1,5 +1,8 @@
 # Requirements — aturan bisnis dan penerimaan
 
+> **Kontrak Release 1 O2C (29 Oktober 2026):** Untuk scope Release 1, alur operasional adalah SO → Surat Jalan → Invoice. Surat Jalan terbit dengan bukti serah terima menjadi event stok, pendapatan dan HPP. Invoice hanya dibuat dari Surat Jalan terbit. POD, Packing List, picking, checking dan dispatch terpisah adalah scope lanjutan dan tidak boleh dipakai sebagai prasyarat Release 1. Termin/TOP dipilih pada SO dan disnapshot. Bagian lama di bawah yang menyebut alur POD/Packing List berlaku untuk scope lanjutan dan tidak mengubah kontrak Release 1.
+
+
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
 OTC-01/04/12/17, FIN-01/02/03, IAM-01/04 dan NFR-02/09: catatan uang muka SO menunggu verifikasi pengguna berbeda; posting dan pengikatan dana PREPAY atomik, tidak menghitung pending. Detail, dokumen terkait, cetak, duplikat dan tindakan mengikuti izin server. Gate release dan bukti pengujian dicatat di laporan eksekusi.

@@ -1,5 +1,8 @@
 # Domain Sales & Marketing
 
+> **Batas Release 1 O2C:** Surat Jalan terbit adalah bukti serah terima dan event stok, pendapatan serta HPP. Invoice hanya berasal dari Surat Jalan terbit. Termin/TOP dipilih di SO. Aturan yang masih menyebut POD, Packing List atau invoice menunggu POD berlaku setelah Release 1.
+
+
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
 Detail SO menghitung progress setiap barang serta dokumen terkait, termasuk invoice menunggu Surat Jalan terbit. DP sekarang mencakup receipt POSTED tertaut langsung SO atau batch SO, dikurangi refund tanpa hitung ganda. Catatan uang muka pending tidak masuk DP. Daftar/detail menyembunyikan DP tanpa izin receipt/advance; invoice dan dokumen warehouse mengikuti izin submenu masing-masing. Duplikat membuat draft baru dengan default kepala terbaru, referensi/bukti kosong dan harga diperiksa saat submit.

@@ -1,5 +1,8 @@
 # Database — model relasional
 
+> **Prioritas kontrak Release 1 O2C:** Model dan event baru untuk Release 1 memakai Surat Jalan sebagai bukti serah terima, stock movement, pendapatan dan HPP; Invoice mereferensikan Surat Jalan terbit. Model delivery receipt, Packing List dan fulfillment lama tetap untuk scope lanjutan dan tidak menjadi sumber event Release 1.
+
+
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
 SalesOrderAdvance menyimpan companyId, salesOrderId, amount numeric(24,8), currency, receivedAt, bankAccountId, bankReference, evidenceId, state PENDING_VERIFICATION/VERIFIED/REJECTED, pencatat/waktu, verifier/waktu, rejectionReason, customerReceiptId unik, version dan idempotencyKey unik per perusahaan. CustomerReceipt.salesOrderId nullable mempertahankan asal uang muka; fulfillmentBatchId diisi saat dana PREPAY diikat. Tidak mengubah nominal posted receipt. Dua migration mencatat pemberian izin baru kepada pemegang kemampuan sumber.
