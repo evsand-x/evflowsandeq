@@ -18,11 +18,32 @@ describe("outbound queue status", () => {
     expect(() => issueSuratJalanSchema.parse({
       handover_at: "2026-10-29T08:00:00.000Z",
       receiver_name: "Penerima",
+      evidence_id: "00000000-0000-4000-8000-000000000004",
       lines: [{ sales_order_line_id: "00000000-0000-4000-8000-000000000002", delivered_quantity: "1" }],
     })).not.toThrow();
     expect(() => createInvoiceFromSuratJalanSchema.parse({
       surat_jalan_id: "00000000-0000-4000-8000-000000000003",
     })).not.toThrow();
+  });
+  it("rejects missing handover evidence, zero quantities, and duplicate issue lines", () => {
+    const base = {
+      handover_at: "2026-10-29T08:00:00.000Z",
+      receiver_name: "Penerima",
+      evidence_id: "00000000-0000-4000-8000-000000000004",
+    };
+    expect(issueSuratJalanSchema.safeParse({ ...base, lines: [{ sales_order_line_id: "00000000-0000-4000-8000-000000000002", delivered_quantity: "1" }], evidence_id: undefined }).success).toBe(false);
+    expect(issueSuratJalanSchema.safeParse({ ...base, lines: [{ sales_order_line_id: "00000000-0000-4000-8000-000000000002", delivered_quantity: "0" }] }).success).toBe(false);
+    expect(issueSuratJalanSchema.safeParse({ ...base, lines: [
+      { sales_order_line_id: "00000000-0000-4000-8000-000000000002", delivered_quantity: "1" },
+      { sales_order_line_id: "00000000-0000-4000-8000-000000000002", delivered_quantity: "1" },
+    ] }).success).toBe(false);
+    expect(createSuratJalanSchema.safeParse({
+      sales_order_id: "00000000-0000-4000-8000-000000000001",
+      lines: [
+        { sales_order_line_id: "00000000-0000-4000-8000-000000000002", quantity: "1" },
+        { sales_order_line_id: "00000000-0000-4000-8000-000000000002", quantity: "1" },
+      ],
+    }).success).toBe(false);
   });
   it("never advertises a cancelled batch as actionable", () => {
     for (const stage of ["picking", "checking", "shipping", "pod"]) {

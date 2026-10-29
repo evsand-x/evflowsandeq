@@ -128,20 +128,27 @@ export const createSuratJalanSchema = z
       .max(100),
     notes: z.string().trim().max(2000).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const ids = value.lines.map((line) => line.sales_order_line_id);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["lines"], message: "Baris Surat Jalan tidak boleh duplikat." });
+    }
+  });
 
 /** Release 1 issue event: Surat Jalan is the handover, stock, revenue and HPP event. */
 export const issueSuratJalanSchema = z
   .object({
     handover_at: z.string().datetime(),
     receiver_name: z.string().trim().min(1).max(200),
-    evidence_id: z.string().uuid().optional(),
+    // Release 1 handover evidence is required to issue Surat Jalan.
+    evidence_id: z.string().uuid(),
     lines: z
       .array(
         z
           .object({
             sales_order_line_id: z.string().uuid(),
-            delivered_quantity: nonNegativeDecimal,
+            delivered_quantity: positiveDecimal,
             rejected_quantity: nonNegativeDecimal.optional(),
             discrepancy_reason: z.string().trim().max(1000).optional(),
           })
@@ -150,7 +157,13 @@ export const issueSuratJalanSchema = z
       .min(1)
       .max(100),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const ids = value.lines.map((line) => line.sales_order_line_id);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["lines"], message: "Baris Surat Jalan tidak boleh duplikat." });
+    }
+  });
 
 /** Invoice source contract: one posted invoice at most per issued Surat Jalan. */
 export const createInvoiceFromSuratJalanSchema = z
@@ -160,6 +173,15 @@ export const createInvoiceFromSuratJalanSchema = z
 export type CreateSuratJalanInput = z.infer<typeof createSuratJalanSchema>;
 export type IssueSuratJalanInput = z.infer<typeof issueSuratJalanSchema>;
 export type CreateInvoiceFromSuratJalanInput = z.infer<typeof createInvoiceFromSuratJalanSchema>;
+
+// Public command aliases use the English aggregate name used by the API while
+// retaining the Indonesian document name in the Office UI.
+export const createDeliveryNoteSchema = createSuratJalanSchema;
+export const issueDeliveryNoteSchema = issueSuratJalanSchema;
+export const createInvoiceFromDeliveryNoteSchema = createInvoiceFromSuratJalanSchema;
+export type CreateDeliveryNoteInput = CreateSuratJalanInput;
+export type IssueDeliveryNoteInput = IssueSuratJalanInput;
+export type CreateInvoiceFromDeliveryNoteInput = CreateInvoiceFromSuratJalanInput;
 export const invoiceDraftSchema = z
   .object({
     delivery_receipt_id: z.string().uuid(),

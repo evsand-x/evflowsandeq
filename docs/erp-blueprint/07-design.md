@@ -433,7 +433,7 @@ Satu akun menampilkan gabungan izin per tindakan/cakupan dari peran yang diberik
 | Stock detail | Produk, NIE, batch, expiry, lokasi, pemilik, on hand/reserved/available, quality | Lihat pergerakan / inspeksi |
 | Penerimaan | PO, qty, batch/expiry, kondisi, lokasi dan hasil pemeriksaan | Simpan pemeriksaan / posting |
 | AR/AP aging | Pihak, invoice, jatuh tempo, umur, outstanding, collector | Catat follow-up / alokasikan pembayaran |
-| Detail Invoice | Nomor, pelanggan, jumlah/nilai, tanggal penerimaan POD, termin, jatuh tempo, dibayar dan sisa; riwayat penerimaan | Terima Pembayaran sesuai izin; form memisahkan uang masuk, PPN Dipungut WAPU, PPh Dipotong dan komponen lain; pilih penerimaan yang sudah ada bila dana telah dicatat |
+| Detail Invoice | Nomor, pelanggan, jumlah/nilai, waktu serah terima Surat Jalan, termin, jatuh tempo, dibayar dan sisa; riwayat penerimaan | Terima Pembayaran sesuai izin; form memisahkan uang masuk, PPN Dipungut WAPU, PPh Dipotong dan komponen lain; pilih penerimaan yang sudah ada bila dana telah dicatat |
 | Kartu Piutang Pelanggan | Periode, saldo awal, mutasi bertanggal/nomor dokumen, tambah/kurang, saldo berjalan/akhir; invoice terbuka, jatuh tempo, aging dan riwayat penagihan | Telusuri sumber / catat follow-up dan janji bayar / cetak-ekspor sesuai izin |
 | Closing | Langkah, selisih, bukti, pemilik, status validasi/review | Selesaikan langkah / review / tutup periode |
 | Harga & HPP | Basis biaya, target margin, diskon, rekomendasi neto, margin efektif | Simulasi / ajukan pricelist |
@@ -460,7 +460,7 @@ Daftar atribut berikut berasal dari pengguna. Pengelompokan dan perilaku input m
 | 11 | NPWP | Teks untuk menjaga nol di depan, nama/alamat terdaftar dan berkas bila diperlukan; simpan NPWP/NIK, status PKP/Non-PKP dan alamat sesuai pajak |
 | 12 | Apoteker Penanggung Jawab/Penanggung Jawab Teknis | Nama, jenis penanggung jawab, kontak dan masa penugasan bila tersedia; berlaku sesuai jenis pelanggan |
 | 13 | Izin Penanggung Jawab | Tertaut ke penanggung jawab: jenis/nomor izin, penerbit, masa berlaku dan berkas; dukung riwayat penggantian |
-| 14 | Termin Pembayaran | Opsional: termin bawaan pelanggan dari daftar termin Setting (Tunai/COD, Bayar sebelum kirim, Tempo N hari) yang hanya mengisi otomatis SO. COD memiliki TOP 0 dan jatuh tempo dari POD |
+| 14 | Termin Pembayaran | Opsional: termin bawaan pelanggan dari daftar termin Setting (Tunai/COD, Bayar sebelum kirim, Tempo N hari) yang hanya mengisi otomatis SO. COD memiliki TOP 0 dan jatuh tempo dari waktu serah terima Surat Jalan |
 | 15 | Limit Kredit | Nilai uang dan tanggal efektif; hanya pengguna berwenang. Pelanggan baru tidak otomatis mendapat limit/Tempo; limit untuk prepay/COD dapat tetap kosong sesuai policy |
 | 16 | Saldo Awal Piutang | Ringkasan hasil proses opening per invoice dan tanggal cut-over; tombol Isi/Impor Rincian Piutang Awal mengikuti hak finance. Bukan angka bebas yang langsung mengubah kartu piutang |
 | 17 | Upload Berkas NOO | Unggah berkas dengan nama, tanggal, versi dan catatan; akses privat. Istilah NOO dipertahankan sesuai pengguna; template/kewajiban mengikuti channel |

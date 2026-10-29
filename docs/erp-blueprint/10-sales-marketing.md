@@ -2,7 +2,7 @@
 
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
-Detail SO menghitung progress setiap barang serta dokumen terkait, termasuk invoice ISSUED_WAITING_POD. DP sekarang mencakup receipt POSTED tertaut langsung SO atau batch SO, dikurangi refund tanpa hitung ganda. Catatan uang muka pending tidak masuk DP. Daftar/detail menyembunyikan DP tanpa izin receipt/advance; invoice dan dokumen warehouse mengikuti izin submenu masing-masing. Duplikat membuat draft baru dengan default kepala terbaru, referensi/bukti kosong dan harga diperiksa saat submit.
+Detail SO menghitung progress setiap barang serta dokumen terkait, termasuk invoice menunggu Surat Jalan terbit. DP sekarang mencakup receipt POSTED tertaut langsung SO atau batch SO, dikurangi refund tanpa hitung ganda. Catatan uang muka pending tidak masuk DP. Daftar/detail menyembunyikan DP tanpa izin receipt/advance; invoice dan dokumen warehouse mengikuti izin submenu masing-masing. Duplikat membuat draft baru dengan default kepala terbaru, referensi/bukti kosong dan harga diperiksa saat submit.
 
 ## Backend daftar dan form SO — 25 Oktober 2026
 
@@ -332,7 +332,7 @@ Backorder yang belum dialokasikan tidak memakai limit. Saat stok tersedia dan ak
 
 ## 2. Mode pelanggan
 
-- **COD:** TOP 0, jatuh tempo pada POD; tidak memerlukan limit kredit, tetapi pembayaran tetap dipantau.
+- **COD:** TOP 0, jatuh tempo pada waktu serah terima Surat Jalan terbit; tidak memerlukan limit kredit, tetapi pembayaran tetap dipantau.
 - **Prepay:** dispatch memerlukan dana terverifikasi dan ditautkan; dana tersebut tidak dapat digunakan dua kali.
 - **Credit/Tempo:** memerlukan TOP, limit, tanggal efektif dan pengguna berwenang.
 
@@ -437,7 +437,7 @@ Picking memilih batch/locator yang layak berdasarkan FEFO/FIFO. Expired, karanti
 
 Fulfillment batch dapat dibuat beberapa kali dari satu SO. Proforma dan picking hanya memuat allocated quantity. Packing/SJ hanya memuat picking yang lolos checking. POD mencatat tanggal/jam aktual, penerima, bukti, qty diterima, selisih dan alasan.
 
-Invoice resmi mengacu qty POD yang belum ditagih. Jatuh tempo = tanggal POD + TOP. Satu invoice hanya menggabungkan POD dengan pelanggan, mata uang, tax profile, TOP dan tanggal POD yang sama; POD berbeda tanggal dibuat menjadi invoice terpisah. Invoice asli dapat dibawa saat pengiriman dengan status menunggu POD; posting tetap menunggu POD tervalidasi. Invoice tidak boleh membuat pendapatan/HPP kedua.
+Invoice Release 1 hanya mengacu qty Surat Jalan terbit yang belum ditagih. Jatuh tempo = waktu serah terima Surat Jalan terbit + TOP. Satu invoice hanya menggabungkan POD dengan pelanggan, mata uang, tax profile, TOP dan tanggal POD yang sama; POD berbeda tanggal dibuat menjadi invoice terpisah. Invoice asli dapat dibawa saat pengiriman dengan status menunggu POD; posting tetap menunggu POD tervalidasi. Invoice tidak boleh membuat pendapatan/HPP kedua.
 
 Untuk prepay, masa reservasi mengikuti OPS-FIN-06 dengan nilai awal sampai akhir satu hari kerja berikutnya. Jika dana belum terverifikasi saat expiry, sistem mengevaluasi ulang dan melepas reservasi yang belum picking. Barang yang sudah picking tidak dilepas otomatis dan wajib dikembalikan melalui movement terkontrol sebelum reservasi ditutup.
 

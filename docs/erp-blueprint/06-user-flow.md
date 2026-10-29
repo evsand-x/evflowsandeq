@@ -663,7 +663,7 @@ Navigasi CRM 16 Oktober 2026: pengguna membuka CRM > Peluang untuk daftar/pencar
 
 ## O2C Release 1 (29 Oktober 2026)
 
-Pada Release 1, pengguna membuat Surat Jalan langsung dari SO, dapat mengirim parsial kumulatif, mengisi waktu/penerima/bukti serah, menerbitkan, lalu membuat Invoice dari Surat Jalan terbit.
+Pada Release 1, pengguna membuat Surat Jalan langsung dari SO, dapat mengirim parsial kumulatif, mengisi waktu/penerima/bukti serah, menerbitkan Surat Jalan sebagai event stok/pendapatan/HPP, lalu membuat Invoice dari Surat Jalan terbit.
 
 
 ## O2C Release 1 (29 October 2026)

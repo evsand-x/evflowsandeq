@@ -2,7 +2,7 @@
 
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
-Izin sales_order_advance.create/verify dimigrasikan hanya dari grant customer_receipt.post; sales_order.print hanya dari sales_order.read, scope dipertahankan dan pemberian diaudit. Peran lain tidak diperluas. Dokumen terkait Pick Slip memakai outbound_picking.read, Packing List outbound_checking.read, Surat Jalan outbound_shipping.read, POD delivery_receipt.read, Proforma proforma.read, invoice/nota kredit sales_invoice.read. Ini menyelaraskan rencana Bagian 2 dengan invariant izin submenu independen.
+Izin sales_order_advance.create/verify dimigrasikan hanya dari grant customer_receipt.post; sales_order.print hanya dari sales_order.read, scope dipertahankan dan pemberian diaudit. Peran lain tidak diperluas. Dokumen terkait Pick Slip memakai outbound_picking.read, Packing List outbound_checking.read, Surat Jalan outbound_shipping.read, Surat Jalan outbound_shipping.read, Proforma proforma.read, invoice/nota kredit sales_invoice.read. Ini menyelaraskan rencana Bagian 2 dengan invariant izin submenu independen.
 
 ## Konfigurasi kepala SO — backend 25 Oktober 2026
 
