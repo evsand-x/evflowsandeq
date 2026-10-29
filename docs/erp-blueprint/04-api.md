@@ -522,6 +522,10 @@ GET /crm/workspace/opportunities memerlukan crm_opportunity.read (scope perusaha
 
 ## O2C Release 1 (29 Oktober 2026)
 
+### Addendum normatif Release 1
+
+Untuk kontrak `SO → Surat Jalan → Invoice`, Surat Jalan terbit adalah event serah terima, stok, pendapatan dan HPP. Invoice hanya boleh dibuat dari Surat Jalan terbit. Termin/TOP dipilih pada SO lalu disnapshot. Izin Surat Jalan memakai family `outbound_*` yang sudah ada; `sales_order.*` tidak menjadi fallback dan `sales_invoice.*` tetap independen. Endpoint serta izin Picking, Packing List, dispatch terpisah dan POD dipertahankan untuk release berikutnya dan tidak menjadi prasyarat Release 1.
+
 Command Release 1: createSuratJalan, issueSuratJalan, createInvoiceFromSuratJalan. Surat Jalan memakai family izin outbound yang sudah ada; tidak ada delivery_note.* baru.
 
 

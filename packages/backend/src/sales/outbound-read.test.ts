@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { outboundStatus } from "./outbound-read";
-import { resourcePermissions } from "../identity/resource-permissions";
+import { hasResourcePermission, resourcePermissions } from "../identity/resource-permissions";
 import {
   createSuratJalanSchema,
   issueSuratJalanSchema,
   createInvoiceFromSuratJalanSchema,
+  createDeliveryNoteSchema,
+  issueDeliveryNoteSchema,
+  createInvoiceFromDeliveryNoteSchema,
 } from "@evflow/contracts";
 
 describe("outbound queue status", () => {
@@ -24,6 +27,35 @@ describe("outbound queue status", () => {
     expect(() => createInvoiceFromSuratJalanSchema.parse({
       surat_jalan_id: "00000000-0000-4000-8000-000000000003",
     })).not.toThrow();
+    // English API aliases are the same public schemas used by delivery-note handlers.
+    expect(createDeliveryNoteSchema).toBe(createSuratJalanSchema);
+    expect(issueDeliveryNoteSchema).toBe(issueSuratJalanSchema);
+    expect(createInvoiceFromDeliveryNoteSchema).toBe(createInvoiceFromSuratJalanSchema);
+    expect(() => createInvoiceFromDeliveryNoteSchema.parse({
+      surat_jalan_id: "00000000-0000-4000-8000-000000000003",
+    })).not.toThrow();
+  });
+
+  it("keeps SO, Surat Jalan and Invoice permissions independent", () => {
+    const base = {
+      user_id: "00000000-0000-4000-8000-000000000001",
+      membership_id: "00000000-0000-4000-8000-000000000002",
+      company_id: "00000000-0000-4000-8000-000000000003",
+      company_name: "Test",
+      display_name: "Test User",
+      email: "test@example.com",
+      roles: [{ code: "SALES", name: "Sales" }],
+    } as const;
+    const withSo = { ...base, permissions: [{ code: "sales_order.read", scope_type: "company", scope_id: null }] };
+    const withSj = { ...base, permissions: [{ code: "outbound_shipping.read", scope_type: "company", scope_id: null }] };
+    const withInvoice = { ...base, permissions: [{ code: "sales_invoice.post", scope_type: "company", scope_id: null }] };
+    expect(hasResourcePermission(withSo, "sales_order.read")).toBe(true);
+    expect(hasResourcePermission(withSo, "outbound_shipping.read")).toBe(false);
+    expect(hasResourcePermission(withSo, "sales_invoice.post")).toBe(false);
+    expect(hasResourcePermission(withSj, "outbound_shipping.read")).toBe(true);
+    expect(hasResourcePermission(withSj, "sales_order.read")).toBe(false);
+    expect(hasResourcePermission(withInvoice, "sales_invoice.post")).toBe(true);
+    expect(hasResourcePermission(withInvoice, "outbound_shipping.read")).toBe(false);
   });
   it("rejects missing handover evidence, zero quantities, and duplicate issue lines", () => {
     const base = {

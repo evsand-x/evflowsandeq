@@ -2920,6 +2920,10 @@ Reversal sumber yang sudah melalui otorisasi/approval boleh menggunakan akun his
 
 ## O2C Release 1 (29 Oktober 2026)
 
+### Addendum normatif Release 1
+
+Finance mengakui pendapatan dan HPP pada Surat Jalan terbit dengan bukti serah terima, lalu membuat Invoice hanya dari Surat Jalan terbit. TOP dipilih pada SO dan disnapshot untuk jatuh tempo. Tabel atau narasi lama yang memakai POD/Packing List sebagai event posting atau prasyarat Invoice adalah referensi/later scope dan tidak berlaku untuk Release 1.
+
 Finance menerima sumber Invoice dari Surat Jalan terbit. Penerbitan Surat Jalan memicu posting pendapatan/HPP secara atomik; snapshot TOP diwariskan untuk jatuh tempo Invoice.
 
 

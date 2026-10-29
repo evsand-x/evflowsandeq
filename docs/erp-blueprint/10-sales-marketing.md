@@ -491,6 +491,10 @@ CRM menampilkan Prospek, Peluang dan Kontak. Daftar Peluang perusahaan dapat dib
 
 ## O2C Release 1 (29 Oktober 2026)
 
+### Addendum normatif Release 1
+
+Surat Jalan dibuat langsung dari SO, mendukung pengiriman parsial kumulatif, dan saat diterbitkan mencatat bukti serah terima sekaligus event stok, pendapatan dan HPP. Invoice hanya dibuat dari Surat Jalan terbit. TOP dipilih pada SO dan disnapshot. Flow Picking/Packing List/dispatch/POD lama tetap menjadi later scope dan tidak boleh mengubah alur atau izin Release 1.
+
 Sales Order menyimpan seluruh permintaan dan snapshot Termin/TOP yang dipilih. Penyerahan serta kuantitas yang dapat ditagih berasal dari Surat Jalan terbit.
 
 

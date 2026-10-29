@@ -663,6 +663,10 @@ Navigasi CRM 16 Oktober 2026: pengguna membuka CRM > Peluang untuk daftar/pencar
 
 ## O2C Release 1 (29 Oktober 2026)
 
+### Addendum normatif Release 1
+
+Alur aktif adalah SO → Surat Jalan → Invoice. Surat Jalan terbit sekaligus menjadi bukti penyerahan dan event stok/pendapatan/HPP; Invoice hanya berasal dari Surat Jalan terbit; TOP dipilih pada SO dan diwariskan melalui snapshot. Picking, Checking, Packing List, dispatch terpisah dan POD adalah alur later/out of Release 1 bila masih dirujuk di bagian historis dokumen.
+
 Pada Release 1, pengguna membuat Surat Jalan langsung dari SO, dapat mengirim parsial kumulatif, mengisi waktu/penerima/bukti serah, menerbitkan Surat Jalan sebagai event stok/pendapatan/HPP, lalu membuat Invoice dari Surat Jalan terbit.
 
 
