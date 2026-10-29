@@ -38,15 +38,18 @@ export async function financeFixture(companyId: string, actorId: string) {
   });
 }
 export async function cleanFinanceTransactions(companyId: string) {
-  await prisma.$executeRaw`DELETE FROM bank_statement_matches WHERE company_id=${companyId}::uuid`;
-  await prisma.officialTaxDocument.deleteMany({ where: { companyId } });
-  await prisma.advanceTax.deleteMany({ where: { companyId } });
-  await prisma.bankStatementLine.deleteMany({ where: { companyId } });
-  await prisma.bankStatement.deleteMany({ where: { companyId } });
-  await prisma.receiptTaxComponent.deleteMany({ where: { companyId } });
-  await prisma.ledgerEntry.deleteMany({ where: { companyId } });
-  await prisma.financeJournalLine.deleteMany({ where: { companyId } });
-  await prisma.financeJournal.deleteMany({ where: { companyId } });
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SET LOCAL session_replication_role = replica`;
+    await tx.$executeRaw`DELETE FROM bank_statement_matches WHERE company_id=${companyId}::uuid`;
+    await tx.officialTaxDocument.deleteMany({ where: { companyId } });
+    await tx.advanceTax.deleteMany({ where: { companyId } });
+    await tx.bankStatementLine.deleteMany({ where: { companyId } });
+    await tx.bankStatement.deleteMany({ where: { companyId } });
+    await tx.receiptTaxComponent.deleteMany({ where: { companyId } });
+    await tx.ledgerEntry.deleteMany({ where: { companyId } });
+    await tx.financeJournalLine.deleteMany({ where: { companyId } });
+    await tx.financeJournal.deleteMany({ where: { companyId } });
+  });
 }
 export async function cleanFinanceConfiguration(companyId: string) {
   await prisma.receiptTaxRule.deleteMany({ where: { companyId } });
