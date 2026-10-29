@@ -89,6 +89,14 @@ export async function deliveredOrderQuantities(c: string, orderId: string, tx: T
     rows.map((r) => [r.salesOrderLineId, (r._sum.deliveredQuantity ?? d(0)).toString()]),
   );
 }
+export async function getOrderDeliveryProgress(c: string, orderId: string, tx: Tx = prisma) {
+  const order = await tx.salesOrder.findFirst({
+    where: { id: orderId, companyId: c },
+    select: { id: true },
+  });
+  if (!order) throw new NotFoundException("SO tidak ditemukan.");
+  return deliveredOrderQuantities(c, orderId, tx);
+}
 async function lockOrder(tx: Tx, c: string, id: string) {
   const ref = await tx.salesOrder.findFirst({ where: { companyId: c, id } });
   if (!ref) throw new NotFoundException("SO tidak ditemukan.");

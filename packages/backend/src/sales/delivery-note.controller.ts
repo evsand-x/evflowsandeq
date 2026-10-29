@@ -21,6 +21,7 @@ import {
   createDeliveryNote,
   deliveryNoteView,
   getDeliveryNote,
+  getOrderDeliveryProgress,
   issueDeliveryNote,
   listDeliveryNotes,
   updateDeliveryNoteDraft,
@@ -34,6 +35,11 @@ function key(value: string | undefined) {
 @Controller("delivery-notes")
 @UseGuards(AuthGuard, PermissionGuard)
 export class DeliveryNoteController {
+  @Get("orders/:orderId/delivered")
+  @RequirePermissions("outbound_shipping.read")
+  async delivered(@Param("orderId") orderId: string, @Req() r: AuthenticatedRequest) {
+    return { data: await getOrderDeliveryProgress(r.auth.company_id, uuid(orderId)) };
+  }
   @Get()
   @RequirePermissions("outbound_shipping.read")
   async list(

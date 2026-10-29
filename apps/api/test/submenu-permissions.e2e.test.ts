@@ -90,6 +90,10 @@ describe("independent submenu HTTP permissions", () => {
         .set("x-permissions", grants)
         .expect(403);
       await request(app.getHttpServer())
+        .get("/delivery-notes/orders/00000000-0000-4000-8000-000000000001/delivered")
+        .set("x-permissions", grants)
+        .expect(403);
+      await request(app.getHttpServer())
         .post("/delivery-notes")
         .set("x-permissions", grants)
         .send({})

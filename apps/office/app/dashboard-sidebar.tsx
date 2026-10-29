@@ -347,22 +347,10 @@ export function DashboardSidebar({
                             : item === "Barang Keluar"
                               ? [
                                   [
-                                    "Backorder & Alokasi Stok",
-                                    "warehouse-backorders",
-                                    "warehouse_allocation.read",
-                                  ],
-                                  ["Pick Slip", "pick-slips", "outbound_picking.read"],
-                                  [
-                                    "Checking / Packing",
-                                    "warehouse?stage=checking",
-                                    "outbound_checking.read",
-                                  ],
-                                  [
-                                    "Pengiriman",
+                                    "Surat Jalan",
                                     "delivery-notes",
                                     "outbound_shipping.read",
                                   ],
-                                  ["POD", "warehouse?stage=pod", "delivery_receipt.read"],
                                   ["Retur", "returns", "customer_return.receive"],
                                 ]
                               : item === "Piutang (AR)"

@@ -327,7 +327,7 @@ export function SalesOrderDetail({
                 Cetak
               </Button>
             )}
-            {row.state === "OPEN" && can("fulfillment.dispatch") && (
+            {row.state === "OPEN" && can("fulfillment.dispatch") && can("outbound_shipping.read") && (
               <Button variant="outline" asChild>
                 <Link href={`/operations/delivery-notes/from-order/${row.id}`}>
                   Buat Surat Jalan

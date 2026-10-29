@@ -35,7 +35,7 @@ type Note = {
     salesOrderLineId: string;
     quantity: string;
     deliveredQuantity?: string;
-    salesOrderLine?: Line;
+    product?: { name: string; code: string };
   }[];
   issuedAt?: string | null;
   receiverName?: string | null;
@@ -187,6 +187,10 @@ function SuratJalanDraft({ orderId, canDispatch }: { orderId: string; canDispatc
         data: { id: string; number: string; lines: Line[]; customer?: { name: string } };
       }>(`/operations/orders/${orderId}`),
   });
+  const progress = useQuery({
+    queryKey: ["surat-jalan", "delivered", principal?.company_id, orderId],
+    queryFn: () => apiRequest<{ data: Record<string, string> }>(`/delivery-notes/orders/${orderId}/delivered`),
+  });
   const { run, error, pending } = useCommand();
   const [notes, setNotes] = useState("");
   const [qty, setQty] = useState<Record<string, string>>({});
@@ -204,7 +208,7 @@ function SuratJalanDraft({ orderId, canDispatch }: { orderId: string; canDispatc
           ...(l.warehouseId ? { warehouse_id: l.warehouseId } : {}),
         })),
     };
-    if (!payload.lines.length) return;
+    if (!payload.lines.length || progress.isPending || progress.isError) return;
     const note = await run("/delivery-notes", payload);
     window.location.href = `/operations/delivery-notes/${note.id}`;
   };
@@ -213,16 +217,18 @@ function SuratJalanDraft({ orderId, canDispatch }: { orderId: string; canDispatc
       <form className="ob-panel" onSubmit={submit}>
         {error && <ErrorBox message={error} />} {q.isPending && <p>Memuat Sales Order…</p>}
         {q.isError && <ErrorBox message="Sales Order belum dapat dimuat." />}
+        {progress.isPending && <p>Memuat jumlah terkirim…</p>}
+        {progress.isError && <ErrorBox message="Jumlah terkirim belum dapat dimuat." />}
         {lines.map((l) => {
-          const delivered = l.deliveredQuantity ?? l.accepted ?? "0";
+          const delivered = progress.data?.data[l.id] ?? "0";
           const ordered = l.orderedQuantity ?? l.ordered ?? "0";
-          const rem = l.remaining ?? remainingQuantity(ordered, delivered);
+          const rem = remainingQuantity(ordered, delivered);
           return (
             <div className="ob-line" key={l.id}>
               <div>
                 <strong>{l.product.name}</strong>
                 <small>
-                  {l.product.code} · Dipesan {l.orderedQuantity} · Terkirim {delivered} · Sisa {rem}
+                  {l.product.code} · Dipesan {ordered} · Terkirim {delivered} · Sisa {rem}
                 </small>
               </div>
               <Input
@@ -240,7 +246,7 @@ function SuratJalanDraft({ orderId, canDispatch }: { orderId: string; canDispatc
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
         <footer className="ob-actions">
-          <Button type="submit" disabled={!canDispatch || pending}>
+          <Button type="submit" disabled={!canDispatch || pending || progress.isPending || progress.isError}>
             {pending ? "Menyimpan…" : "Simpan draf"}
           </Button>
         </footer>
@@ -343,7 +349,7 @@ function SuratJalanDetail({
             <ul>
               {note.lines.map((l) => (
                 <li key={l.id}>
-                  {l.salesOrderLine?.product.name ?? l.salesOrderLineId} · {l.quantity}
+                  {l.product?.name ?? l.salesOrderLineId} · {l.quantity}
                 </li>
               ))}
             </ul>
