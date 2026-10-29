@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { Prisma } from "@evflow/database";
-import { allocateDeliveryStock, deliveryNoteView } from "./delivery-note";
+import {
+  allocateDeliveryStock,
+  deliveryNoteView,
+  eligibleMovingAverageCost,
+} from "./delivery-note";
 const d = (v: string) => new Prisma.Decimal(v);
 describe("Surat Jalan stock allocation", () => {
   it("uses only unreserved quantity with exact decimals and rejects shortage before any writes", () => {
@@ -119,4 +123,27 @@ it("does not expose unit costs, prices, credit data or source row internals in t
     product: { id: "p", code: "P", name: "Product" },
   });
   expect(JSON.stringify(view)).not.toMatch(/unitPrice|unitCost|costSnapshot|credit_limit|999|666/);
+});
+
+describe("Surat Jalan valuation scope", () => {
+  it("averages only eligible scoped lots and leaves quarantine/foreign lots out", () => {
+    const lots = [
+      {
+        productId: "p",
+        quantityOnHand: new Prisma.Decimal("2"),
+        unitCost: new Prisma.Decimal("3"),
+      },
+      {
+        productId: "p",
+        quantityOnHand: new Prisma.Decimal("8"),
+        unitCost: new Prisma.Decimal("5"),
+      },
+      {
+        productId: "q",
+        quantityOnHand: new Prisma.Decimal("100"),
+        unitCost: new Prisma.Decimal("999"),
+      },
+    ];
+    expect(eligibleMovingAverageCost(lots, "p").toString()).toBe("4.6");
+  });
 });

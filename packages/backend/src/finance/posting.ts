@@ -203,3 +203,13 @@ export async function postLedger(
   });
   return journal;
 }
+
+/** Delivery Note posting adapter keeps the Release 1 source contract explicit while reusing the
+ * same period, mapping, balancing and journal transaction controls as every Finance command. */
+export function postDeliveryNoteLedger(
+  tx: Tx,
+  actor: string,
+  input: Parameters<typeof postLedger>[2],
+) {
+  return postLedger(tx, actor, input);
+}

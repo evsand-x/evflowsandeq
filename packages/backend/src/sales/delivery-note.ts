@@ -11,7 +11,7 @@ import { AuditService } from "../common/audit.service";
 import { eligibleLots, lockCustomer } from "./transaction-controls";
 import { requireEvidence } from "./document-controls";
 import { lineAmounts } from "./pricing-controls";
-import { lockFinance, financeDate, postLedger } from "../finance/posting";
+import { lockFinance, financeDate, postDeliveryNoteLedger } from "../finance/posting";
 import { defaultSalesTaxOn } from "../finance/operational-tax";
 import { assertFinancePeriodOpen } from "../finance/period-guard";
 
@@ -303,18 +303,12 @@ export function issueDeliveryNote(c: string, a: string, id: string, input: unkno
     for (const productId of [
       ...new Set(note.lines.map((l) => l.salesOrderLine.productId)),
     ].sort()) {
-      const balances = await tx.stockLot.findMany({
-        where: { companyId: c, productId, quantityOnHand: { gt: 0 } },
-      });
-      const quantity = balances.reduce((s, l) => s.add(l.quantityOnHand), d(0));
-      if (quantity.lte(0)) throw new ConflictException("STOCK_INSUFFICIENT");
-      productCosts.set(
-        productId,
-        balances
-          .reduce((s, l) => s.add(d(l.quantityOnHand).mul(l.unitCost)), d(0))
-          .div(quantity)
-          .toDecimalPlaces(8),
+      // Valuation scope is the already-locked, eligible lot set for this shipment.
+      // Never rewrite quarantine, expired, inactive, reserved-only, or foreign lots.
+      const eligibleProductLots = lots.filter(
+        (lot) => lot.productId === productId && lot.quantityOnHand.gt(0),
       );
+      productCosts.set(productId, eligibleMovingAverageCost(eligibleProductLots, productId));
     }
     const stockPlans = allocateDeliveryStock(
       lots,
@@ -338,10 +332,14 @@ export function issueDeliveryNote(c: string, a: string, id: string, input: unkno
     // Spread the same product book cost over the remaining physical lots. The total
     // inventory value is unchanged; future receipts blend into this moving average.
     for (const [productId, unitCost] of productCosts) {
-      await tx.stockLot.updateMany({
-        where: { companyId: c, productId, quantityOnHand: { gt: 0 } },
-        data: { unitCost },
-      });
+      const eligibleIds = lots
+        .filter((lot) => lot.productId === productId && lot.quantityOnHand.gt(0))
+        .map((lot) => lot.id);
+      if (eligibleIds.length)
+        await tx.stockLot.updateMany({
+          where: { companyId: c, id: { in: eligibleIds } },
+          data: { unitCost },
+        });
     }
     let cost = d(0);
     for (const plan of plans) {
@@ -423,7 +421,7 @@ export function issueDeliveryNote(c: string, a: string, id: string, input: unkno
       });
       accountIds.push(snapshot?.freight_tax_snapshot?.account_id);
     }
-    await postLedger(tx, a, { businessDate: handoverAt, accountIds, data: posting });
+    await postDeliveryNoteLedger(tx, a, { businessDate: handoverAt, accountIds, data: posting });
     const updated = await tx.deliveryNote.update({
       where: { id },
       data: {
@@ -544,4 +542,18 @@ export function deliveryNoteView(row: Awaited<ReturnType<typeof getDeliveryNote>
       },
     })),
   };
+}
+
+/** Moving-average book cost over the eligible, locked lots used by a shipment. */
+export function eligibleMovingAverageCost(
+  lots: Array<{ productId: string; quantityOnHand: Prisma.Decimal; unitCost: Prisma.Decimal }>,
+  productId: string,
+) {
+  const scoped = lots.filter((lot) => lot.productId === productId && lot.quantityOnHand.gt(0));
+  const quantity = scoped.reduce((sum, lot) => sum.add(lot.quantityOnHand), d(0));
+  if (quantity.lte(0)) throw new ConflictException("STOCK_INSUFFICIENT");
+  return scoped
+    .reduce((sum, lot) => sum.add(lot.quantityOnHand.mul(lot.unitCost)), d(0))
+    .div(quantity)
+    .toDecimalPlaces(8);
 }

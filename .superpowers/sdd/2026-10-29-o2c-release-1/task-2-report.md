@@ -179,3 +179,17 @@ Task 4 must adapt legacy SO orderDetail/orderStatusRows/orderActions/related-doc
  FAIL  apps/api/test/settings.e2e.test.ts > settings HTTP authorization > lists numbering for readers
  FAIL  apps/api/test/settings.e2e.test.ts > settings HTTP authorization > preferences returns number format for any session
 ```
+
+## Review fix round 1 (29 October 2026)
+
+- Restricted moving-average valuation to the locked eligible lot set selected for this Surat Jalan. Quarantine, expired, inactive, reserved-only and foreign warehouse lots are excluded; only eligible lot IDs may receive normalized book cost updates. Added `eligibleMovingAverageCost` regression coverage proving foreign-product lots do not affect the result.
+- Added `postDeliveryNoteLedger` in `packages/backend/src/finance/posting.ts`; the SJ issue command now routes through this adapter, preserving the existing Finance period, mapping, balancing and journal controls. The operational `/delivery-notes` controller remains the dedicated HTTP adapter registered in `OtcPtpModule`; no duplicate route was added to `otc-ptp.controller.ts`.
+- Added migration FK `ON DELETE RESTRICT` constraints for SJ evidence, creator/issuer users, line warehouses and locators. Existing trigger checks remain defense in depth for company and SO-line scope.
+
+### Fix verification
+
+- `pnpm test packages/backend/src/sales/delivery-note.test.ts` — 4 tests passed.
+- `pnpm --filter @evflow/backend typecheck` — passed.
+- `pnpm exec eslint` on changed service/helper/tests — passed.
+- `./tools/validate-repository.ps1` — passed.
+- Database migration and integration rerun remain blocked at the unavailable local PostgreSQL service; no database transaction success is claimed.

@@ -58,3 +58,11 @@ BEGIN
 END $$;
 CREATE TRIGGER delivery_note_line_guard BEFORE INSERT OR UPDATE OR DELETE ON delivery_note_lines FOR EACH ROW EXECUTE FUNCTION guard_delivery_note_line();
 
+
+ALTER TABLE delivery_notes
+  ADD CONSTRAINT delivery_notes_evidence_fkey FOREIGN KEY (evidence_id) REFERENCES transaction_evidence(id) ON DELETE RESTRICT,
+  ADD CONSTRAINT delivery_notes_issued_by_fkey FOREIGN KEY (issued_by_id) REFERENCES users(id) ON DELETE RESTRICT,
+  ADD CONSTRAINT delivery_notes_created_by_fkey FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE RESTRICT;
+ALTER TABLE delivery_note_lines
+  ADD CONSTRAINT delivery_note_lines_warehouse_fkey FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE RESTRICT,
+  ADD CONSTRAINT delivery_note_lines_locator_fkey FOREIGN KEY (locator_id) REFERENCES locators(id) ON DELETE RESTRICT;
