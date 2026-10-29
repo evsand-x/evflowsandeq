@@ -43,6 +43,11 @@ export const salesOrderNumberSchema = z
   .min(1)
   .max(60)
   .regex(/^[A-Za-z0-9][A-Za-z0-9./_-]*$/, "Nomor SO hanya huruf, angka, titik, garis miring, garis bawah dan tanda hubung.");
+/** Line discount in percent (OTC-18): 0-100 with at most four decimals, e.g. "5" or "2.5". */
+export const lineDiscountSchema = z
+  .string()
+  .regex(/^\d{1,3}(\.\d{1,4})?$/, "Diskon harus angka 0-100 dengan maksimal empat desimal.")
+  .refine((v) => Number(v) <= 100, "Diskon tidak boleh lebih dari 100%.");
 export const createSalesOrderSchema = z
   .object({
     customer_id: z.string().uuid(),
@@ -69,6 +74,7 @@ export const createSalesOrderSchema = z
             warehouse_id: z.string().uuid().optional(),
             quantity: positiveDecimal,
             unit_price: z.string().regex(/^\d{1,16}(\.\d{1,8})?$/),
+            discount_rate: lineDiscountSchema.optional(),
             /** Refused (LINE_TAX_NOT_ALLOWED): every line uses the default sales tax. */
             tax_master_id: z.string().uuid().optional(),
           })

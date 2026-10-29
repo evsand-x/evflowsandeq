@@ -8,7 +8,14 @@ export type OrderLine = NonNullable<Row["lines"]>[number] & {
   remainder: string;
   subtotal: string;
   taxAmount: string | null;
-  taxSnapshot?: { name: string; rate: string; operational_tax_id?: string } | null;
+  taxSnapshot?: {
+    name: string;
+    rate: string;
+    dpp_factor?: string;
+    operational_tax_id?: string;
+  } | null;
+  /** Diskon baris dalam persen (OTC-18). */
+  discountRate?: string;
 };
 export type Order = Omit<Row, "lines" | "total" | "taxAmount"> & {
   lines: OrderLine[];
@@ -32,9 +39,19 @@ export type Order = Omit<Row, "lines" | "total" | "taxAmount"> & {
   remainderStatus: string;
 };
 export type OrderCommand = (path: string, body?: unknown) => Promise<{ data: Row }>;
-export function taxLabel(snapshot?: { rate: string } | null) {
+/**
+ * Tarif PPN efektif yang ditampilkan: tarif x faktor DPP, dibulatkan dua desimal
+ * (PPN 12% x DPP 11/12 tampil 11%). Nilai pajak tetap dihitung server dari snapshot.
+ */
+export function effectiveTaxPercent(percentage: string, dppFactor?: string | null) {
+  return new Decimal(percentage)
+    .mul(dppFactor ?? "1")
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+    .toString();
+}
+export function taxLabel(snapshot?: { rate: string; dpp_factor?: string } | null) {
   return snapshot
-    ? `${amount(new Decimal(snapshot.rate).mul(100).toString())}%`
+    ? `${amount(effectiveTaxPercent(new Decimal(snapshot.rate).mul(100).toString(), snapshot.dpp_factor))}%`
     : "Belum ditetapkan";
 }
 export const orderStates: Record<string, string> = {

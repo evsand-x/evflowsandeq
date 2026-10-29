@@ -1,7 +1,7 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
 import { z } from "zod";
-import { createSalesOrderSchema, salesOrderNumberSchema } from "@evflow/contracts";
+import { createSalesOrderSchema, lineDiscountSchema, salesOrderNumberSchema } from "@evflow/contracts";
 import { resolveOrderHeader, resolveOrderNumber } from "./order-header";
 import { rejectTaxChoice } from "./pricing-controls";
 import { freightValues } from "./proforma";
@@ -9,6 +9,7 @@ import { transactionCommand } from "../common/transaction-command";
 import { AuditService } from "../common/audit.service";
 import { lockCustomer } from "./transaction-controls";
 import { issueDocument, requireEvidence } from "./document-controls";
+import { assertLineDiscounts } from "./discount-limit";
 
 const audit = new AuditService();
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -340,6 +341,7 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
               line_id: z.string().uuid(),
               quantity: z.string().regex(/^\d+(\.\d{1,10})?$/),
               unit_price: z.string().regex(/^\d+(\.\d{1,8})?$/),
+              discount_rate: lineDiscountSchema.optional(),
               warehouse_id: z.string().uuid().nullable().optional(),
               /** Refused (LINE_TAX_NOT_ALLOWED): every line uses the default sales tax. */
               tax_master_id: z.string().uuid().optional(),
@@ -409,6 +411,15 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
         tax_mode: input.freight.tax_mode,
       });
     }
+    await assertLineDiscounts(
+      tx,
+      c,
+      a,
+      input.lines.map((line) => ({
+        productId: order.lines.find((l) => l.id === line.line_id)?.productId ?? line.line_id,
+        discountRate: line.discount_rate,
+      })),
+    );
     for (const [index, line] of input.lines.entries()) {
       if (
         !order.lines.some((l) => l.id === line.line_id) ||
@@ -420,6 +431,7 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
         data: {
           orderedQuantity: line.quantity,
           unitPrice: line.unit_price,
+          discountRate: line.discount_rate ?? 0,
           warehouseId: lineWarehouseIds[index] ?? null,
           allocatedQuantity: 0,
           backorderQuantity: 0,

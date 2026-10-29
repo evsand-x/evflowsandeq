@@ -30,12 +30,21 @@ Atas permintaan pengguna backend dilengkapi (kontrak di `04-api.md`, bagian Rele
 - Kolom Status menampilkan status dokumen (Draft, Menunggu persetujuan, Diajukan, Dibatalkan); kemajuan kirim ada di kolom Pengiriman sesuai mockup.
 - Data dummy: `pnpm db:seed:o2c-demo` (setelah `db:seed:dev` dan akun demo) membuat satu SO 150 Box diajukan, satu Surat Jalan terbit 86 Box dan satu Invoice dari Surat Jalan itu melalui command domain dengan kunci idempoten.
 
+## Lanjutan 30 Oktober 2026: kolom sesuai `.pen`, diskon, PPN 11% dan pelanggan dapat dicari
+
+- Kolom Daftar, Form dan Detail mengikuti `evflow-office-design.pen`. Form Barang: Produk | Qty | Satuan | Harga | Diskon | Subtotal (kolom PPN dihapus dari form). Detail Barang tetap Produk | Dipesan | Terkirim | Sisa | Diinvoice | Harga | PPN | Subtotal (keputusan pengguna: ikuti `.pen` persis).
+- Diskon persen per baris disimpan di SO (`sales_order_lines.discount_rate`), diperiksa terhadap batas diskon OTC-18 di server, dan mengurangi nilai SO sebelum PPN. Keputusan pengguna: **hanya SO dulu**; Surat Jalan dan Invoice belum memakai diskon.
+- PPN ditampilkan sebagai tarif efektif (tarif × faktor DPP): bawaan 12% × 11/12 tampil **11%** di Ringkasan form dan kolom/ringkasan detail.
+- Pelanggan di form SO memakai field yang diketik langsung untuk mencari (`SearchSelectField`), bukan dropdown; mockup canvas dan `.pen` diselaraskan.
+
 ## Gap yang masih tercatat
 
 | Mockup | Kondisi |
 |---|---|
 | Tanggal SP | Belum ada di backend; tidak ditampilkan |
 | Ongkir Ditanggung pelanggan untuk akun tanpa izin baca Setting | Ditahan dengan pesan konfigurasi |
+| Diskon SO di Surat Jalan dan Invoice | Belum diwariskan; Invoice memakai nilai bruto baris SO (keputusan "hanya SO dulu") |
+| Diskon di Detail SO | Tidak ada kolom Diskon (mengikuti `.pen`); Subtotal detail sudah setelah diskon |
 
 ## Verifikasi
 

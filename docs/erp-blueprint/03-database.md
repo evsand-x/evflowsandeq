@@ -470,6 +470,7 @@ IAM-01/04: migration `20261016210000_independent_submenu_permissions` memetakan 
 - `20261024160000_deduction_types`: tabel `deduction_types`.
 - `20261024170000_account_mapping` dan `20261024171000_bank_account_manage`: izin Pemetaan Akun dan `bank_account.manage`.
 - `20261024180000_discount_limits`: `roles.discount_limit`, `company_memberships.discount_limit`, `products.discount_limit` (DECIMAL(7,4), CHECK 0–100).
+- `20261030090000_sales_order_line_discount`: `sales_order_lines.discount_rate` DECIMAL(7,4) NOT NULL DEFAULT 0, CHECK 0–100 (OTC-18; diskon persen per baris SO, dipakai untuk nilai SO; belum diwariskan ke Surat Jalan/Invoice).
 
 ## O2C Release 1 (29 Oktober 2026)
 

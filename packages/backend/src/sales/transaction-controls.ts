@@ -144,7 +144,7 @@ export async function checkCredit(
   if (order && (order.customerId !== customerId || order.currency !== currency))
     throw new ConflictException("UNLOCK_SCOPE_INVALID");
   const value = order?.lines.reduce(
-    (sum, l) => sum.add(lineAmounts(l, l.orderedQuantity).total),
+    (sum, l) => sum.add(lineAmounts(l, l.orderedQuantity, l.discountRate).total),
     zero(),
   );
   const permits = (reason: string) =>

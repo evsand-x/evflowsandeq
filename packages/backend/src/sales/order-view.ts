@@ -10,6 +10,7 @@ type Line = {
   closedQuantity: Prisma.Decimal;
   backorderQuantity: Prisma.Decimal;
   unitPrice: Prisma.Decimal;
+  discountRate?: Prisma.Decimal;
   taxSnapshot: Prisma.JsonValue | null;
   allocations: {
     acceptedQuantity: Prisma.Decimal;
@@ -33,8 +34,16 @@ export function orderView(order: { state: string; lines: Line[]; orderDate?: Dat
         zero(),
       ),
     );
-    const amounts = line.taxSnapshot ? lineAmounts(line, line.orderedQuantity) : null;
-    const net = amounts?.net ?? line.unitPrice.mul(line.orderedQuantity);
+    // OTC-18: the line discount lowers the SO value before PPN.
+    const amounts = line.taxSnapshot
+      ? lineAmounts(line, line.orderedQuantity, line.discountRate)
+      : null;
+    const gross = line.unitPrice.mul(line.orderedQuantity);
+    const net =
+      amounts?.net ??
+      (line.discountRate?.gt(0)
+        ? gross.mul(new Decimal(100).sub(line.discountRate)).div(100).toDecimalPlaces(2)
+        : gross);
     subtotal = subtotal.add(net);
     if (amounts) tax = tax.add(amounts.tax);
     return {

@@ -351,3 +351,44 @@
 .sor-next span.sor-hint {
   color: var(--ev-color-text-muted);
 }
+
+/* Kolom isian tabel Barang: lebar minimum agar Qty, Harga dan Diskon tetap terbaca. */
+.page-frame .sor-lines-form .crm-table-panel :is(th, td) {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.sor-head-num {
+  display: block;
+}
+/* Produk mengisi sisa lebar; nama panjang dipotong dengan elipsis di pemilih. */
+.page-frame .sor-lines-form .crm-table-panel td:first-child {
+  width: 34%;
+  min-width: 200px;
+  max-width: 0;
+}
+.sor-cell-qty {
+  display: block;
+  min-width: 64px;
+}
+.sor-cell-price {
+  display: block;
+  min-width: 108px;
+}
+/* Diskon persen per baris: tanda % di dalam input, di kanan. */
+.sor-percent {
+  position: relative;
+  display: block;
+  min-width: 76px;
+}
+.web-form .sor-percent [data-slot="input"] {
+  padding-right: 28px;
+}
+.sor-percent > span {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--ev-color-text-muted);
+  pointer-events: none;
+}

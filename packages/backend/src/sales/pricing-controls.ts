@@ -53,7 +53,16 @@ export function rejectTaxChoice(input: {
     throw new BadRequestException("FREIGHT_TAX_RULE_NOT_ALLOWED");
 }
 
-export function lineAmounts(line: PricedLine, quantity: Prisma.Decimal) {
+/**
+ * Net, DPP, PPN and total for a quantity of an SO line. `discountRate` (percent, OTC-18) is only
+ * passed by SO-level values (SO list/detail, credit and down payment checks); Release 1 Surat Jalan
+ * and Invoice still price the gross line until discounts are carried downstream.
+ */
+export function lineAmounts(
+  line: PricedLine,
+  quantity: Prisma.Decimal,
+  discountRate?: Prisma.Decimal.Value | null,
+) {
   const tax = line.taxSnapshot as TaxSnapshot | null;
   if (!tax?.rule_id) throw new ConflictException("TAX_SNAPSHOT_REQUIRED");
   const rounding = {
@@ -62,7 +71,12 @@ export function lineAmounts(line: PricedLine, quantity: Prisma.Decimal) {
     DOWN: Prisma.Decimal.ROUND_DOWN,
   }[tax.rounding];
   if (rounding === undefined) throw new ConflictException("TAX_ROUNDING_REQUIRED");
-  const net = quantity.mul(line.unitPrice).toDecimalPlaces(tax.decimal_places, rounding);
+  const gross = quantity.mul(line.unitPrice);
+  const net = (
+    discountRate && !new Prisma.Decimal(discountRate).isZero()
+      ? gross.mul(new Prisma.Decimal(100).sub(discountRate)).div(100)
+      : gross
+  ).toDecimalPlaces(tax.decimal_places, rounding);
   const dpp = net.mul(tax.dpp_factor).toDecimalPlaces(tax.decimal_places, rounding);
   const vat = dpp
     .mul(tax.rate)

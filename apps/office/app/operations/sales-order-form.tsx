@@ -18,12 +18,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { SelectionField } from "@/components/web/selection-field";
+import { SearchSelectField } from "@/components/web/search-select-field";
 import { ApiError, apiRequest } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
 import { DataTable, Notice } from "../crm/crm-common";
 import { Upload, ErrorBox, Evidence } from "./workspace";
-import { amount, type Order, type OrderCommand } from "./sales-order-types";
+import { amount, effectiveTaxPercent, type Order, type OrderCommand } from "./sales-order-types";
 
 const D = Decimal.clone({ precision: 50 });
 type DraftLine = {
@@ -32,6 +33,8 @@ type DraftLine = {
   product_id: string;
   quantity: string;
   unit_price: string;
+  /** Diskon persen per baris (OTC-18); "0" bila tanpa diskon. */
+  discount_rate: string;
 };
 type Term = { code: string; label: string; days: number; kind: "COD" | "PREPAY" | "TEMPO" };
 export type OrderOptions = {
@@ -67,9 +70,15 @@ const decimalPattern = /^\d{1,14}(\.\d{1,10})?$/;
 const validQty = (v: string) => decimalPattern.test(v) && new D(v).gt(0);
 const validPrice = (v: string) => /^\d{1,16}(\.\d{1,8})?$/.test(v);
 const validFreight = (v: string) => v.trim() === "" || decimalPattern.test(v.trim());
+const validDiscount = (v: string) => /^\d{1,3}(\.\d{1,4})?$/.test(v) && new D(v).lte(100);
+/** Nilai baris setelah diskon; server menghitung ulang saat menyimpan. */
 function lineValue(line: DraftLine) {
-  return validQty(line.quantity) && validPrice(line.unit_price)
-    ? new D(line.quantity).mul(line.unit_price)
+  return validQty(line.quantity) && validPrice(line.unit_price) && validDiscount(line.discount_rate)
+    ? new D(line.quantity)
+        .mul(line.unit_price)
+        .mul(new D(100).sub(line.discount_rate))
+        .div(100)
+        .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
     : null;
 }
 
@@ -221,7 +230,8 @@ export function SalesOrderForm({
       product_id: l.productId,
       quantity: l.orderedQuantity,
       unit_price: l.unitPrice,
-    })) ?? [{ key: "first", product_id: "", quantity: "", unit_price: "" }],
+      discount_rate: l.discountRate ? new D(l.discountRate).toString() : "0",
+    })) ?? [{ key: "first", product_id: "", quantity: "", unit_price: "", discount_rate: "0" }],
   );
 
   // Nilai bawaan dari server: tanggal hari ini (zona perusahaan) dan ongkir bawaan Setting.
@@ -357,16 +367,18 @@ export function SalesOrderForm({
     },
     {
       id: "qty",
-      header: "Jumlah",
+      header: () => <span className="sor-num sor-head-num">Qty</span>,
       cell: ({ row }) => (
-        <Input
-          aria-label={`Jumlah baris ${row.index + 1}`}
-          aria-invalid={(tried && !validQty(row.original.quantity)) || undefined}
-          inputMode="decimal"
-          className="sor-num"
-          value={row.original.quantity}
-          onChange={(e) => change(row.original.key, "quantity", e.target.value)}
-        />
+        <span className="sor-cell-qty">
+          <Input
+            aria-label={`Qty baris ${row.index + 1}`}
+            aria-invalid={(tried && !validQty(row.original.quantity)) || undefined}
+            inputMode="decimal"
+            className="sor-num"
+            value={row.original.quantity}
+            onChange={(e) => change(row.original.key, "quantity", e.target.value)}
+          />
+        </span>
       ),
     },
     {
@@ -376,26 +388,38 @@ export function SalesOrderForm({
     },
     {
       id: "price",
-      header: "Harga",
+      header: () => <span className="sor-num sor-head-num">Harga</span>,
       cell: ({ row }) => (
-        <DecimalInput
-          label={`Harga baris ${row.index + 1}`}
-          value={row.original.unit_price}
-          invalid={tried && !validPrice(row.original.unit_price)}
-          onChange={(v) => change(row.original.key, "unit_price", v)}
-        />
+        <span className="sor-cell-price">
+          <DecimalInput
+            label={`Harga baris ${row.index + 1}`}
+            value={row.original.unit_price}
+            invalid={tried && !validPrice(row.original.unit_price)}
+            onChange={(v) => change(row.original.key, "unit_price", v)}
+          />
+        </span>
       ),
     },
     {
-      id: "tax",
-      header: "PPN",
-      cell: () => (
-        <span className="sor-num">{defaultTax ? `${amount(defaultTax.percentage)}%` : "—"}</span>
+      id: "discount",
+      header: () => <span className="sor-num sor-head-num">Diskon</span>,
+      cell: ({ row }) => (
+        <span className="sor-percent">
+          <Input
+            aria-label={`Diskon persen baris ${row.index + 1}`}
+            aria-invalid={!validDiscount(row.original.discount_rate) || undefined}
+            inputMode="decimal"
+            className="sor-num"
+            value={row.original.discount_rate}
+            onChange={(e) => change(row.original.key, "discount_rate", e.target.value.trim())}
+          />
+          <span aria-hidden="true">%</span>
+        </span>
       ),
     },
     {
       id: "net",
-      header: "Subtotal",
+      header: () => <span className="sor-num sor-head-num">Subtotal</span>,
       cell: ({ row }) => {
         const value = lineValue(row.original);
         return (
@@ -447,12 +471,18 @@ export function SalesOrderForm({
       Object.values(missing).some(Boolean) ||
       freightBlocked ||
       !currency ||
-      lines.some((l) => !l.product_id || !validQty(l.quantity) || !validPrice(l.unit_price))
+      lines.some(
+        (l) =>
+          !l.product_id ||
+          !validQty(l.quantity) ||
+          !validPrice(l.unit_price) ||
+          !validDiscount(l.discount_rate),
+      )
     ) {
       setLocalError(
         freightBlocked
           ? "Posisi PPN ongkir belum dapat dibaca dari Setting › Termin & Kredit. Hubungi admin atau pilih Ditanggung perusahaan."
-          : "Lengkapi isian bertanda * dan periksa jumlah serta harga setiap barang. Gunakan titik untuk desimal.",
+          : "Lengkapi isian bertanda * dan periksa qty, harga serta diskon (0–100%) setiap barang. Gunakan titik untuk desimal.",
       );
       requestAnimationFrame(() => errorRef.current?.focus());
       return;
@@ -480,6 +510,7 @@ export function SalesOrderForm({
             line_id: l.line_id,
             quantity: l.quantity,
             unit_price: l.unit_price,
+            discount_rate: l.discount_rate,
           })),
         }
       : {
@@ -489,10 +520,11 @@ export function SalesOrderForm({
           ...(notes.trim() ? { notes: notes.trim() } : {}),
           ...(freightPayload() ? { freight: freightPayload() } : {}),
           currency,
-          lines: lines.map(({ product_id, quantity, unit_price }) => ({
+          lines: lines.map(({ product_id, quantity, unit_price, discount_rate }) => ({
             product_id,
             quantity,
             unit_price,
+            discount_rate,
           })),
         };
     try {
@@ -602,16 +634,17 @@ export function SalesOrderForm({
                 </label>
               ) : (
                 <div className="sor-field">
-                  <SelectionField
+                  <SearchSelectField
                     label="Pelanggan *"
                     options={options?.customers ?? []}
-                    value={customer ? [customer] : []}
+                    value={customer}
+                    loading={lookup.isLoading}
                     error={tried && missing.customer ? "Pilih pelanggan." : undefined}
-                    placeholder={lookup.isLoading ? "Memuat pelanggan…" : "Pilih pelanggan"}
-                    onChange={(v) => {
+                    placeholder="Ketik nama pelanggan"
+                    onChange={(id) => {
                       touch();
-                      const c = options?.customers.find((x) => x.id === v[0]);
-                      setCustomer(v[0] ?? "");
+                      const c = options?.customers.find((x) => x.id === id);
+                      setCustomer(id);
                       setAddress(c?.shippingAddress ?? c?.primaryAddress ?? "");
                       if (c?.paymentTerm && terms.some((t) => t.code === c.paymentTerm!.code))
                         setTermCode(c.paymentTerm.code);
@@ -725,11 +758,11 @@ export function SalesOrderForm({
             </div>
           </section>
 
-          <section className="sor-panel" aria-labelledby="so-g3">
+          <section className="sor-panel sor-lines-form" aria-labelledby="so-g3">
             <h2 id="so-g3">Barang</h2>
             <p className="sor-desc">
-              PPN memakai pajak penjualan bawaan di Setting. Server memeriksa harga terhadap price
-              list saat SO diajukan.
+              Diskon dalam persen per baris dan tidak boleh melebihi batas diskon Anda. PPN dihitung
+              di Ringkasan dari nilai setelah diskon memakai pajak penjualan bawaan di Setting.
             </p>
             <DataTable
               data={lines}
@@ -750,7 +783,13 @@ export function SalesOrderForm({
                     touch();
                     setLines((old) => [
                       ...old,
-                      { key: crypto.randomUUID(), product_id: "", quantity: "", unit_price: "" },
+                      {
+                        key: crypto.randomUUID(),
+                        product_id: "",
+                        quantity: "",
+                        unit_price: "",
+                        discount_rate: "0",
+                      },
                     ]);
                   }}
                 >
@@ -849,7 +888,11 @@ export function SalesOrderForm({
                 <dd>{goods ? amount(goods.toString(), currency) : "—"}</dd>
               </div>
               <div className="sor-sum">
-                <dt>{defaultTax ? `PPN ${amount(defaultTax.percentage)}%` : "PPN"}</dt>
+                <dt>
+                  {defaultTax
+                    ? `PPN ${amount(effectiveTaxPercent(defaultTax.percentage, defaultTax.dppFactor))}%`
+                    : "PPN"}
+                </dt>
                 <dd>
                   {tax
                     ? amount(tax.toString(), currency)

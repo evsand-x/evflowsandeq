@@ -1318,6 +1318,8 @@ model SalesOrderLine {
   allocatedQuantity Decimal                 @default(0) @map("allocated_quantity") @db.Decimal(24, 10)
   backorderQuantity Decimal                 @default(0) @map("backorder_quantity") @db.Decimal(24, 10)
   unitPrice         Decimal                 @map("unit_price") @db.Decimal(24, 8)
+  /// Line discount in percent (0-100), OTC-18; applied to the SO value before PPN.
+  discountRate      Decimal                 @default(0) @map("discount_rate") @db.Decimal(7, 4)
   priceSnapshot     Json?                    @map("price_snapshot")
   taxSnapshot       Json?                    @map("tax_snapshot")
   salesOrder        SalesOrder              @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)

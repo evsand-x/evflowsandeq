@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   NotFoundException,
   PreconditionFailedException,
 } from "@nestjs/common";
@@ -178,4 +179,58 @@ export async function setUserDiscountLimit(
       version: updated.updatedAt.getTime(),
     };
   });
+}
+
+/**
+ * OTC-18 server check for SO lines: each line discount must stay within the actor's effective
+ * limit for that product (person, roles, company default, product cap; Admin Sistem unlimited).
+ */
+export async function assertLineDiscounts(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  actorId: string,
+  lines: ReadonlyArray<{
+    productId: string;
+    discountRate?: Prisma.Decimal.Value | null | undefined;
+  }>,
+) {
+  const discounted = lines
+    .map((line) => ({ ...line, rate: new Prisma.Decimal(line.discountRate ?? 0) }))
+    .filter((line) => line.rate.gt(0));
+  if (!discounted.length) return;
+  const membership = await tx.companyMembership.findUnique({
+    where: { companyId_userId: { companyId, userId: actorId } },
+    select: {
+      discountLimit: true,
+      userRoles: {
+        select: { role: { select: { active: true, code: true, discountLimit: true } } },
+      },
+    },
+  });
+  const roles = (membership?.userRoles ?? [])
+    .map((assignment) => assignment.role)
+    .filter((r) => r.active);
+  if (roles.some((role) => role.code === "ADMIN_SYSTEM")) return;
+  const [companyDefault, products] = await Promise.all([
+    companyDiscountDefault(tx, companyId),
+    tx.product.findMany({
+      where: { companyId, id: { in: [...new Set(discounted.map((l) => l.productId))] } },
+      select: { id: true, name: true, discountLimit: true },
+    }),
+  ]);
+  for (const line of discounted) {
+    const product = products.find((p) => p.id === line.productId);
+    const limit = effectiveDiscountLimit({
+      isAdmin: false,
+      personLimit: membership?.discountLimit ?? null,
+      roleLimits: roles.filter((r) => r.discountLimit).map((r) => r.discountLimit!),
+      companyDefault,
+      productLimit: product?.discountLimit ?? null,
+    }) as Percent;
+    if (line.rate.gt(limit))
+      throw new ConflictException({
+        code: "DISCOUNT_LIMIT_EXCEEDED",
+        message: `Diskon ${line.rate.toString()}% untuk ${product?.name ?? "produk"} melebihi batas diskon Anda ${limit.toString()}%.`,
+      });
+  }
 }

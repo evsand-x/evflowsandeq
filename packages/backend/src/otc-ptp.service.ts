@@ -32,6 +32,7 @@ import {
 } from "./finance/operational-tax";
 import { availablePrepayFunds, bindOrderAdvancesToBatch } from "./sales/prepay-funds";
 import { getDeliveryNote } from "./sales/delivery-note";
+import { assertLineDiscounts } from "./sales/discount-limit";
 type Tx = Prisma.TransactionClient;
 const d = (v: string | Prisma.Decimal) => new Prisma.Decimal(v);
 type FreightTaxMode = "NON_TAXABLE" | "TAXABLE";
@@ -196,6 +197,7 @@ export class OtcPtpService {
         throw new ConflictException("ORDER_PRODUCT_INVALID");
       if (i.freight?.tax_mode === "TAXABLE")
         await this.freightTax(tx, c, d(i.freight.estimate), "TAXABLE");
+      await assertLineDiscounts(tx, c, a, i.lines.map((x: any) => ({ productId: x.product_id, discountRate: x.discount_rate })));
       const o = await tx.salesOrder.create({
         data: {
           companyId: c,
@@ -220,6 +222,7 @@ export class OtcPtpService {
               productId: x.product_id,
               orderedQuantity: d(x.quantity),
               unitPrice: d(x.unit_price),
+              discountRate: d(x.discount_rate ?? "0"),
               warehouseId: lineWarehouseIds[index],
               ...(duplicate ? {uomId:x.duplicateUomId} : {}),
             })),

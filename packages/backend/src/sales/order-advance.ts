@@ -44,7 +44,7 @@ export async function recordSalesOrderAdvance(
     if (!order.lines.length || order.lines.some((l) => !l.taxSnapshot))
       throw new ConflictException("ORDER_TOTAL_NOT_AVAILABLE");
     const total = order.lines.reduce(
-      (s, l) => s.add(lineAmounts(l, l.orderedQuantity).total),
+      (s, l) => s.add(lineAmounts(l, l.orderedQuantity, l.discountRate).total),
       new Decimal(0),
     );
     const sum = await tx.salesOrderAdvance.aggregate({
