@@ -359,7 +359,7 @@ export function DashboardSidebar({
                                   ],
                                   [
                                     "Pengiriman",
-                                    "warehouse?stage=shipping",
+                                    "delivery-notes",
                                     "outbound_shipping.read",
                                   ],
                                   ["POD", "warehouse?stage=pod", "delivery_receipt.read"],

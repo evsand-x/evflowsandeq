@@ -149,7 +149,9 @@ const releaseOneStages = stages.filter(
   (stage) => stage.key === "shipping" || stage.key === "returns",
 );
 const href = (stage: Stage, id = "", form = false) =>
-  `${stage === "picking" ? "/operations/pick-slips" : stage === "returns" ? "/operations/returns" : "/operations/warehouse"}${id ? `/${id}` : ""}?stage=${stage}${form ? "&view=form" : ""}`;
+  stage === "shipping" && !id
+    ? "/operations/delivery-notes"
+    : `${stage === "picking" ? "/operations/pick-slips" : stage === "returns" ? "/operations/returns" : "/operations/warehouse"}${id ? `/${id}` : ""}?stage=${stage}${form ? "&view=form" : ""}`;
 const date = (s?: string | null) =>
   s ? new Date(s).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "—";
 const qty = (s?: string) => new Decimal(s || "0").toString();

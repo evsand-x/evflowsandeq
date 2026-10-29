@@ -346,7 +346,7 @@ const warehouseStageTitles: Record<string, string> = {
 };
 
 const outboundStages = [
-  { key: "shipping", label: "Surat Jalan", href: "/operations/warehouse?stage=shipping" },
+  { key: "shipping", label: "Surat Jalan", href: "/operations/delivery-notes" },
   { key: "returns", label: "Retur", href: "/operations/returns" },
 ] as const;
 
