@@ -212,7 +212,7 @@ async function setup(tx: PrismaTypes.TransactionClient) {
     evidence_id: evidence.id,
     lines: [{ sales_order_line_id: order.lines[0]!.id, delivered_quantity: quantity }],
   });
-  return { tx, c, a, w, p, lot, order, input, handover };
+  return { tx, c, a, w, p, uom, lot, order, input, handover };
 }
 describe("Release 1 Surat Jalan", () => {
   it("creates one posted invoice from an issued Surat Jalan and replays idempotently", async () =>
@@ -243,7 +243,9 @@ describe("Release 1 Surat Jalan", () => {
       ).toBe(1);
       expect(await f.tx.ledgerEntry.count({ where: { companyId: f.c, sourceId: invoice.id } })).toBe(2);
       const detail = await new OperationsService(new AuditService()).invoice(f.c, invoice.id, false, f.tx);
-      expect((detail.snapshot as { allocations?: unknown[] }).allocations).toHaveLength(1);
+      expect((detail.snapshot as { allocations?: { product_code?: string; unit?: string }[] }).allocations).toMatchObject([
+        { product_code: f.p.code, product: f.p.name, unit: f.uom.name },
+      ]);
       expect(
         (await service.createInvoiceFromDeliveryNote(f.c, f.a, { surat_jalan_id: note.id }, key)).id,
       ).toBe(invoice.id);

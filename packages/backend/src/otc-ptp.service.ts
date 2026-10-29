@@ -1050,6 +1050,9 @@ export class OtcPtpService {
         payment: policy, freight: snap, handover_at: note.handoverAt,
         due_date: dueDate, lines: lines.map((row) => ({
           sales_order_line_id: row.line.salesOrderLineId,
+          product_code: row.line.salesOrderLine.product.code,
+          product: row.line.salesOrderLine.product.name,
+          unit: row.line.salesOrderLine.product.baseUom.name,
           quantity: row.quantity.toString(), unit_price: row.line.unitPrice.toString(),
           tax_snapshot: row.line.taxSnapshot, amounts: row.amounts,
         })),

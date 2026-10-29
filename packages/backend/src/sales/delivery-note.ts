@@ -30,7 +30,11 @@ function parse<T>(
 }
 const include = {
   lines: {
-    include: { salesOrderLine: { include: { product: { select: { code: true, name: true } } } } },
+    include: {
+      salesOrderLine: {
+        include: { product: { select: { code: true, name: true, baseUom: { select: { name: true } } } } },
+      },
+    },
   },
   salesOrder: {
     select: {
