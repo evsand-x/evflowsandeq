@@ -131,19 +131,22 @@ describe("Surat Jalan valuation scope", () => {
       {
         productId: "p",
         quantityOnHand: new Prisma.Decimal("2"),
+        quantityReserved: new Prisma.Decimal("0"),
         unitCost: new Prisma.Decimal("3"),
       },
       {
         productId: "p",
         quantityOnHand: new Prisma.Decimal("8"),
-        unitCost: new Prisma.Decimal("5"),
+        quantityReserved: new Prisma.Decimal("8"),
+        unitCost: new Prisma.Decimal("999"),
       },
       {
         productId: "q",
         quantityOnHand: new Prisma.Decimal("100"),
+        quantityReserved: new Prisma.Decimal("0"),
         unitCost: new Prisma.Decimal("999"),
       },
     ];
-    expect(eligibleMovingAverageCost(lots, "p").toString()).toBe("4.6");
+    expect(eligibleMovingAverageCost(lots, "p").toString()).toBe("3");
   });
 });

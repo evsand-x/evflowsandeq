@@ -306,7 +306,8 @@ export function issueDeliveryNote(c: string, a: string, id: string, input: unkno
       // Valuation scope is the already-locked, eligible lot set for this shipment.
       // Never rewrite quarantine, expired, inactive, reserved-only, or foreign lots.
       const eligibleProductLots = lots.filter(
-        (lot) => lot.productId === productId && lot.quantityOnHand.gt(0),
+        (lot) =>
+          lot.productId === productId && lot.quantityOnHand.sub(d(lot.quantityReserved ?? 0)).gt(0),
       );
       productCosts.set(productId, eligibleMovingAverageCost(eligibleProductLots, productId));
     }
@@ -333,7 +334,11 @@ export function issueDeliveryNote(c: string, a: string, id: string, input: unkno
     // inventory value is unchanged; future receipts blend into this moving average.
     for (const [productId, unitCost] of productCosts) {
       const eligibleIds = lots
-        .filter((lot) => lot.productId === productId && lot.quantityOnHand.gt(0))
+        .filter(
+          (lot) =>
+            lot.productId === productId &&
+            lot.quantityOnHand.sub(d(lot.quantityReserved ?? 0)).gt(0),
+        )
         .map((lot) => lot.id);
       if (eligibleIds.length)
         await tx.stockLot.updateMany({
@@ -546,10 +551,18 @@ export function deliveryNoteView(row: Awaited<ReturnType<typeof getDeliveryNote>
 
 /** Moving-average book cost over the eligible, locked lots used by a shipment. */
 export function eligibleMovingAverageCost(
-  lots: Array<{ productId: string; quantityOnHand: Prisma.Decimal; unitCost: Prisma.Decimal }>,
+  lots: Array<{
+    productId: string;
+    quantityOnHand: Prisma.Decimal;
+    quantityReserved?: Prisma.Decimal;
+    unitCost: Prisma.Decimal;
+  }>,
   productId: string,
 ) {
-  const scoped = lots.filter((lot) => lot.productId === productId && lot.quantityOnHand.gt(0));
+  const scoped = lots.filter(
+    (lot) =>
+      lot.productId === productId && lot.quantityOnHand.sub(d(lot.quantityReserved ?? 0)).gt(0),
+  );
   const quantity = scoped.reduce((sum, lot) => sum.add(lot.quantityOnHand), d(0));
   if (quantity.lte(0)) throw new ConflictException("STOCK_INSUFFICIENT");
   return scoped

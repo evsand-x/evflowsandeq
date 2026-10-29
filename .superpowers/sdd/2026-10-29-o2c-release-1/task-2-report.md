@@ -193,3 +193,15 @@ Task 4 must adapt legacy SO orderDetail/orderStatusRows/orderActions/related-doc
 - `pnpm exec eslint` on changed service/helper/tests — passed.
 - `./tools/validate-repository.ps1` — passed.
 - Database migration and integration rerun remain blocked at the unavailable local PostgreSQL service; no database transaction success is claimed.
+
+## Review fix round 2 (29 October 2026)
+
+- Reserved-only lots are now excluded from SJ valuation normalization and moving-average cost (`quantityOnHand - quantityReserved > 0`). Normalization continues to use only eligible, locked lots in the shipment scope, so foreign warehouse/product and ineligible quality lots cannot influence or be mutated by issue.
+- Added regression coverage with an eligible lot, a fully reserved lot carrying a deliberately different cost, and a foreign product lot. Expected cost remains the eligible lot cost.
+
+### Round 2 verification
+
+- `pnpm test packages/backend/src/sales/delivery-note.test.ts` — 4 tests passed.
+- `pnpm --filter @evflow/backend typecheck` — passed.
+- `./tools/validate-repository.ps1` — passed.
+- Database-backed migration/integration verification remains blocked by unavailable PostgreSQL; no transaction proof is claimed.
