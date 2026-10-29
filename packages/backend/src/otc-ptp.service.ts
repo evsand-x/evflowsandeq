@@ -35,6 +35,21 @@ import { getDeliveryNote } from "./sales/delivery-note";
 type Tx = Prisma.TransactionClient;
 const d = (v: string | Prisma.Decimal) => new Prisma.Decimal(v);
 type FreightTaxMode = "NON_TAXABLE" | "TAXABLE";
+
+export function receiptBelongsToInvoice(
+  receipt: {
+    salesOrderId: string | null;
+    fulfillmentBatchId: string | null;
+    fulfillmentBatch?: { salesOrderId: string } | null;
+  },
+  invoice: { salesOrderId: string; fulfillmentBatchId: string | null; deliveryNoteId: string | null },
+) {
+  if (receipt.salesOrderId && receipt.salesOrderId !== invoice.salesOrderId) return false;
+  if (!receipt.fulfillmentBatchId) return true;
+  if (invoice.deliveryNoteId)
+    return receipt.fulfillmentBatch?.salesOrderId === invoice.salesOrderId;
+  return receipt.fulfillmentBatchId === invoice.fulfillmentBatchId;
+}
 @Injectable()
 export class OtcPtpService {
   constructor(@Inject(AuditService) private readonly audit: AuditService) {}
@@ -1931,7 +1946,7 @@ export class OtcPtpService {
       await tx.$queryRaw`SELECT id FROM customer_receipts WHERE id = ${receiptId}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
       const receipt = await tx.customerReceipt.findFirst({
         where: { id: receiptId, companyId: c },
-        include: { allocations: true },
+        include: { allocations: true, fulfillmentBatch: { select: { salesOrderId: true } } },
       });
       if (!receipt) throw new NotFoundException("Penerimaan pelanggan tidak ditemukan.");
       await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${i.invoice_id}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
@@ -1942,7 +1957,7 @@ export class OtcPtpService {
         throw new ConflictException("RECEIPT_INVOICE_MISMATCH");
       if (receipt.salesOrderId && invoice.salesOrderId !== receipt.salesOrderId)
         throw new ConflictException("RECEIPT_FUNDS_BOUND_TO_ANOTHER_ORDER");
-      if (receipt.fulfillmentBatchId && invoice.fulfillmentBatchId !== receipt.fulfillmentBatchId)
+      if (!receiptBelongsToInvoice(receipt, invoice))
         throw new ConflictException("RECEIPT_FUNDS_BOUND_TO_ANOTHER_FULFILLMENT");
       if (
         receipt.state !== "POSTED" ||

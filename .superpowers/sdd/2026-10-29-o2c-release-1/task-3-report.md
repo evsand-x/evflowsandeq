@@ -18,6 +18,7 @@ Implementation is present and statically verified. Database-backed acceptance re
 - Disabled legacy Packing List/POD invoice commands and drafts for Release 1 with an explicit source error; historical records remain readable.
 - Extended the immutable invoice snapshot with customer code/name/legal name, billing/shipping/primary addresses, tax identity, and the SO delivery address.
 - Kept payment allocation explicit for Release 1 because customer receipts are currently linked by SO/fulfillment batch rather than Delivery Note; invoice outstanding remains unchanged until allocation to the invoice ID.
+- Batch-bound receipts can now allocate to a Delivery Note invoice when the batch belongs to the same SO; cross-order batches remain rejected.
 - Added focused contract tests rejecting direct SO and legacy POD source payloads.
 
 ## Verification
@@ -25,7 +26,7 @@ Implementation is present and statically verified. Database-backed acceptance re
 - `pnpm db:generate` passed.
 - `pnpm --filter @evflow/database validate` passed.
 - `pnpm --filter @evflow/backend typecheck` passed.
-- Focused static tests passed: `tests/integration/o2c-invoice-from-delivery-note.test.ts`, `packages/backend/src/sales/outbound-read.test.ts`, and `packages/backend/src/sales/delivery-note.test.ts`.
+- Focused static tests passed: `tests/integration/o2c-invoice-from-delivery-note.test.ts` (4 tests), `packages/backend/src/sales/outbound-read.test.ts`, and `packages/backend/src/sales/delivery-note.test.ts`.
 - Delivery Note integration tests could not run: Prisma reported `Can't reach database server at 127.0.0.1:5432` for all five database tests.
 - `./tools/validate-repository.ps1` passed.
 

@@ -1,4 +1,4 @@
-import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
+import { OtcPtpService, receiptBelongsToInvoice } from "../../packages/backend/src/otc-ptp.service";
 import { createInvoiceFromDeliveryNoteSchema } from "@evflow/contracts";
 
 describe("Release 1 invoice source", () => {
@@ -21,5 +21,16 @@ describe("Release 1 invoice source", () => {
     await expect(service.postInvoice("c", "a", "rid", "key")).rejects.toThrow("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
     await expect(service.issueInvoice("c", "a", "batch", "key")).rejects.toThrow("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
     await expect(service.saveInvoiceDraft("c", "a", undefined, { delivery_receipt_id: "rid", notes: "", billing_reference: "" }, "key")).rejects.toThrow("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
+  });
+
+  it("allows a batch-bound receipt only when its batch belongs to the invoice SO", () => {
+    expect(receiptBelongsToInvoice(
+      { salesOrderId: null, fulfillmentBatchId: "batch-1", fulfillmentBatch: { salesOrderId: "so-1" } },
+      { salesOrderId: "so-1", fulfillmentBatchId: null, deliveryNoteId: "sj-1" },
+    )).toBe(true);
+    expect(receiptBelongsToInvoice(
+      { salesOrderId: null, fulfillmentBatchId: "batch-2", fulfillmentBatch: { salesOrderId: "so-2" } },
+      { salesOrderId: "so-1", fulfillmentBatchId: null, deliveryNoteId: "sj-1" },
+    )).toBe(false);
   });
 });
