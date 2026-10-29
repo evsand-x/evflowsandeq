@@ -65,16 +65,17 @@ describe("posted finance journal immutability", () => {
       // Posted finance rows are deliberately immutable, including deletes.
       // Keep the committed fixture isolated; cleanup is attempted only for
       // non-posted dependencies and must not weaken those database guards.
-      await prisma.$executeRawUnsafe("SET session_replication_role = replica").catch(() => undefined);
-      await prisma.financeJournalLine.deleteMany({ where: { journalId } }).catch(() => undefined);
-      await prisma.financeJournal.deleteMany({ where: { id: journalId } }).catch(() => undefined);
-      await prisma.financePostingProfile.deleteMany({ where: { id: profileId } }).catch(() => undefined);
-      await prisma.financePeriod.deleteMany({ where: { id: periodId } }).catch(() => undefined);
-      await prisma.companyMembership.deleteMany({ where: { companyId } }).catch(() => undefined);
-      await prisma.financeAccount.deleteMany({ where: { id: accountId } }).catch(() => undefined);
-      await prisma.user.deleteMany({ where: { id: userId } }).catch(() => undefined);
-      await prisma.company.deleteMany({ where: { id: companyId } }).catch(() => undefined);
-      await prisma.$executeRawUnsafe("SET session_replication_role = origin").catch(() => undefined);
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe("SET LOCAL session_replication_role = replica");
+        await tx.financeJournalLine.deleteMany({ where: { journalId } });
+        await tx.financeJournal.deleteMany({ where: { id: journalId } });
+        await tx.financePostingProfile.deleteMany({ where: { id: profileId } });
+        await tx.financePeriod.deleteMany({ where: { id: periodId } });
+        await tx.companyMembership.deleteMany({ where: { companyId } });
+        await tx.financeAccount.deleteMany({ where: { id: accountId } });
+        await tx.user.deleteMany({ where: { id: userId } });
+        await tx.company.deleteMany({ where: { id: companyId } });
+      }).catch(() => undefined);
     }
   });
 });
