@@ -39,6 +39,25 @@ export function policyPayload(code: string, form: unknown): { value: unknown } {
   return { value: form };
 }
 
+const romanMonths = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+
+/** Segments of `Prefix.Year.Month.Sequence`, same rules as the server formatter. */
+export function documentNumberParts(
+  prefix: string,
+  yearFormat: "YYYY" | "YY",
+  digits: number,
+  day: string,
+  next: string,
+  monthFormat: "ARABIC" | "ROMAN" = "ARABIC",
+) {
+  return {
+    prefix,
+    year: yearFormat === "YY" ? day.slice(2, 4) : day.slice(0, 4),
+    month: monthFormat === "ROMAN" ? romanMonths[Number(day.slice(5, 7)) - 1]! : day.slice(5, 7),
+    sequence: next.padStart(digits, "0"),
+  };
+}
+
 export function previewDocumentNumber(
   prefix: string,
   yearFormat: "YYYY" | "YY",
@@ -47,10 +66,28 @@ export function previewDocumentNumber(
   next: string,
   monthFormat: "ARABIC" | "ROMAN" = "ARABIC",
 ) {
-  const year = yearFormat === "YY" ? day.slice(2, 4) : day.slice(0, 4);
-  const roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
-  const month = monthFormat === "ROMAN" ? roman[Number(day.slice(5, 7)) - 1] : day.slice(5, 7);
-  return `${prefix}.${year}.${month}.${next.padStart(digits, "0")}`;
+  const p = documentNumberParts(prefix, yearFormat, digits, day, next, monthFormat);
+  return `${p.prefix}.${p.year}.${p.month}.${p.sequence}`;
+}
+
+/** Format pattern shown in the list, e.g. `SO.TTTT.BB.0000` (RR = bulan Romawi). */
+export function numberPattern(
+  prefix: string,
+  yearFormat: "YYYY" | "YY",
+  monthFormat: "ARABIC" | "ROMAN",
+  digits: number,
+) {
+  return `${prefix}.${yearFormat === "YY" ? "TT" : "TTTT"}.${monthFormat === "ROMAN" ? "RR" : "BB"}.${"0".repeat(digits)}`;
+}
+
+/**
+ * "Nomor saat ini" check: digits only and never below the number already used.
+ * Returns the next sequence number as a decimal string, or null when invalid.
+ */
+export function nextFromCurrent(current: string, used: string) {
+  if (!/^\d{1,10}$/.test(current)) return null;
+  const value = BigInt(current);
+  return value < BigInt(used) ? null : (value + 1n).toString();
 }
 
 /** The dialog starts from the scheduled reset period when one exists, so saving does not cancel it. */

@@ -113,6 +113,12 @@ export function translateProblem(problem: { detail?: string; message?: string } 
         "Jumlah digit urutan lebih pendek dari nomor yang sedang berjalan. Tambah jumlah digit di Setting › Penomoran Dokumen.",
       settings_href: "/setting/numbering",
     };
+  if (detail === "NUMBERING_CURRENT_BELOW_USED")
+    return {
+      message:
+        "Nomor saat ini tidak boleh lebih kecil dari nomor yang sudah terpakai. Muat ulang Setting › Penomoran Dokumen lalu coba lagi.",
+      settings_href: "/setting/numbering",
+    };
   if (detail === "DOCUMENT_NUMBER_EXHAUSTED")
     return {
       message:

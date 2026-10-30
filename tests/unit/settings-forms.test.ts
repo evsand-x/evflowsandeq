@@ -5,6 +5,9 @@ import {
   initialResetPeriod,
   lockDraft,
   previewDocumentNumber,
+  documentNumberParts,
+  numberPattern,
+  nextFromCurrent,
   effectiveTaxPercent,
   taxPayload,
   canBeDefault,
@@ -36,6 +39,23 @@ describe("settings form helpers", () => {
     expect(previewDocumentNumber("SO", "YYYY", 4, "2026-10-24", "1", "ROMAN")).toBe(
       "SO.2026.X.0001",
     );
+  });
+  it("splits the number into segments and shows the pattern", () => {
+    expect(documentNumberParts("INV", "YY", 4, "2026-12-01", "12", "ROMAN")).toEqual({
+      prefix: "INV",
+      year: "26",
+      month: "XII",
+      sequence: "0012",
+    });
+    expect(numberPattern("SO", "YYYY", "ARABIC", 4)).toBe("SO.TTTT.BB.0000");
+    expect(numberPattern("SO", "YY", "ROMAN", 3)).toBe("SO.TT.RR.000");
+  });
+  it("current number only moves forward", () => {
+    expect(nextFromCurrent("2", "2")).toBe("3");
+    expect(nextFromCurrent("40", "2")).toBe("41");
+    expect(nextFromCurrent("1", "2")).toBeNull();
+    expect(nextFromCurrent("", "0")).toBeNull();
+    expect(nextFromCurrent("12a", "0")).toBeNull();
   });
   it("dialog starts from the scheduled reset period", () => {
     expect(

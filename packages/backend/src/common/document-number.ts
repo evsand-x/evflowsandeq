@@ -168,6 +168,11 @@ export const numberingRevisionSchema = z
     month_format: z.enum(["ARABIC", "ROMAN"]).default("ARABIC"),
     digits: z.number().int().min(3).max(10),
     reset_period: z.enum(["YEARLY", "MONTHLY"]),
+    /** Last number already used in the running period; only moves forward. Omit to keep the counter. */
+    current_number: z
+      .string()
+      .regex(/^\d{1,10}$/)
+      .optional(),
   })
   .strict();
 
@@ -193,6 +198,7 @@ export function numberingDefault(kind: string) {
 /**
  * Prefix, year format and length apply from today and the running counter continues (IAM-06).
  * A reset-period change waits for the start of the next period so a month never gets two counters.
+ * `current_number` advances the running counter; it can never go below a number already issued.
  */
 export async function reviseNumbering(
   c: string,
@@ -219,8 +225,33 @@ export async function reviseNumbering(
         companyId_entityType: { companyId: c, entityType: sequenceKey(kind, currentPeriod, day) },
       },
     });
-    if (String(counter?.nextValue ?? 1n).length > i.digits)
+    const used = (counter?.nextValue ?? 1n) - 1n;
+    const target = i.current_number === undefined ? used : BigInt(i.current_number);
+    if (target < used) throw new ConflictException("NUMBERING_CURRENT_BELOW_USED");
+    if (String(target + 1n).length > i.digits)
       throw new ConflictException("NUMBERING_DIGITS_TOO_SHORT");
+    if (target > used) {
+      // Conditional upsert: a number issued concurrently past the target wins and the change is refused.
+      const entity = sequenceKey(kind, currentPeriod, day);
+      const moved = await tx.$queryRaw<{ id: string }[]>`
+        INSERT INTO master_code_sequences (id, company_id, entity_type, next_value, updated_at)
+        VALUES (gen_random_uuid(), ${c}::uuid, ${entity}, ${target + 1n}, now())
+        ON CONFLICT (company_id, entity_type) DO UPDATE
+          SET next_value = EXCLUDED.next_value, updated_at = now()
+          WHERE master_code_sequences.next_value <= EXCLUDED.next_value
+        RETURNING id`;
+      if (!moved.length) throw new ConflictException("NUMBERING_CURRENT_BELOW_USED");
+      await new AuditService().recordWith(tx, {
+        companyId: c,
+        actorId: a,
+        action: "numbering_counter.advanced",
+        resourceType: "numbering_counter",
+        resourceId: moved[0]!.id,
+        before: { current_number: used.toString() },
+        after: { current_number: target.toString() },
+        metadata: { document_kind: kind, counter: entity },
+      });
+    }
     // A scheduled reset change to the same target period is kept; any other one is replaced.
     const kept = scheduled.find(
       (r) => r.resetPeriod === i.reset_period && r.resetPeriod !== currentPeriod,
@@ -324,6 +355,7 @@ export async function listNumberingSettings(c: string) {
           digits: null,
           reset_period: null,
           effective_from: null,
+          current_number: null,
           next_preview: null,
           pending: null,
           active: false,
@@ -351,6 +383,7 @@ export async function listNumberingSettings(c: string) {
         digits: rule.digits,
         reset_period: rule.resetPeriod,
         effective_from: rule.effectiveFrom.toISOString().slice(0, 10),
+        current_number: ((seq?.nextValue ?? 1n) - 1n).toString(),
         next_preview,
         pending: later
           ? {

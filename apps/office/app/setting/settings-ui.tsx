@@ -22,12 +22,15 @@ export function SettingFrame({
   subtitle,
   permission,
   actions,
+  tabs,
   children,
 }: {
   title: string;
   subtitle: string;
   permission: string;
   actions?: ReactNode;
+  /** Sub-tab di dasar pita (pola daftar canvas). */
+  tabs?: ReactNode;
   children: ReactNode;
 }) {
   const { principal } = useSession();
@@ -39,6 +42,7 @@ export function SettingFrame({
       title={title}
       subtitle={subtitle}
       actions={allowed ? actions : undefined}
+      tabs={allowed ? tabs : undefined}
     >
       {allowed ? (
         children

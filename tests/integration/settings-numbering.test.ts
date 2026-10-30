@@ -111,6 +111,58 @@ describe("numbering settings revision", () => {
     expect(listed.month_format).toBe("ROMAN");
   });
 
+  it("advances the running counter from current_number and never moves it back", async () => {
+    await next();
+    await next();
+    const base = { prefix: "SO", year_format: "YYYY", digits: 4, reset_period: "YEARLY" };
+    const before = (await listNumberingSettings(companyId)).find(
+      (r) => r.document_kind === "sales_order",
+    )!;
+    expect(before.current_number).toBe("2");
+    await expect(
+      reviseNumbering(
+        companyId,
+        actorId,
+        "sales_order",
+        { ...base, current_number: "1" },
+        randomUUID(),
+      ),
+    ).rejects.toThrow("NUMBERING_CURRENT_BELOW_USED");
+    await reviseNumbering(
+      companyId,
+      actorId,
+      "sales_order",
+      { ...base, current_number: "40" },
+      randomUUID(),
+    );
+    const [y] = companyToday().split("-");
+    expect(await next()).toMatch(new RegExp(`^SO\\.${y}\\.\\d{2}\\.0041$`));
+    const after = (await listNumberingSettings(companyId)).find(
+      (r) => r.document_kind === "sales_order",
+    )!;
+    expect(after.current_number).toBe("41");
+    expect(
+      await prisma.auditEvent.count({ where: { companyId, action: "numbering_counter.advanced" } }),
+    ).toBe(1);
+    // Keeping the same value is not a change; a value that no longer fits the digits is refused.
+    await reviseNumbering(
+      companyId,
+      actorId,
+      "sales_order",
+      { ...base, current_number: "41" },
+      randomUUID(),
+    );
+    await expect(
+      reviseNumbering(
+        companyId,
+        actorId,
+        "sales_order",
+        { ...base, current_number: "9999" },
+        randomUUID(),
+      ),
+    ).rejects.toThrow("NUMBERING_DIGITS_TOO_SHORT");
+  });
+
   it("monthly reset restarts next month", async () => {
     await setRule("MONTHLY");
     await next("sales_order", "2026-10-10");
