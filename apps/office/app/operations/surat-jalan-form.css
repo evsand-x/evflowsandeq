@@ -1,0 +1,138 @@
+/* Form Surat Jalan (canvas SJ-form); tata letak memakai kelas sor-* dari sales-order-r1.css. */
+.sj-select {
+  height: var(--ev-input-height, 44px);
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--ev-color-border-strong, #c6d3e6);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #ffffff;
+  font: inherit;
+  font-weight: 400;
+  font-size: 13px;
+  color: inherit;
+}
+.sj-carrier {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: var(--ev-input-height, 44px);
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--ev-color-border-strong, #c6d3e6);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #ffffff;
+  font: inherit;
+  font-weight: 400;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.sj-carrier > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sj-carrier:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 0 0 4px #1f7fe0;
+}
+.sj-table-wrap {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+.sj-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+}
+.sj-table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ev-color-text-muted);
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--ev-color-border, #d8e0ec);
+  white-space: nowrap;
+}
+.sj-table th.sor-num {
+  text-align: right;
+}
+.sj-table td {
+  font-size: 13px;
+  padding: 10px 8px;
+  border-bottom: 1px solid #eef1f6;
+  vertical-align: top;
+}
+.sj-table td.sor-num {
+  padding-top: 20px;
+}
+.sj-table td:last-child.sor-num,
+.sj-issue .sj-table td:nth-child(3) {
+  padding-top: 10px;
+}
+.sj-product {
+  display: block;
+  font-weight: 600;
+}
+.sj-line-msg {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+  white-space: normal;
+}
+.sj-hint {
+  color: var(--ev-color-text-muted);
+}
+.sj-warn {
+  color: #8a5300;
+}
+.sj-err {
+  color: #b42318;
+}
+.sj-source {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.sj-source dt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ev-color-text-muted);
+}
+.sj-source dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.sj-issue {
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+/* Isi dialog tidak boleh melebar melewati dialog (item grid default min-width:auto). */
+.sj-issue > *,
+.sj-dialog > * {
+  min-width: 0;
+}
+.sj-issue .sj-table {
+  min-width: 0;
+}
+.sj-ack {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 20px;
+}
+.sj-ack input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  flex: none;
+}

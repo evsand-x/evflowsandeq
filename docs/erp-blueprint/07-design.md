@@ -1,5 +1,12 @@
 # Design — web kantor dan aplikasi mobile sales/gudang
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Tombol Terbitkan Surat Jalan menjalankan penerbitan langsung. Tidak ada modal bukti/checkbox penerimaan pada aksi itu. Detail ISSUED menampilkan tombol Penerimaan Barang bagi fulfillment.dispatch selama belum ada receipt/histori handover, serta ringkasan penerimaan. Dialog Penerimaan Barang memuat waktu, nama, jabatan opsional, jumlah diterima, alasan selisih dan bukti; tombol Simpan penerimaan. Tampilkan error/pending, fokus dan Escape sesuai komponen global; sesudah berhasil perbarui detail/list. Selisih tidak diklaim otomatis kembali ke stok.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
 Detail SO satu halaman: kepala nomor/status/navigasi/Cetak/tindakan utama/Aksi/menu lainnya; atribut faktur; tabel barang bersisa di atas; kuantitas, subtotal, PPN, total dan sisa tagihan; panel uang muka; Transaksi; jejak perubahan/cetak. Tidak ada tab detail lama atau Bagikan/WhatsApp. Tindakan tanpa izin tidak dikirim, hambatan alur beralasan. Cetak menggunakan Profil Perusahaan dan audit sebelum dialog cetak. QA visual operasional belum lulus; lihat laporan eksekusi.
@@ -880,5 +887,10 @@ Label dan tindakan Release 1 memakai Surat Jalan. Tombol Invoice hanya tersedia 
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Kontrak backend mengikuti daftar, form, detail Invoice dan Terima Pembayaran pada evflow-office-design.pen. Teks jatuh tempo pada mockup yang menyebut tanggal Invoice digantikan keputusan pengguna: tanggal SJ diterbitkan + termin. Nomor editable saat draft; Simpan draft belum memposting, Submit membentuk AR. Tab hitungan dan pencarian diproses server. Menunggu bukti potong mengungguli contoh Lunas pada mockup bila bukti wajib belum ada. Label Lihat harga tersedia pada capability Invoice. Belum ada klaim implementasi ulang frontend/visual QA tahap ini.

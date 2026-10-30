@@ -166,6 +166,7 @@ export function DashboardSidebar({
           "pick-slips": "Barang Keluar",
           warehouse: "Barang Keluar",
           returns: "Barang Keluar",
+          "delivery-notes": "Barang Keluar",
           invoices: "Piutang (AR)",
           reconciliation: "Kas & Bank",
           "bank-statements": "Kas & Bank",

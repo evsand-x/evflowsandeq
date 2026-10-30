@@ -1,5 +1,12 @@
 # API — kontrak awal v1
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+POST /delivery-notes/:id/issue kini menerima {} saja; field handover lama ditolak. POST /delivery-notes/:id/receipt menerima handover_at, receiver_name, receiver_title?, evidence_id dan lines[{sales_order_line_id, delivered_quantity, discrepancy_reason?}]. Kedua command memakai fulfillment.dispatch dan Idempotency-Key. Receipt hanya ISSUED belum diterima, tanggal >= issuedAt dan tidak di masa depan, seluruh baris tepat satu kali. GET detail/list dengan outbound_shipping.read mengembalikan receipt serta handoverAt/receiverName/receiverTitle/evidenceId dari receipt atau histori lama. API receipt tidak mengubah SJ/line.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
 POST /sales-orders/:id/advances membutuhkan sales_order_advance.create dan Idempotency-Key; body amount, received_at (datetime), bank_account_id, bank_reference opsional, evidence_id. POST /sales-order-advances/:id/verify dan /reject membutuhkan sales_order_advance.verify, version; reject juga reason. GET /operations/orders/:id/related dan /actions membutuhkan sales_order.read dan menyaring per jenis/tindakan. POST /sales-orders/:id/print-events membutuhkan sales_order.print; POST /sales-orders/:id/duplicate membutuhkan sales_order.create dan Idempotency-Key. Detail menambah progress baris, neighbors, companyProfile, lastChanged/lastPrinted; advances/DP hanya untuk izin sumber dan remainingBill juga mensyaratkan akses invoice.
@@ -19,6 +26,7 @@ Release 1 (29 Oktober 2026), read model dan nomor SO:
 - Surat Jalan terbit dihitung sebagai serah terima pada status tampilan, filter dan progress SO. GET /operations/lists/orders menambah per baris `paymentTerm {code,label}`, `shipping {status NOT_SHIPPED|PARTIAL|SHIPPED, remainingQuantity, remainingUnit, draftDeliveryNotes}` dan, bila pemanggil memiliki `sales_invoice.read`, `billing {status NONE|UNINVOICED|UNPAID|PARTIAL|PAID, invoiceCount, uninvoicedDeliveryNotes}`. Query `queue=TO_SHIP|UNINVOICED`; UNINVOICED tanpa `sales_invoice.read` ditolak 403. Summary menambah `toShip` dan (bila boleh) `uninvoiced`.
 - GET /operations/orders/:id menambah `customer.primaryAddress`, `paymentTerm`, `shipping`, per baris `delivered` dan (dengan `sales_invoice.read`) `invoiced`, `billing` serta `invoiceSummaries [{id,number,total,outstanding,paymentStatus}]`; `deliveryNotes [{id,number,state,issuedAt}]` hanya dengan `outbound_shipping.read`. Aksi `revise` tidak lagi ditawarkan setelah ada Surat Jalan terbit.
 - Diskon per baris (OTC-18, 30 Oktober 2026, tahap SO saja): baris POST /sales-orders dan revisi menerima `discount_rate` opsional (persen 0–100, maks. 4 desimal, bawaan 0). Server memeriksa batas diskon efektif pemanggil per produk (batas orang, peran, bawaan perusahaan `OPS-FLX-09`, batas produk; Admin Sistem tanpa batas) dan menolak 409 `DISCOUNT_LIMIT_EXCEEDED`. Nilai baris, `subtotal`, `taxAmount` dan `total` SO (daftar, detail, cek kredit, uang muka) dihitung dari harga setelah diskon; detail mengembalikan `discountRate` per baris. Surat Jalan dan Invoice Release 1 belum memakai diskon (nilai bruto baris SO).
+- Daftar Surat Jalan (30 Oktober 2026): GET /delivery-notes (`outbound_shipping.read`) menerima `tab=ALL|DRAFT|UNINVOICED|INVOICED`, `warehouse_id`, `search`, `page` (25 baris; `state` lama tetap diterima). Baris menambah `warehouses [{id,name}]`, `quantity` (terbit: diserahkan; draft: rencana) dan `unit` (bila seragam), serta `invoice {id,number,state}|null` hanya dengan `sales_invoice.read`. Respons menambah `summary {all, draft, uninvoiced?, invoiced?}`, `warehouses` (filter) dan `timezone`. Tab UNINVOICED/INVOICED tanpa `sales_invoice.read` ditolak 403.
 - Tampilan PPN di layar SO memakai tarif efektif = tarif × faktor DPP (bawaan 12% × 11/12 tampil 11%); nilai pajak tetap dari snapshot server.
 
 Error konfigurasi memuat kode pada errors.code, pesan manusia pada detail dan settings_href di root problem response. Scope perusahaan tetap berasal dari sesi; izin per submenu tetap diperiksa server.
@@ -537,8 +545,43 @@ Untuk kontrak `SO → Surat Jalan → Invoice`, Surat Jalan terbit adalah event 
 
 Command Release 1: createSuratJalan, issueSuratJalan, createInvoiceFromSuratJalan. Surat Jalan memakai family izin outbound yang sudah ada; tidak ada delivery_note.* baru.
 
+Implementasi endpoint Surat Jalan aktif:
+
+- `POST /delivery-notes` dan `PATCH /delivery-notes/:id` memakai `fulfillment.dispatch` dan `Idempotency-Key`. Payload draft menerima `sales_order_id`, `lines[]`, serta field form `number`, `document_date`, `ship_date`, `warehouse_id`, `carrier_name`, `vehicle_number`, `driver_name`, `freight_amount`, dan `notes`. Nomor opsional harus unik per perusahaan; bila kosong, server memakai aturan penomoran Surat Jalan.
+- `GET /delivery-notes/:id` memakai `outbound_shipping.read` dan mengembalikan field draft/terbit tersebut sebagai string tanggal/decimal, bersama snapshot alamat pengantaran, TOP, produk, dan freight yang berasal dari SO.
+- Gudang form harus aktif dan satu perusahaan; bila diberikan, semua baris harus memakai gudang tersebut. Kuantitas tetap divalidasi kumulatif terhadap sisa SO.
+- `GET /delivery-notes/form?sales_order_id=|delivery_note_id=&warehouse_id=` (`outbound_shipping.read`, 30 Oktober 2026) adalah read model form: SO (nomor, tanggal, pelanggan, alamat, termin, ongkir), baris (dipesan, terbit, sisa, harga, pajak, stok layak di gudang terpilih), draft, gudang aktif, `nextNumber` (usulan tanpa memakai urutan), `today`, `timezone` dan nama ekspedisi yang pernah dipakai. Hanya baca; perintah memeriksa ulang di server.
+- `freight_amount` Surat Jalan ditagihkan (snapshot, posting dan Invoice) hanya bila ongkir SO ditanggung pelanggan; menggantikan estimasi SO. Bila ditanggung perusahaan, nilai disimpan sebagai biaya kirim Surat Jalan saja (keputusan 30 Oktober 2026).
+- `POST /delivery-notes/:id/receipt` menerima `receiver_title` opsional (jabatan/unit penerima), disimpan pada catatan penerimaan dan dikembalikan sebagai `receiverTitle`.
+- `POST /delivery-notes/:id/issue` memakai `fulfillment.dispatch`. Penerbitan menyimpan field form ke `snapshot`, memakai seluruh baris draft tanpa data penerimaan; event stok, pendapatan, dan HPP tetap berasal dari transaksi ini. Record terbit immutable dan replay idempotent.
+
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Endpoint baru (prefix /api/v1):
+
+| Endpoint | Izin dan kontrak |
+|---|---|
+| GET /sales-invoices | sales_invoice.read; page/search/customer_id/tab ALL,DRAFT,UNPAID,PARTIAL,OVERDUE,PAID; 25 baris, hitungan tab. Nilai disaring tanpa view_price |
+| GET /sales-invoices/candidates | sales_invoice.read; SJ terbit tanpa Invoice, pencarian/pelanggan/pagination |
+| GET /sales-invoices/form | sales_invoice.read + sales_invoice.view_price; surat_jalan_id atau invoice_id; usulan nomor, sumber immutable |
+| GET /sales-invoices/:id | sales_invoice.read; nilai hanya dengan view_price, riwayat/bukti hanya dengan customer_receipt.read |
+| POST /sales-invoices/drafts | sales_invoice.post + view_price; surat_jalan_id, number?, invoice_date?, notes? |
+| PATCH /sales-invoices/:id/draft | izin sama; sumber tetap, version wajib cocok |
+| POST /sales-invoices/:id/submit | izin sama; version; AR atomik pada tanggal Invoice |
+| GET /sales-invoices/:id/payment-form | customer_receipt.read + view_price; invoice, bank, pajak/potongan, akun dan pending bukti |
+| POST /sales-invoices/:id/payments | customer_receipt.post + view_price; received_date, bank_account_id, amount, bank_reference, evidence_id, external_reference?, deductions[] |
+| POST /invoice-payment-deductions/:id/proof | customer_receipt.post + view_price; evidence_id, proof_number, proof_date, settlement_date |
+| POST /sales-invoices/:id/payment-evidence | customer_receipt.post; purpose PAYMENT/TAX, name/base64; JPEG/PNG maksimum 2 MB |
+| GET /sales-invoices/:id/payment-evidence/:evidenceId | customer_receipt.read; hanya bukti yang sudah tertaut invoice terkait |
+
+Mutasi transaksi memerlukan Idempotency-Key. Potongan: source_type TAX/DEDUCTION_TYPE, source_id, mode AMOUNT/PERCENT, value, evidence_id?/proof_number?/proof_date?. BANK_REFERENCE_DUPLICATE, PAYMENT_EXCEEDS_OUTSTANDING, INVOICE_VERSION_CONFLICT, INVOICE_NUMBER_EXISTS, DELIVERY_NOTE_ALREADY_INVOICED dan FINANCE_PERIOD_NOT_OPEN menolak transaksi tanpa saldo parsial. POST /sales-invoices/from-delivery-note tetap tersedia sebagai create+post atomik dan memakai aturan baru. Kandidat endpoint lama kini SJ, bukan Packing List. Jalur POD/Packing tetap ditolak. Reversal legacy menolak receipt invoice langsung dengan USE_INVOICE_PAYMENT_CORRECTION; koreksi baru tidak boleh melalui asumsi uang muka lama.
+# Backend Persediaan vertical slice — 30 Oktober 2026
+
+Endpoint operasional Persediaan tersedia pada `/inventory`, `/inventory/{productId}`, dan `/inventory/{productId}/stock-card`. Read model mengagregasi lot, reservasi, mutu, expiry, locator dan movement dari server; kolom HPP memerlukan `inventory.cost.read`. Opname minimum memakai `/inventory/stock-counts` dengan lifecycle draft, submit, approve dan post; posting membuat movement adjustment atomik dan tidak mengedit histori.

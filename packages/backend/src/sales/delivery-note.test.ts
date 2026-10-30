@@ -80,6 +80,13 @@ it("does not expose unit costs, prices, credit data or source row internals in t
     id: "note",
     number: "SJ",
     state: "ISSUED",
+    documentDate: new Date("2026-10-29T00:00:00.000Z"),
+    shipDate: new Date("2026-10-30T00:00:00.000Z"),
+    warehouseId: "w",
+    carrierName: "Ekspedisi",
+    vehicleNumber: "DD 1234 AA",
+    driverName: "Driver",
+    freightAmount: d("100"),
     salesOrderId: "so",
     notes: null,
     handoverAt: null,
@@ -121,6 +128,15 @@ it("does not expose unit costs, prices, credit data or source row internals in t
   expect(view.lines[0]).toMatchObject({
     quantity: "2",
     product: { id: "p", code: "P", name: "Product" },
+  });
+  expect(view).toMatchObject({
+    documentDate: "2026-10-29",
+    shipDate: "2026-10-30",
+    warehouseId: "w",
+    carrierName: "Ekspedisi",
+    vehicleNumber: "DD 1234 AA",
+    driverName: "Driver",
+    freightAmount: "100",
   });
   expect(JSON.stringify(view)).not.toMatch(/unitPrice|unitCost|costSnapshot|credit_limit|999|666/);
 });

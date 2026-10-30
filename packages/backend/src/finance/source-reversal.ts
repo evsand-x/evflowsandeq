@@ -34,6 +34,7 @@ export async function requestReversal(c: string, a: string, body: unknown, key: 
       include: { lines: true },
     });
     if (!journal) throw new NotFoundException();
+    await assertLegacyReversalSupported(tx, c, journal);
     if (!supported.includes(journal.sourceType))
       throw new ConflictException("USE_SOURCE_DOMAIN_CORRECTION");
     const value = journal.lines.reduce((s, l) => s.add(l.debit), new Prisma.Decimal(0));
@@ -68,6 +69,7 @@ export async function postReversal(c: string, a: string, id: string, key: string
         where: { companyId: c, id: request.sourceId },
         include: { lines: true },
       });
+      await assertLegacyReversalSupported(tx, c, journal);
       let customerId: string | undefined;
       if (journal.sourceType === "CUSTOMER_RECEIPT")
         customerId = (
@@ -257,4 +259,19 @@ export async function postReversal(c: string, a: string, id: string, key: string
       return reversal;
     },
   );
+}
+
+async function assertLegacyReversalSupported(
+  tx: Prisma.TransactionClient,
+  c: string,
+  journal: { sourceType: string; sourceId: string },
+) {
+  if (
+    journal.sourceType === "INVOICE_PAYMENT_DEDUCTION" ||
+    (journal.sourceType === "CUSTOMER_RECEIPT" &&
+      (await tx.customerReceipt.count({
+        where: { companyId: c, id: journal.sourceId, invoicePayment: true },
+      })))
+  )
+    throw new ConflictException("USE_SOURCE_DOMAIN_CORRECTION");
 }

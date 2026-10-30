@@ -94,6 +94,10 @@ describe("independent submenu HTTP permissions", () => {
         .set("x-permissions", grants)
         .expect(403);
       await request(app.getHttpServer())
+        .get("/delivery-notes/form?sales_order_id=00000000-0000-4000-8000-000000000001")
+        .set("x-permissions", grants)
+        .expect(403);
+      await request(app.getHttpServer())
         .post("/delivery-notes")
         .set("x-permissions", grants)
         .send({})
@@ -108,7 +112,26 @@ describe("independent submenu HTTP permissions", () => {
         .set("x-permissions", grants)
         .send({})
         .expect(403);
+      await request(app.getHttpServer())
+        .post("/delivery-notes/00000000-0000-4000-8000-000000000001/receipt")
+        .set("x-permissions", grants)
+        .send({})
+        .expect(403);
     }
+  });
+  it("keeps receipt writes within the Surat Jalan command grant and company scope", async () => {
+    for (const grants of ["outbound_shipping.read", "delivery_receipt.read,fulfillment.pod"]) {
+      await request(app.getHttpServer())
+        .post("/delivery-notes/00000000-0000-4000-8000-000000000001/receipt")
+        .set("x-permissions", grants).send({}).expect(403);
+    }
+    await request(app.getHttpServer())
+      .post("/delivery-notes/00000000-0000-4000-8000-000000000001/receipt")
+      .set("x-permissions", "fulfillment.dispatch").set("x-foreign", "1").send({}).expect(403);
+    // An authorized dispatcher reaches command validation, not an unrelated submenu guard.
+    await request(app.getHttpServer())
+      .post("/delivery-notes/00000000-0000-4000-8000-000000000001/receipt")
+      .set("x-permissions", "fulfillment.dispatch").send({}).expect(400);
   });
   it("requires independent account permissions and scopes list queries", async () => {
     await request(app.getHttpServer())
@@ -491,6 +514,8 @@ describe("independent submenu HTTP permissions", () => {
   it("keeps SO, Surat Jalan and Invoice HTTP grants independent", async () => {
     const find = vi.spyOn(prisma.deliveryNote, "findMany").mockResolvedValue([]);
     const count = vi.spyOn(prisma.deliveryNote, "count").mockResolvedValue(0);
+    const warehouses = vi.spyOn(prisma.warehouse, "findMany").mockResolvedValue([]);
+    const company = vi.spyOn(prisma.company, "findUnique").mockResolvedValue(null);
     const matrix = [
       {
         name: "SO",
@@ -507,8 +532,8 @@ describe("independent submenu HTTP permissions", () => {
       {
         name: "Invoice",
         path: "/operations/lists/invoices?page=1",
-        grant: "sales_invoice.read",
-        denied: ["sales_order.read", "outbound_shipping.read"],
+        grant: "sales_invoice.read,sales_invoice.view_price",
+        denied: ["sales_order.read", "outbound_shipping.read", "sales_invoice.read", "sales_invoice.view_price"],
       },
     ];
     try {
@@ -524,9 +549,22 @@ describe("independent submenu HTTP permissions", () => {
             .expect(403);
         }
       }
+      // Invoice tabs of the Surat Jalan list are invoice data.
+      for (const tab of ["UNINVOICED", "INVOICED"]) {
+        await request(app.getHttpServer())
+          .get(`/delivery-notes?tab=${tab}`)
+          .set("x-permissions", "outbound_shipping.read")
+          .expect(403);
+        await request(app.getHttpServer())
+          .get(`/delivery-notes?tab=${tab}`)
+          .set("x-permissions", "outbound_shipping.read,sales_invoice.read")
+          .expect(200);
+      }
     } finally {
       find.mockRestore();
       count.mockRestore();
+      warehouses.mockRestore();
+      company.mockRestore();
     }
   });
   it("requires independent Proforma and Backorder read capabilities", async () => {

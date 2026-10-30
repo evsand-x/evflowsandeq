@@ -3,7 +3,7 @@ import { ConflictException, NotFoundException } from "@nestjs/common";
 import { AuditService } from "../common/audit.service";
 import { lockCustomer } from "../sales/transaction-controls";
 import { requireEvidence } from "../sales/document-controls";
-import { postLedger } from "./posting";
+import { lockFinance, postLedger } from "./posting";
 import { postAdvanceTax } from "./advance-tax";
 const d = (v: string | Prisma.Decimal) => new Prisma.Decimal(v);
 /** Shared posting core. Caller owns transaction and command replay. */
@@ -54,6 +54,18 @@ export async function postCustomerReceiptTx(
     include: { allocations: true },
   });
   if (existing) return existing;
+  await lockFinance(tx, c);
+  if (
+    i.bank_reference &&
+    (await tx.customerReceipt.findFirst({
+      where: {
+        companyId: c,
+        bankAccountId: i.bank_account_id,
+        bankReference: i.bank_reference.trim(),
+      },
+    }))
+  )
+    throw new ConflictException("BANK_REFERENCE_DUPLICATE");
   const customer = await tx.customer.findFirst({
     where: { id: customerId, companyId: c, state: "ACTIVE" },
   });
@@ -76,7 +88,7 @@ export async function postCustomerReceiptTx(
       salesOrderId: i.sales_order_id ?? null,
       fulfillmentBatchId: i.fulfillment_batch_id ?? null,
       externalReference: i.external_reference ?? null,
-      bankReference: i.bank_reference ?? null,
+      bankReference: i.bank_reference?.trim() ?? null,
       bankAccountId: i.bank_account_id,
       evidenceId: i.evidence_id,
       receivedAt: i.received_at ? new Date(i.received_at) : new Date(),

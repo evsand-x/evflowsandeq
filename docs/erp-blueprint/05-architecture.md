@@ -1,5 +1,12 @@
 # Architecture evflow — web kantor, aplikasi mobile, satu backend modular
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Issue tetap transactionCommand + customer/finance/SO/lot locks, audit dan outbox atomik. Receipt memakai transactionCommand + row lock SJ, unique per SJ, audit delivery_note.received dan outbox; tidak memanggil posting/inventory mutation. Payload issue berasal dari draft tersimpan. Snapshot replay tidak menggandakan efek.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 ## Dampak keputusan 24 Oktober 2026
 
 Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Mesin persetujuan umum dan Struktur Organisasi berada di modul Identity/Setting. Modul domain (Sales, Finance, HRIS, Warehouse) mendaftarkan jenis dokumen, kondisi yang didukung dan aksi lanjutan setelah keputusan; mesin tidak memuat aturan bisnis domain. Keputusan diteruskan ke domain melalui transaksi atau outbox yang idempotent. Nilai bawaan konfigurasi dibuat oleh proses penyiapan perusahaan yang idempotent, bukan konstanta kode.
@@ -201,5 +208,10 @@ Jalur Release 1 mempertahankan batas modular monolith: Surat Jalan menjadi trans
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Modul Finance Invoice/payment memakai transactionCommand dan kernel posting bersama; lock pelanggan, sumber/Invoice dan finance menjaga satu sumber/nomor/alokasi. Snapshot dan outbox commit bersama ledger. Tanggal bisnis input YYYY-MM-DD dikonversi ke instant hari lokal untuk kernel posting, sehingga zona UTC negatif tidak memundurkan tanggal jurnal. Pembayaran langsung Invoice tidak menjalankan pajak uang muka. Jalur reversal uang muka lama menolak sumber penerimaan Invoice langsung.

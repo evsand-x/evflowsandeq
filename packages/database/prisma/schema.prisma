@@ -165,6 +165,7 @@ model Company {
   masterCodeSequences        MasterCodeSequence[]
   stockLots                  StockLot[]
   inventoryMovements         InventoryMovement[]
+  stockCounts                StockCount[]
   salesOrders                SalesOrder[]
   fulfillmentBatches         FulfillmentBatch[]
   deliveryReceipts           DeliveryReceipt[]
@@ -472,6 +473,7 @@ model Product {
   discountLimit        Decimal?                @map("discount_limit") @db.Decimal(7, 4)
   storageVerifiedAt    DateTime?               @map("storage_verified_at") @db.Timestamptz(6)
   storageVerifiedById  String?                 @map("storage_verified_by_id") @db.Uuid
+  minimumStock         Decimal?               @map("minimum_stock") @db.Decimal(20, 6)
   state                MasterRecordState       @default(DRAFT)
   version              Int                     @default(1)
   createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1052,6 +1054,8 @@ model Warehouse {
   goodsReceipts  GoodsReceipt[]
   salesOrders    SalesOrder[]
   salesOrderLines SalesOrderLine[]
+  deliveryNotes  DeliveryNote[]
+  stockCounts    StockCount[]
 
   @@unique([companyId, id])
   @@unique([companyId, code])
@@ -1162,6 +1166,7 @@ enum SalesInvoiceState {
 }
 
 enum LedgerEntryKind {
+  RECEIPT_DEDUCTION
   INVENTORY_QUARANTINE
   BANK_ADJUSTMENT
   WAPU_TAX
@@ -1212,6 +1217,7 @@ enum InventoryMovementKind {
   RETURN_FROM_TRANSIT
   RETURN_RECEIPT
   RECEIPT
+  ADJUSTMENT
 }
 
 model StockLot {
@@ -1235,6 +1241,7 @@ model StockLot {
   warehouse        Warehouse               @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
   locator          Locator                 @relation(fields: [locatorId], references: [id], onDelete: Restrict)
   movements        InventoryMovement[]
+  stockCountLines   StockCountLine[]
   allocations      FulfillmentAllocation[]
   Uom              Uom?                    @relation(fields: [uomId], references: [id])
   uomId            String?                 @db.Uuid
@@ -1263,6 +1270,51 @@ model InventoryMovement {
   @@unique([companyId, idempotencyKey])
   @@index([companyId, stockLotId, createdAt])
   @@map("inventory_movements")
+}
+
+enum StockCountState {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  POSTED
+  REJECTED
+}
+
+model StockCount {
+  id             String          @id @default(uuid()) @db.Uuid
+  companyId      String          @map("company_id") @db.Uuid
+  warehouseId    String          @map("warehouse_id") @db.Uuid
+  state          StockCountState @default(DRAFT)
+  reason         String
+  version        Int             @default(1)
+  submittedAt   DateTime?       @map("submitted_at") @db.Timestamptz(6)
+  submittedById String?         @map("submitted_by_id") @db.Uuid
+  approvedAt    DateTime?       @map("approved_at") @db.Timestamptz(6)
+  approvedById  String?         @map("approved_by_id") @db.Uuid
+  postedAt      DateTime?       @map("posted_at") @db.Timestamptz(6)
+  postedById    String?         @map("posted_by_id") @db.Uuid
+  idempotencyKey String         @map("idempotency_key")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  company       Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  warehouse     Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  lines         StockCountLine[]
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, state, createdAt])
+  @@map("stock_counts")
+}
+
+model StockCountLine {
+  id              String    @id @default(uuid()) @db.Uuid
+  stockCountId    String    @map("stock_count_id") @db.Uuid
+  stockLotId      String    @map("stock_lot_id") @db.Uuid
+  expectedQuantity Decimal  @map("expected_quantity") @db.Decimal(24, 10)
+  countedQuantity  Decimal  @map("counted_quantity") @db.Decimal(24, 10)
+  unitCost         Decimal  @map("unit_cost") @db.Decimal(24, 8)
+  stockCount      StockCount @relation(fields: [stockCountId], references: [id], onDelete: Restrict)
+  stockLot        StockLot   @relation(fields: [stockLotId], references: [id], onDelete: Restrict)
+  @@unique([stockCountId, stockLotId])
+  @@map("stock_count_lines")
 }
 
 model SalesOrder {
@@ -1405,6 +1457,9 @@ model DeliveryReceipt {
 }
 
 model SalesInvoice {
+  invoiceDate        DateTime? @map("invoice_date") @db.Date
+  version            Int       @default(1)
+  notes              String?
   fulfillmentBatchId String? @map("fulfillment_batch_id") @db.Uuid
   deliveryNoteId     String? @map("delivery_note_id") @db.Uuid
   issuedSnapshot Json? @map("issued_snapshot")
@@ -1543,6 +1598,8 @@ model CustomerRefund {
 }
 
 model CustomerReceipt {
+  number String?
+  invoicePayment Boolean @default(false) @map("invoice_payment")
   salesOrderId String? @map("sales_order_id") @db.Uuid
   salesOrder SalesOrder? @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
   salesOrderAdvance SalesOrderAdvance?
@@ -1568,6 +1625,7 @@ model CustomerReceipt {
   fulfillmentBatch   FulfillmentBatch?           @relation(fields: [fulfillmentBatchId], references: [id], onDelete: Restrict)
   allocations        CustomerReceiptAllocation[]
 
+  @@unique([companyId, number])
   @@unique([companyId, idempotencyKey])
   @@index([companyId, customerId, state, receivedAt])
   @@map("customer_receipts")
@@ -2374,9 +2432,18 @@ model DeliveryNote {
   salesOrderId   String           @map("sales_order_id") @db.Uuid
   number         String
   state          DeliveryNoteState @default(DRAFT)
+  documentDate   DateTime?        @map("document_date") @db.Date
+  shipDate       DateTime?        @map("ship_date") @db.Date
+  warehouseId    String?          @map("warehouse_id") @db.Uuid
+  carrierName    String?          @map("carrier_name")
+  vehicleNumber  String?          @map("vehicle_number")
+  driverName     String?          @map("driver_name")
+  freightAmount  Decimal?         @map("freight_amount") @db.Decimal(24, 8)
   notes          String?
   handoverAt     DateTime?         @map("handover_at") @db.Timestamptz(6)
   receiverName   String?           @map("receiver_name")
+  /// Jabatan/unit penerima saat serah terima (opsional).
+  receiverTitle  String?           @map("receiver_title")
   evidenceId     String?           @map("evidence_id") @db.Uuid
   issuedAt       DateTime?         @map("issued_at") @db.Timestamptz(6)
   issuedById     String?           @map("issued_by_id") @db.Uuid
@@ -2388,12 +2455,15 @@ model DeliveryNote {
   createdById    String            @map("created_by_id") @db.Uuid
   company        Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
   salesOrder     SalesOrder        @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  warehouse      Warehouse?        @relation(fields: [companyId, warehouseId], references: [companyId, id], onDelete: Restrict)
   lines          DeliveryNoteLine[]
   invoices       SalesInvoice[]
+  receipt        DeliveryNoteReceipt?
 
   @@unique([companyId, number])
   @@unique([companyId, issueIdempotencyKey])
   @@index([companyId, salesOrderId, state])
+  @@index([companyId, warehouseId, state])
   @@map("delivery_notes")
 }
 
@@ -2419,6 +2489,24 @@ model DeliveryNoteLine {
   @@map("delivery_note_lines")
 }
 
+/// Append-only customer receipt. Financial effects belong to the immutable issued SJ.
+model DeliveryNoteReceipt {
+  id             String @id @default(uuid()) @db.Uuid
+  companyId      String @map("company_id") @db.Uuid
+  deliveryNoteId String @unique @map("delivery_note_id") @db.Uuid
+  handoverAt     DateTime @map("handover_at") @db.Timestamptz(6)
+  receiverName   String @map("receiver_name")
+  receiverTitle  String? @map("receiver_title")
+  evidenceId     String @map("evidence_id") @db.Uuid
+  snapshot       Json
+  recordedById   String @map("recorded_by_id") @db.Uuid
+  recordedAt     DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  deliveryNote   DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, deliveryNoteId])
+  @@map("delivery_note_receipts")
+}
+
 
 model OutboxEvent {
   id          String @id @default(uuid()) @db.Uuid
@@ -2432,4 +2520,29 @@ model OutboxEvent {
   @@unique([companyId, eventType, aggregateId])
   @@index([publishedAt, createdAt])
   @@map("outbox_events")
+}
+
+model InvoicePaymentDeduction {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @map("company_id") @db.Uuid
+  invoiceId String @map("invoice_id") @db.Uuid
+  receiptId String @map("receipt_id") @db.Uuid
+  sourceType String @map("source_type")
+  sourceId String @map("source_id") @db.Uuid
+  mode String
+  value Decimal @db.Decimal(24,8)
+  baseAmount Decimal @map("base_amount") @db.Decimal(24,8)
+  amount Decimal @db.Decimal(24,8)
+  accountId String @map("account_id") @db.Uuid
+  snapshot Json
+  state String
+  evidenceId String? @map("evidence_id") @db.Uuid
+  proofNumber String? @map("proof_number")
+  proofDate DateTime? @map("proof_date") @db.Date
+  settledAt DateTime? @map("settled_at") @db.Timestamptz(6)
+  createdById String @map("created_by_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@index([companyId,invoiceId,state])
+  @@index([receiptId])
+  @@map("invoice_payment_deductions")
 }

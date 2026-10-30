@@ -1,5 +1,12 @@
 # Domain Warehouse & Logistik
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Warehouse mengeluarkan jumlah draft saat issue. Tombol penerimaan pelanggan berada di detail SJ; ini bukan penerimaan pembelian/GR. Selisih diterima disimpan sebagai catatan, tanpa otomatis mengembalikan stok. Guard dokumen terbit tetap immutable; receipt terpisah append-only.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 ## Gudang pada SO — backend 25 Oktober 2026
 
 OTC-04: SO baru menyimpan gudang kepala dan opsional per baris. Alokasi mengunci lot dan memeriksa ulang kelayakan, hanya pada gudang baris atau kepala; tidak otomatis mengambil gudang lain. SO lama tanpa gudang mempertahankan perilaku sebelumnya sampai direvisi. Pembacaan stok pada form hanya informasi: saldo dikurangi reservasi pada STORAGE/DISPATCH dengan mutu AVAILABLE dan expiry sah. Stok locator lain ditampilkan terpisah, termasuk karantina, tanpa membuat reservasi atau memindahkan barang. Pengajuan pindah locator belum bagian backend daftar/form ini.
@@ -96,5 +103,5 @@ Surat Jalan terbit adalah event handover dan pemindahan stok pada Release 1. Pen
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 

@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest";
 import { effectiveTaxPercent, taxLabel } from "./sales-order-types";
 
 describe("PPN shown on SO screens", () => {

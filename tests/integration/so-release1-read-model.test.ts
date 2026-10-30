@@ -51,7 +51,7 @@ describe("SO read model from Release 1 Surat Jalan and invoices", () => {
         status: "NOT_SHIPPED",
         draftDeliveryNotes: 1,
       });
-      await issueDeliveryNote(f.c, f.a, note.id, f.handover("4"), randomUUID());
+      await issueDeliveryNote(f.c, f.a, note.id, {}, randomUUID());
 
       const shipped = await list();
       expect(shipped.rows[0]).toMatchObject({
@@ -100,7 +100,7 @@ describe("SO read model from Release 1 Surat Jalan and invoices", () => {
       expect((await list()).rows[0]!.billing).toMatchObject({ status: "PAID" });
 
       const rest = await createDeliveryNote(f.c, f.a, f.input("6"), randomUUID());
-      await issueDeliveryNote(f.c, f.a, rest.id, f.handover("6"), randomUUID());
+      await issueDeliveryNote(f.c, f.a, rest.id, {}, randomUUID());
       const done = await list();
       expect(done.rows[0]).toMatchObject({
         displayStatus: "COMPLETED",
@@ -152,7 +152,7 @@ describe("SO actions after Release 1 handover", () => {
       expect(await codes()).toContain("revise");
       const note = await createDeliveryNote(f.c, f.a, f.input("4"), randomUUID());
       expect(await codes()).toContain("revise");
-      await issueDeliveryNote(f.c, f.a, note.id, f.handover("4"), randomUUID());
+      await issueDeliveryNote(f.c, f.a, note.id, {}, randomUUID());
       expect(await codes()).not.toContain("revise");
     }));
 });

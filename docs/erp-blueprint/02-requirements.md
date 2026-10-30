@@ -1,5 +1,12 @@
 # Requirements — aturan bisnis dan penerimaan
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+OTC-05/06 dan WH-08: issue tidak meminta waktu/penerima/bukti/qty penerimaan. Penerimaan terpisah satu kali memerlukan waktu, penerima, bukti SURAT_JALAN dan jumlah per baris (0 sampai jumlah terbit; selisih wajib alasan). IAM-01/04: read outbound_shipping.read, command fulfillment.dispatch, scope perusahaan; bukan grant SO/Invoice/POD lama.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 > **Kontrak Release 1 O2C (29 Oktober 2026):** Untuk scope Release 1, alur operasional adalah SO → Surat Jalan → Invoice. Surat Jalan terbit dengan bukti serah terima menjadi event stok, pendapatan dan HPP. Invoice hanya dibuat dari Surat Jalan terbit. POD, Packing List, picking, checking dan dispatch terpisah adalah scope lanjutan dan tidak boleh dipakai sebagai prasyarat Release 1. Termin/TOP dipilih pada SO dan disnapshot. Bagian lama di bawah yang menyebut alur POD/Packing List berlaku untuk scope lanjutan dan tidak mengubah kontrak Release 1.
 
 
@@ -337,5 +344,13 @@ OTC-R1: satu SO dapat memiliki beberapa Surat Jalan kumulatif; jumlah terbit per
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+OTC-05/06, FIN-01/02/03/11/18, IAM-01/04 dan CFG-08: Invoice mendukung draft/version/Submit dari SJ terbit, nomor editable unik, jatuh tempo issuedAt SJ + TOP; penerimaan kas dan alokasi atomik, potongan pending bukti tetap piutang. Persen potongan mengikuti subtotal net sebelum PPN sesuai contoh mockup. sales_invoice.view_price membatasi seluruh respons nilai Invoice, termasuk jalur lama dan dokumen terkait. Snapshot historis tidak ditulis ulang.
+# Persediaan vertical slice — 30 Oktober 2026
+
+WH-01/02/03/05 dan FIN-04 diterapkan pada read model Persediaan dan Kartu Stok: saldo berasal dari ledger, FEFO/FIFO menentukan urutan lot, lot hold/expired/recall tidak tersedia, dan adjustment opname memakai movement baru dengan version/lock/idempotency. `inventory.cost.read` membatasi HPP.

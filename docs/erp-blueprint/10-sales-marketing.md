@@ -1,5 +1,12 @@
 # Domain Sales & Marketing
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Progres SO dan jumlah dapat ditagih dihitung dari jumlah SJ terbit; penerimaan tidak membuka kembali sisa SO atau menghitung pengiriman dua kali.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 > **Batas Release 1 O2C:** Surat Jalan terbit adalah bukti serah terima dan event stok, pendapatan serta HPP. Invoice hanya berasal dari Surat Jalan terbit. Termin/TOP dipilih di SO. Aturan yang masih menyebut POD, Packing List atau invoice menunggu POD berlaku setelah Release 1.
 
 
@@ -503,5 +510,5 @@ Sales Order menyimpan seluruh permintaan dan snapshot Termin/TOP yang dipilih. P
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 

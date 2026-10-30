@@ -16,6 +16,14 @@ describe("outbound queue status", () => {
     expect(resourcePermissions.outbound.suratJalanIssue).toEqual("outbound_shipping");
     expect(() => createSuratJalanSchema.parse({
       sales_order_id: "00000000-0000-4000-8000-000000000001",
+      number: "SJ/2026/10/0001",
+      document_date: "2026-10-29",
+      ship_date: "2026-10-30",
+      warehouse_id: "00000000-0000-4000-8000-000000000005",
+      carrier_name: "Ekspedisi Uji",
+      vehicle_number: "DD 1234 AA",
+      driver_name: "Pengemudi Uji",
+      freight_amount: "125000.50",
       lines: [{ sales_order_line_id: "00000000-0000-4000-8000-000000000002", quantity: "1" }],
     })).not.toThrow();
     expect(() => issueSuratJalanSchema.parse({

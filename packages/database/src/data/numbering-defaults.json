@@ -1,5 +1,13 @@
 [
   {
+    "document_kind": "customer_receipt",
+    "label": "Penerimaan Pelanggan",
+    "prefix": "RC",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
     "document_kind": "sales_order",
     "label": "Sales Order",
     "prefix": "SO",

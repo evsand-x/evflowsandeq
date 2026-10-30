@@ -214,7 +214,7 @@ export async function orderRelated(
         number: invoice.number,
         date: (invoice.postedAt ?? invoice.createdAt).toISOString(),
         status: invoice.state,
-        amount: invoice.total?.toString() ?? null,
+        amount: can("sales_invoice.view_price") ? invoice.total?.toString() ?? null : null,
         href: `/operations/invoices/${invoice.id}`,
       });
       for (const credit of invoice.creditNotes)
@@ -224,7 +224,7 @@ export async function orderRelated(
           number: credit.number,
           date: (credit.postedAt ?? credit.createdAt).toISOString(),
           status: credit.state,
-          amount: credit.amount.toString(),
+          amount: can("sales_invoice.view_price") ? credit.amount.toString() : null,
           href: `/operations/invoices/${invoice.id}`,
         });
     }

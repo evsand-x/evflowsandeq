@@ -258,6 +258,7 @@ export const createProductSchema = z
     storage_notes: z.string().trim().max(1000).nullable().optional(),
     storage_profile: z.record(z.unknown()).nullable().optional(),
     shelf_life_days: z.number().int().nonnegative().nullable().optional(),
+    minimum_stock: optionalDecimalStringSchema,
     permit_type: z.enum(["AKL", "AKD"]).optional(),
     permit_number: z.string().trim().max(100).optional(),
     permit_holder: z.string().trim().max(200).optional(),
@@ -714,6 +715,9 @@ export * from "./crm-workspace";
 export * from "./otc-ptp";
 export * from "./bank-statement-csv";
 export * from "./proforma";
+export * from "./invoice";
+export * from "./invoice-payment";
+export * from "./inventory";
 
 /** Display number format from Setting (OPS-FLX-06); Rupiah only for now (CFG-09). */
 export type NumberFormat = {

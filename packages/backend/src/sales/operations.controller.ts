@@ -609,6 +609,7 @@ export class OperationsController {
     @Req() req: AuthenticatedRequest,
   ) {
     const type = z.enum(["orders", "warehouse", "pick-slips", "invoices", "proformas"]).parse(kind);
+    if (type === "invoices") allowed(req, "sales_invoice.view_price");
     if (type === "proformas") allowed(req, "proforma.read");
     else
       allowed(
@@ -715,7 +716,7 @@ export class OperationsController {
     return { data: await this.service.batch(req.auth.company_id, uuid(id)) };
   }
   @Get("invoices/:id")
-  @RequirePermissions("sales_invoice.read")
+  @RequirePermissions("sales_invoice.read", "sales_invoice.view_price")
   async invoice(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return { data: await this.service.invoice(req.auth.company_id, uuid(id), hasPermission(req, "customer_receipt.read")) };
   }

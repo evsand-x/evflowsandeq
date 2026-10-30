@@ -1,5 +1,12 @@
 # Domain Setting
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Tidak ada grant/preset peran baru. Penerimaan pada detail SJ berada pada tindakan fulfillment.dispatch milik submenu Surat Jalan, baca memakai outbound_shipping.read. Grant delivery_receipt.* / fulfillment.pod lama tetap milik submenu lain, tidak menjadi fallback. Penomoran/termin/policy stok dan posting tetap di Setting.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
 Izin sales_order_advance.create/verify dimigrasikan hanya dari grant customer_receipt.post; sales_order.print hanya dari sales_order.read, scope dipertahankan dan pemberian diaudit. Peran lain tidak diperluas. Dokumen terkait Pick Slip memakai outbound_picking.read, Packing List outbound_checking.read, Surat Jalan outbound_shipping.read, Surat Jalan outbound_shipping.read, Proforma proforma.read, invoice/nota kredit sales_invoice.read. Ini menyelaraskan rencana Bagian 2 dengan invariant izin submenu independen.
@@ -231,5 +238,10 @@ Termin/TOP aktif dipilih pada SO dan disnapshot. Perubahan Setting hanya berlaku
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Penomoran customer_receipt tersedia sebagai default editable RC dengan reset bulanan. Nomor Invoice dapat diganti selama draft dan harus unik per perusahaan. Capability sales_invoice.view_price (Lihat harga) tidak menggantikan izin Invoice maupun pembayaran; grant awal hanya mempertahankan akses nilai lama secara teraudit. Pajak potong dan Jenis Potongan tetap dikelola di Setting; form pembayaran menyediakan lookup terbatas tanpa memberikan izin pengelolaan Setting.

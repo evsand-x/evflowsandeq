@@ -1,5 +1,12 @@
 # Database — model relasional
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Migration 20261030160000_delivery_note_receipt mengganti CHECK handover wajib saat ISSUED dengan CHECK metadata issue; guard immutable SJ/line tetap. delivery_note_receipts unik per delivery_note_id, append-only, company-scoped dan FK ke SJ/bukti/aktor, menyimpan waktu, identitas, snapshot jumlah dan alasan. Trigger menolak draft, bukti lintas perusahaan/purpose salah, penerimaan historis ganda, perubahan/penghapusan receipt. delivered_quantity pada line tetap jumlah terbit untuk kompatibilitas; jumlah diterima ada di snapshot receipt. Snapshot field form issue disimpan pada snapshot SJ, bukan handover_snapshot. Tidak memigrasi/mengubah saldo atau bukti lama.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 > **Prioritas kontrak Release 1 O2C:** Model dan event baru untuk Release 1 memakai Surat Jalan sebagai bukti serah terima, stock movement, pendapatan dan HPP; Invoice mereferensikan Surat Jalan terbit. Model delivery receipt, Packing List dan fulfillment lama tetap untuk scope lanjutan dan tidak menjadi sumber event Release 1.
 
 
@@ -476,8 +483,20 @@ IAM-01/04: migration `20261016210000_independent_submenu_permissions` memetakan 
 
 Kontrak O2C Release 1: Surat Jalan draft tidak memutasi saldo; penerbitan immutable dan menyimpan bukti serah terima serta snapshot konfigurasi. Kunci kumulatif per SO-line mencegah kuantitas melebihi pesanan.
 
+Migration `20261030120000_delivery_note_receiver_title` menambah `delivery_notes.receiver_title` (opsional) untuk jabatan/unit penerima pada serah terima.
+
+Migration `20261029123000_delivery_note_form` menambah kolom terstruktur nullable pada `delivery_notes`: `document_date`, `ship_date`, `warehouse_id`, `carrier_name`, `vehicle_number`, `driver_name`, dan `freight_amount` (`numeric(24,8)` dengan CHECK non-negatif). `warehouse_id` memiliki foreign key company-scoped ke `warehouses` dan index status. Nilai form yang sudah terbit juga disimpan di `handover_snapshot`; kolom dan snapshot tunduk pada guard immutable yang sudah ada.
+
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Migrasi 20261030140000_invoice_form menambah invoice_date nullable, version positif, notes dan indeks tanggal pada sales_invoices. 20261030141000_invoice_payment menambah nomor receipt unik per perusahaan, penanda invoice_payment, indeks parsial referensi bank dan invoice_payment_deductions (sumber/master, persen/nominal, basis, amount numeric, akun/snapshot, state PENDING_PROOF/SETTLED, bukti/nomor/tanggal). 20261030142000_invoice_payment_ledger_kind menambah RECEIPT_DEDUCTION. 20261030143000_invoice_payment_numbering menyediakan rule RC editable yang belum ada dan audit. 20261030144000_invoice_price_permission menambah capability nilai dan migrasi grant teraudit dengan scope identik. Migrasi aditif, tanpa perubahan saldo/tanggal historis; pemulihan melalui forward fix, jangan menghapus tabel/enum berisi transaksi.
+# Persediaan vertical slice — 30 Oktober 2026
+
+Produk memiliki `minimum_stock` numeric nullable untuk indikator stok rendah. `stock_counts` dan `stock_count_lines` menyimpan scope gudang/locator, snapshot saldo harapan, hitungan fisik, approval, versi, idempotency dan metadata posting. Selisih hanya diposting sebagai `inventory_movements.kind=ADJUSTMENT` dengan sumber opname.

@@ -1,4 +1,6 @@
 import { DeliveryNoteController } from "./sales/delivery-note.controller";
+import { InvoiceController } from "./finance/invoice.controller";
+import { InvoicePaymentController } from "./finance/invoice-payment.controller";
 import { AccountsController } from "./finance/accounts.controller";
 import { Module } from "@nestjs/common";
 import { AuditService } from "./common/audit.service";
@@ -13,6 +15,8 @@ import { OperationalTaxController } from "./finance/operational-tax.controller";
 @Module({
   imports: [IdentityModule],
   controllers: [
+    InvoiceController,
+    InvoicePaymentController,
     DeliveryNoteController,
     AccountsController,
     OtcPtpController,

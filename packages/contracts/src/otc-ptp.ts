@@ -42,7 +42,10 @@ export const salesOrderNumberSchema = z
   .trim()
   .min(1)
   .max(60)
-  .regex(/^[A-Za-z0-9][A-Za-z0-9./_-]*$/, "Nomor SO hanya huruf, angka, titik, garis miring, garis bawah dan tanda hubung.");
+  .regex(
+    /^[A-Za-z0-9][A-Za-z0-9./_-]*$/,
+    "Nomor SO hanya huruf, angka, titik, garis miring, garis bawah dan tanda hubung.",
+  );
 /** Line discount in percent (OTC-18): 0-100 with at most four decimals, e.g. "5" or "2.5". */
 export const lineDiscountSchema = z
   .string()
@@ -127,6 +130,14 @@ export const postInvoiceSchema = z.object({ delivery_receipt_id: z.string().uuid
 export const createSuratJalanSchema = z
   .object({
     sales_order_id: z.string().uuid(),
+    number: salesOrderNumberSchema.optional(),
+    document_date: z.string().date().optional(),
+    ship_date: z.string().date().optional(),
+    warehouse_id: z.string().uuid().optional(),
+    carrier_name: z.string().trim().max(200).optional(),
+    vehicle_number: z.string().trim().max(100).optional(),
+    driver_name: z.string().trim().max(200).optional(),
+    freight_amount: nonNegativeDecimal.optional(),
     lines: z
       .array(
         z
@@ -146,24 +157,30 @@ export const createSuratJalanSchema = z
   .superRefine((value, context) => {
     const ids = value.lines.map((line) => line.sales_order_line_id);
     if (new Set(ids).size !== ids.length) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["lines"], message: "Baris Surat Jalan tidak boleh duplikat." });
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lines"],
+        message: "Baris Surat Jalan tidak boleh duplikat.",
+      });
     }
   });
 
-/** Release 1 issue event: Surat Jalan is the handover, stock, revenue and HPP event. */
-export const issueSuratJalanSchema = z
+/** Issue posts the saved draft quantities; customer receipt is a separate command. */
+export const issueSuratJalanSchema = z.object({}).strict();
+
+export const receiveDeliveryNoteSchema = z
   .object({
     handover_at: z.string().datetime(),
     receiver_name: z.string().trim().min(1).max(200),
-    // Release 1 handover evidence is required to issue Surat Jalan.
+    receiver_title: z.string().trim().max(200).optional(),
+    // Receipt evidence never gates issue or invoice creation.
     evidence_id: z.string().uuid(),
     lines: z
       .array(
         z
           .object({
             sales_order_line_id: z.string().uuid(),
-            delivered_quantity: positiveDecimal,
-            rejected_quantity: nonNegativeDecimal.optional(),
+            delivered_quantity: nonNegativeDecimal,
             discrepancy_reason: z.string().trim().max(1000).optional(),
           })
           .strict(),
@@ -175,7 +192,11 @@ export const issueSuratJalanSchema = z
   .superRefine((value, context) => {
     const ids = value.lines.map((line) => line.sales_order_line_id);
     if (new Set(ids).size !== ids.length) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["lines"], message: "Baris Surat Jalan tidak boleh duplikat." });
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lines"],
+        message: "Baris Surat Jalan tidak boleh duplikat.",
+      });
     }
   });
 
@@ -366,12 +387,21 @@ export const pickListCheckSchema = z
   })
   .strict();
 
-export const recordSalesOrderAdvanceSchema = z.object({
- amount: z.string().regex(/^\d{1,16}(\.\d{1,8})?$/).refine(v => !/^0+(\.0*)?$/.test(v)),
- received_at: z.string().datetime(),
- bank_account_id: z.string().uuid(),
- bank_reference: z.string().trim().min(1).max(200).optional(),
- evidence_id: z.string().uuid(),
-}).strict();
-export const verifySalesOrderAdvanceSchema = z.object({ version: z.number().int().positive() }).strict();
-export const rejectSalesOrderAdvanceSchema = verifySalesOrderAdvanceSchema.extend({ reason: z.string().trim().min(1).max(500) });
+export const recordSalesOrderAdvanceSchema = z
+  .object({
+    amount: z
+      .string()
+      .regex(/^\d{1,16}(\.\d{1,8})?$/)
+      .refine((v) => !/^0+(\.0*)?$/.test(v)),
+    received_at: z.string().datetime(),
+    bank_account_id: z.string().uuid(),
+    bank_reference: z.string().trim().min(1).max(200).optional(),
+    evidence_id: z.string().uuid(),
+  })
+  .strict();
+export const verifySalesOrderAdvanceSchema = z
+  .object({ version: z.number().int().positive() })
+  .strict();
+export const rejectSalesOrderAdvanceSchema = verifySalesOrderAdvanceSchema.extend({
+  reason: z.string().trim().min(1).max(500),
+});

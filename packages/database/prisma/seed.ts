@@ -72,6 +72,14 @@ async function main() {
   });
 
   const permissions = [
+    ["inventory.read", "inventory", "read"],
+    ["inventory.cost.read", "inventory", "cost_read"],
+    ["inventory.stock_count.create", "inventory.stock_count", "create"],
+    ["inventory.stock_count.edit", "inventory.stock_count", "edit"],
+    ["inventory.stock_count.submit", "inventory.stock_count", "submit"],
+    ["inventory.stock_count.approve", "inventory.stock_count", "approve"],
+    ["inventory.stock_count.post", "inventory.stock_count", "post"],
+    ["sales_invoice.view_price", "sales_invoice", "view_price"],
     ["account.read", "account", "read"],
     ["account.create", "account", "create"],
     ["account.update", "account", "update"],

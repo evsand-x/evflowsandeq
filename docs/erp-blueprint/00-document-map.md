@@ -1,5 +1,12 @@
 # Peta Dokumen dan Sumber Kebenaran
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Keputusan terbaru pengguna pada README dan desain [SJ dan penerimaan terpisah](../superpowers/specs/2026-10-30-sj-penerimaan-terpisah-design.md) menggantikan syarat handover pada issue Release 1.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 Keputusan konsolidasi 24 Oktober 2026 ([desain](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md)): satu menu satu rumah, pengaturan umum di Setting, aturan per pasangan dihentikan, persetujuan di tempat dokumen.
 
 
@@ -65,5 +72,10 @@ Sumber lintas dokumen O2C Release 1 adalah desain 29 Oktober 2026: SO menjadi su
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Sumber tambahan Invoice/pembayaran adalah keputusan 30 Oktober 2026 pada README dan desain backend Invoice. Basis jatuh tempo baru issuedAt SJ + snapshot TOP; nomor draft dapat diedit. Aturan historis yang berbeda tidak berlaku untuk dokumen baru.

@@ -219,6 +219,8 @@ export class MasterService {
           storageNotes: nullable(input.storage_notes),
           storageProfile: jsonOrNull(input.storage_profile),
           shelfLifeDays: input.shelf_life_days == null ? null : Number(input.shelf_life_days),
+          minimumStock:
+            input.minimum_stock == null ? null : new Prisma.Decimal(String(input.minimum_stock)),
           ...(input.discount_limit !== undefined
             ? { discountLimit: parseDiscountLimit(input.discount_limit as string | null) }
             : {}),
@@ -383,6 +385,8 @@ export class MasterService {
           storageNotes: nullable(input.storage_notes),
           storageProfile: jsonOrNull(input.storage_profile),
           shelfLifeDays: input.shelf_life_days == null ? null : Number(input.shelf_life_days),
+          minimumStock:
+            input.minimum_stock == null ? null : new Prisma.Decimal(String(input.minimum_stock)),
           ...(input.discount_limit !== undefined
             ? { discountLimit: parseDiscountLimit(input.discount_limit as string | null) }
             : {}),

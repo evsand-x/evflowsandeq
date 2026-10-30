@@ -216,6 +216,62 @@ async function setup(tx: PrismaTypes.TransactionClient) {
   return { tx, c, a, w, p, uom, altUom, lot, order, input, handover };
 }
 describe("Release 1 Surat Jalan", () => {
+  it("persists the operational fields shown by the Surat Jalan form", async () =>
+    fixture(async (f) => {
+      const note = await createDeliveryNote(
+        f.c,
+        f.a,
+        {
+          ...f.input("4"),
+          number: "SJ/2026/10/FORM-1",
+          document_date: "2026-10-29",
+          ship_date: "2026-10-30",
+          warehouse_id: f.w.id,
+          carrier_name: "Ekspedisi Uji",
+          vehicle_number: "DD 1234 AA",
+          driver_name: "Driver Uji",
+          freight_amount: "125000.50",
+        },
+        randomUUID(),
+      );
+      expect(note).toMatchObject({
+        number: "SJ/2026/10/FORM-1",
+        warehouseId: f.w.id,
+        carrierName: "Ekspedisi Uji",
+        vehicleNumber: "DD 1234 AA",
+        driverName: "Driver Uji",
+        freightAmount: new Prisma.Decimal("125000.50"),
+      });
+      expect(note.documentDate?.toISOString().slice(0, 10)).toBe("2026-10-29");
+      expect(note.shipDate?.toISOString().slice(0, 10)).toBe("2026-10-30");
+      const updated = await updateDeliveryNoteDraft(
+        f.c,
+        f.a,
+        note.id,
+        { ...f.input("3"), number: "SJ/2026/10/FORM-1", warehouse_id: f.w.id, ship_date: "2026-10-31" },
+        randomUUID(),
+      );
+      expect(updated.shipDate?.toISOString().slice(0, 10)).toBe("2026-10-31");
+    }));
+
+  it("snapshots form metadata when the document is issued", async () =>
+    fixture(async (f) => {
+      const note = await createDeliveryNote(
+        f.c,
+        f.a,
+        { ...f.input("2"), document_date: "2026-10-29", ship_date: "2026-10-30", warehouse_id: f.w.id, driver_name: "Driver Snapshot" },
+        randomUUID(),
+      );
+      await issueDeliveryNote(f.c, f.a, note.id, {}, randomUUID());
+      const issued = await getDeliveryNote(f.c, note.id, f.tx);
+      expect(issued.snapshot).toMatchObject({
+        document_date: "2026-10-29",
+        ship_date: "2026-10-30",
+        warehouse_id: f.w.id,
+        driver_name: "Driver Snapshot",
+      });
+    }));
+
   it("creates one posted invoice from an issued Surat Jalan and replays idempotently", async () =>
     fixture(async (f) => {
       const service = new OtcPtpService(new AuditService());
@@ -223,7 +279,7 @@ describe("Release 1 Surat Jalan", () => {
       const originalName = f.p.name;
       await f.tx.salesOrderLine.update({ where: { id: f.order.lines[0]!.id }, data: { uomId: f.altUom.id } });
       const note = await createDeliveryNote(f.c, f.a, f.input("4"), randomUUID());
-      await issueDeliveryNote(f.c, f.a, note.id, f.handover("4"), randomUUID());
+      await issueDeliveryNote(f.c, f.a, note.id, {}, randomUUID());
       await f.tx.company.update({ where: { id: f.c }, data: { name: "RENAMED AFTER SJ" } });
       await f.tx.product.update({ where: { id: f.p.id }, data: { code: "MUTATED", name: "Mutated product" } });
 
@@ -269,7 +325,7 @@ describe("Release 1 Surat Jalan", () => {
         data: { mappings: {} },
       });
       await expect(
-        issueDeliveryNote(f.c, f.a, note.id, f.handover(), randomUUID()),
+        issueDeliveryNote(f.c, f.a, note.id, {}, randomUUID()),
       ).rejects.toThrow("POSTING_MAPPING_REQUIRED");
       expect((await getDeliveryNote(f.c, note.id, f.tx)).state).toBe("DRAFT");
       expect(
@@ -289,9 +345,9 @@ describe("Release 1 Surat Jalan", () => {
     fixture(async (f) => {
       const first = await createDeliveryNote(f.c, f.a, f.input("7"), randomUUID());
       const second = await createDeliveryNote(f.c, f.a, f.input("7"), randomUUID());
-      await issueDeliveryNote(f.c, f.a, first.id, f.handover("7"), randomUUID());
+      await issueDeliveryNote(f.c, f.a, first.id, {}, randomUUID());
       await expect(
-        issueDeliveryNote(f.c, f.a, second.id, f.handover("7"), randomUUID()),
+        issueDeliveryNote(f.c, f.a, second.id, {}, randomUUID()),
       ).rejects.toThrow("DELIVERY_NOTE_QTY_EXCEEDED");
       expect(await f.tx.financeJournal.count({ where: { companyId: f.c } })).toBe(1);
       expect((await getDeliveryNote(f.c, second.id, f.tx)).state).toBe("DRAFT");
@@ -303,7 +359,7 @@ describe("Release 1 Surat Jalan", () => {
       expect(await f.tx.inventoryMovement.count({ where: { companyId: f.c } })).toBe(0);
       await updateDeliveryNoteDraft(f.c, f.a, note.id, f.input("5"), randomUUID());
       const key = randomUUID();
-      const payload = f.handover("5");
+      const payload = {};
       const issued = await issueDeliveryNote(f.c, f.a, note.id, payload, key);
       expect(issued.state).toBe("ISSUED");
       expect(
@@ -332,22 +388,14 @@ describe("Release 1 Surat Jalan", () => {
       );
       expect(() => createDeliveryNote(f.c, f.a, f.input("0"), randomUUID())).toThrow();
       const note = await createDeliveryNote(f.c, f.a, f.input("7"), randomUUID());
-      await expect(
-        issueDeliveryNote(
-          f.c,
-          f.a,
-          note.id,
-          { ...f.handover("7"), evidence_id: randomUUID() },
-          randomUUID(),
-        ),
-      ).rejects.toThrow("SURAT_JALAN_EVIDENCE_REQUIRED");
+      expect(() => issueDeliveryNote(f.c, f.a, note.id, f.handover("7"), randomUUID())).toThrow();
       await f.tx.stockLot.update({ where: { id: f.lot.id }, data: { qualityState: "QUARANTINE" } });
       await expect(
-        issueDeliveryNote(f.c, f.a, note.id, f.handover("7"), randomUUID()),
+        issueDeliveryNote(f.c, f.a, note.id, {}, randomUUID()),
       ).rejects.toThrow("STOCK_INSUFFICIENT");
       expect(await f.tx.financeJournal.count({ where: { companyId: f.c } })).toBe(0);
       await f.tx.stockLot.update({ where: { id: f.lot.id }, data: { qualityState: "AVAILABLE" } });
-      await issueDeliveryNote(f.c, f.a, note.id, f.handover("7"), randomUUID());
+      await issueDeliveryNote(f.c, f.a, note.id, {}, randomUUID());
       await expect(createDeliveryNote(f.c, f.a, f.input("4"), randomUUID())).rejects.toThrow(
         "DELIVERY_NOTE_QTY_EXCEEDED",
       );
@@ -357,7 +405,7 @@ describe("Release 1 Surat Jalan", () => {
       const note = await createDeliveryNote(f.c, f.a, f.input(), randomUUID());
       await f.tx.financePeriod.updateMany({ where: { companyId: f.c }, data: { state: "CLOSED" } });
       await expect(
-        issueDeliveryNote(f.c, f.a, note.id, f.handover(), randomUUID()),
+        issueDeliveryNote(f.c, f.a, note.id, {}, randomUUID()),
       ).rejects.toThrow();
       expect(
         (

@@ -3,6 +3,7 @@ import { prisma, Prisma } from "@evflow/database";
 import {
   createDeliveryNoteSchema,
   issueDeliveryNoteSchema,
+  receiveDeliveryNoteSchema,
   type CreateDeliveryNoteInput,
 } from "@evflow/contracts";
 import { transactionCommand } from "../common/transaction-command";
@@ -29,10 +30,13 @@ function parse<T>(
   return result.data as T;
 }
 const include = {
+  receipt: true,
   lines: {
     include: {
       salesOrderLine: {
-        include: { product: { select: { code: true, name: true, baseUom: { select: { name: true } } } } },
+        include: {
+          product: { select: { code: true, name: true, baseUom: { select: { name: true } } } },
+        },
       },
     },
   },
@@ -126,6 +130,7 @@ async function draftLines(
   c: string,
   input: CreateDeliveryNoteInput,
   order: Awaited<ReturnType<typeof lockOrder>>,
+  formWarehouseId?: string,
 ) {
   const delivered = await deliveredOrderQuantities(c, order.id, tx);
   const rows = [];
@@ -141,6 +146,8 @@ async function draftLines(
     )
       throw new ConflictException("DELIVERY_NOTE_QTY_EXCEEDED");
     const warehouseId = item.warehouse_id ?? source.warehouseId ?? order.warehouseId;
+    if (formWarehouseId && warehouseId !== formWarehouseId)
+      throw new ConflictException("DELIVERY_NOTE_WAREHOUSE_MISMATCH");
     if (
       !warehouseId ||
       !(await tx.warehouse.findFirst({ where: { companyId: c, id: warehouseId, state: "ACTIVE" } }))
@@ -172,9 +179,18 @@ async function draftLines(
   }
   return rows;
 }
-async function orderSnapshot(tx: Tx, c: string, order: Awaited<ReturnType<typeof lockOrder>>) {
+async function orderSnapshot(
+  tx: Tx,
+  c: string,
+  order: Awaited<ReturnType<typeof lockOrder>>,
+  freightOverride?: Prisma.Decimal,
+) {
   const terms = order.freightTermsSnapshot as { payer?: string; tax_mode?: string } | null;
-  const amount = terms?.payer === "CUSTOMER" ? d(order.freightEstimate ?? 0) : d(0);
+  // Ongkir ditagihkan hanya bila SO menetapkan ongkir ditanggung pelanggan. Nilai yang diketik di
+  // Surat Jalan menggantikan estimasi SO; bila ditanggung perusahaan, nilainya tetap tersimpan
+  // sebagai biaya kirim Surat Jalan tetapi tidak masuk tagihan, pendapatan maupun Invoice.
+  const amount =
+    terms?.payer === "CUSTOMER" ? (freightOverride ?? d(order.freightEstimate ?? 0)) : d(0);
   const freightTax =
     amount.gt(0) && terms?.tax_mode === "TAXABLE" ? await defaultSalesTaxOn(tx, c, amount) : null;
   const company = await tx.company.findUniqueOrThrow({
@@ -197,19 +213,51 @@ async function orderSnapshot(tx: Tx, c: string, order: Awaited<ReturnType<typeof
     delivery_address: order.deliveryAddress,
   });
 }
+function defaultFreightAmount(order: Awaited<ReturnType<typeof lockOrder>>) {
+  const terms = order.freightTermsSnapshot as { payer?: string } | null;
+  return terms?.payer === "CUSTOMER" ? d(order.freightEstimate ?? 0) : d(0);
+}
 export function createDeliveryNote(c: string, a: string, input: unknown, key: string) {
   const i = parse(createDeliveryNoteSchema, input);
   return transactionCommand(c, a, "delivery-notes/create", key, i, async (tx) => {
     const order = await lockOrder(tx, c, i.sales_order_id);
-    const lines = await draftLines(tx, c, i, order);
+    const documentDate = new Date(
+      `${i.document_date ?? order.orderDate.toISOString().slice(0, 10)}T00:00:00.000Z`,
+    );
+    const shipDate = new Date(
+      `${i.ship_date ?? documentDate.toISOString().slice(0, 10)}T00:00:00.000Z`,
+    );
+    const warehouseId = i.warehouse_id ?? order.warehouseId ?? undefined;
+    if (
+      warehouseId &&
+      !(await tx.warehouse.findFirst({ where: { companyId: c, id: warehouseId, state: "ACTIVE" } }))
+    )
+      throw new ConflictException("ORDER_WAREHOUSE_INACTIVE");
+    if (
+      i.number &&
+      (await tx.deliveryNote.findFirst({
+        where: { companyId: c, number: i.number },
+        select: { id: true },
+      }))
+    )
+      throw new ConflictException("DELIVERY_NOTE_NUMBER_EXISTS");
+    const lines = await draftLines(tx, c, i, order, warehouseId);
+    const freightAmount = i.freight_amount ? d(i.freight_amount) : undefined;
     const row = await tx.deliveryNote.create({
       data: {
         companyId: c,
         salesOrderId: order.id,
-        number: await nextDocumentNumber(tx, c, "document_SURAT_JALAN"),
+        number: i.number ?? (await nextDocumentNumber(tx, c, "document_SURAT_JALAN")),
+        documentDate,
+        shipDate,
+        warehouseId: warehouseId ?? null,
+        carrierName: i.carrier_name ?? null,
+        vehicleNumber: i.vehicle_number ?? null,
+        driverName: i.driver_name ?? null,
+        freightAmount: freightAmount ?? defaultFreightAmount(order),
         createdById: a,
         notes: i.notes ?? null,
-        snapshot: await orderSnapshot(tx, c, order),
+        snapshot: await orderSnapshot(tx, c, order, freightAmount),
         lines: { create: lines },
       },
       include,
@@ -240,13 +288,43 @@ export function updateDeliveryNoteDraft(
     if (before.state !== "DRAFT") throw new ConflictException("DELIVERY_NOTE_IMMUTABLE");
     if (before.salesOrderId !== order.id)
       throw new ConflictException("DELIVERY_NOTE_ORDER_MISMATCH");
-    const lines = await draftLines(tx, c, i, order);
+    if (
+      i.number &&
+      i.number !== before.number &&
+      (await tx.deliveryNote.findFirst({
+        where: { companyId: c, number: i.number, id: { not: id } },
+        select: { id: true },
+      }))
+    )
+      throw new ConflictException("DELIVERY_NOTE_NUMBER_EXISTS");
+    const warehouseId = i.warehouse_id ?? order.warehouseId ?? undefined;
+    if (
+      warehouseId &&
+      !(await tx.warehouse.findFirst({ where: { companyId: c, id: warehouseId, state: "ACTIVE" } }))
+    )
+      throw new ConflictException("ORDER_WAREHOUSE_INACTIVE");
+    const documentDate = new Date(
+      `${i.document_date ?? order.orderDate.toISOString().slice(0, 10)}T00:00:00.000Z`,
+    );
+    const shipDate = new Date(
+      `${i.ship_date ?? documentDate.toISOString().slice(0, 10)}T00:00:00.000Z`,
+    );
+    const lines = await draftLines(tx, c, i, order, warehouseId);
+    const freightAmount = i.freight_amount ? d(i.freight_amount) : undefined;
     await tx.deliveryNoteLine.deleteMany({ where: { companyId: c, deliveryNoteId: id } });
     const row = await tx.deliveryNote.update({
       where: { id },
       data: {
+        number: i.number ?? before.number,
+        documentDate,
+        shipDate,
+        warehouseId: warehouseId ?? null,
+        carrierName: i.carrier_name ?? null,
+        vehicleNumber: i.vehicle_number ?? null,
+        driverName: i.driver_name ?? null,
+        freightAmount: freightAmount ?? defaultFreightAmount(order),
         notes: i.notes ?? null,
-        snapshot: await orderSnapshot(tx, c, order),
+        snapshot: await orderSnapshot(tx, c, order, freightAmount),
         lines: { create: lines },
       },
       include,
@@ -282,22 +360,14 @@ export function issueDeliveryNote(c: string, a: string, id: string, input: unkno
     await tx.$queryRaw`SELECT id FROM delivery_notes WHERE id=${id}::uuid AND company_id=${c}::uuid FOR UPDATE`;
     const note = await getDeliveryNote(c, id, tx);
     if (note.state !== "DRAFT") throw new ConflictException("DELIVERY_NOTE_IMMUTABLE");
-    await requireEvidence(tx, c, i.evidence_id, "SURAT_JALAN");
-    const handoverAt = new Date(i.handover_at);
-    await assertFinancePeriodOpen(tx, c, await financeDate(tx, c, handoverAt));
-    if (i.lines.length !== note.lines.length)
-      throw new ConflictException("DELIVERY_NOTE_LINES_REQUIRED");
+    const issuedAt = new Date();
+    await assertFinancePeriodOpen(tx, c, await financeDate(tx, c, issuedAt));
+    if (!note.lines.length) throw new ConflictException("DELIVERY_NOTE_LINES_REQUIRED");
     const delivered = await deliveredOrderQuantities(c, order.id, tx);
     const amounts = [];
     for (const line of note.lines) {
-      const received = i.lines.find((l) => l.sales_order_line_id === line.salesOrderLineId);
-      if (!received) throw new ConflictException("DELIVERY_NOTE_LINES_REQUIRED");
-      const qty = d(received.delivered_quantity),
-        rejected = d(received.rejected_quantity ?? 0);
-      if (qty.add(rejected).gt(line.quantity))
-        throw new ConflictException("DELIVERY_NOTE_HANDOVER_QTY_EXCEEDED");
-      if ((rejected.gt(0) || qty.lt(line.quantity)) && !received.discrepancy_reason?.trim())
-        throw new ConflictException("DELIVERY_NOTE_DISCREPANCY_REASON_REQUIRED");
+      const qty = d(line.quantity),
+        rejected = d(0);
       const source = order.lines.find((l) => l.id === line.salesOrderLineId)!;
       if (
         qty.gt(
@@ -307,7 +377,7 @@ export function issueDeliveryNote(c: string, a: string, id: string, input: unkno
         )
       )
         throw new ConflictException("DELIVERY_NOTE_QTY_EXCEEDED");
-      amounts.push({ line, received, qty, rejected, amount: lineAmounts(line, qty) });
+      amounts.push({ line, qty, rejected, amount: lineAmounts(line, qty) });
     }
     // Lock all eligible lots in stable order before assigning quantities.
     const productIds = [...new Set(note.lines.map((l) => l.salesOrderLine.productId))].sort();
@@ -447,18 +517,24 @@ export function issueDeliveryNote(c: string, a: string, id: string, input: unkno
       });
       accountIds.push(snapshot?.freight_tax_snapshot?.account_id);
     }
-    await postDeliveryNoteLedger(tx, a, { businessDate: handoverAt, accountIds, data: posting });
+    await postDeliveryNoteLedger(tx, a, { businessDate: issuedAt, accountIds, data: posting });
     const updated = await tx.deliveryNote.update({
       where: { id },
       data: {
         state: "ISSUED",
-        handoverAt,
-        receiverName: i.receiver_name,
-        evidenceId: i.evidence_id,
-        issuedAt: new Date(),
+        issuedAt,
         issuedById: a,
         issueIdempotencyKey: key,
-        handoverSnapshot: json(i),
+        snapshot: json({
+          ...(note.snapshot as Record<string, unknown>),
+          document_date: note.documentDate?.toISOString().slice(0, 10) ?? null,
+          ship_date: note.shipDate?.toISOString().slice(0, 10) ?? null,
+          warehouse_id: note.warehouseId,
+          carrier_name: note.carrierName,
+          vehicle_number: note.vehicleNumber,
+          driver_name: note.driverName,
+          recorded_freight_amount: note.freightAmount?.toString() ?? null,
+        }),
       },
       include,
     });
@@ -480,6 +556,63 @@ export function issueDeliveryNote(c: string, a: string, id: string, input: unkno
       },
     });
     return updated;
+  });
+}
+
+/** Append receipt evidence without mutating the issued source or posting any balance. */
+export function receiveDeliveryNote(c: string, a: string, id: string, input: unknown, key: string) {
+  const i = parse(receiveDeliveryNoteSchema, input);
+  return transactionCommand(c, a, `delivery-notes/${id}/receipt`, key, i, async (tx) => {
+    await tx.$queryRaw`SELECT id FROM delivery_notes WHERE id=${id}::uuid AND company_id=${c}::uuid FOR UPDATE`;
+    const note = await getDeliveryNote(c, id, tx);
+    if (note.state !== "ISSUED" || !note.issuedAt)
+      throw new ConflictException("DELIVERY_NOTE_NOT_ISSUED");
+    if (note.receipt || note.handoverAt)
+      throw new ConflictException("DELIVERY_NOTE_ALREADY_RECEIVED");
+    await requireEvidence(tx, c, i.evidence_id, "SURAT_JALAN");
+    const handoverAt = new Date(i.handover_at);
+    if (handoverAt < note.issuedAt || handoverAt.getTime() > Date.now())
+      throw new ConflictException("DELIVERY_NOTE_RECEIPT_DATE_INVALID");
+    if (i.lines.length !== note.lines.length)
+      throw new ConflictException("DELIVERY_NOTE_LINES_REQUIRED");
+    for (const line of note.lines) {
+      const receiptLine = i.lines.find((l) => l.sales_order_line_id === line.salesOrderLineId);
+      if (!receiptLine) throw new ConflictException("DELIVERY_NOTE_LINES_REQUIRED");
+      const qty = d(receiptLine.delivered_quantity);
+      const sent = d(line.deliveredQuantity!);
+      if (qty.gt(sent)) throw new ConflictException("DELIVERY_NOTE_RECEIPT_QTY_INVALID");
+      if (qty.lt(sent) && !receiptLine.discrepancy_reason?.trim())
+        throw new ConflictException("DELIVERY_NOTE_DISCREPANCY_REASON_REQUIRED");
+    }
+    const receipt = await tx.deliveryNoteReceipt.create({
+      data: {
+        companyId: c,
+        deliveryNoteId: id,
+        handoverAt,
+        receiverName: i.receiver_name,
+        receiverTitle: i.receiver_title || null,
+        evidenceId: i.evidence_id,
+        snapshot: json(i),
+        recordedById: a,
+      },
+    });
+    await audit.recordWith(tx, {
+      companyId: c,
+      actorId: a,
+      action: "delivery_note.received",
+      resourceType: "delivery_note",
+      resourceId: id,
+      after: receipt,
+    });
+    await tx.outboxEvent.create({
+      data: {
+        companyId: c,
+        eventType: "delivery_note.received",
+        aggregateId: id,
+        payload: { delivery_note_id: id, receipt_id: receipt.id },
+      },
+    });
+    return receipt;
   });
 }
 
@@ -530,18 +663,61 @@ export function deliveryNoteView(row: Awaited<ReturnType<typeof getDeliveryNote>
   const snapshot = row.snapshot as {
     payment?: { term_code?: string; term_label?: string; mode?: string; top_days?: number };
     delivery_address?: string;
-    products?: Record<string, { code: string; name: string }>;
+    products?: Record<string, { code: string; name: string; unit?: string }>;
   } | null;
   const payment = snapshot?.payment;
+  const receiptSource =
+    row.receipt ??
+    (row.handoverAt
+      ? {
+          handoverAt: row.handoverAt,
+          receiverName: row.receiverName,
+          receiverTitle: row.receiverTitle,
+          evidenceId: row.evidenceId,
+          snapshot: row.handoverSnapshot,
+        }
+      : null);
+  const receipt = receiptSource
+    ? {
+        handoverAt: receiptSource.handoverAt,
+        receiverName: receiptSource.receiverName,
+        receiverTitle: receiptSource.receiverTitle,
+        evidenceId: receiptSource.evidenceId,
+        lines: (
+          (
+            receiptSource.snapshot as {
+              lines?: {
+                sales_order_line_id: string;
+                delivered_quantity: string;
+                discrepancy_reason?: string;
+              }[];
+            } | null
+          )?.lines ?? []
+        ).map((line) => ({
+          sales_order_line_id: line.sales_order_line_id,
+          delivered_quantity: line.delivered_quantity,
+          discrepancy_reason: line.discrepancy_reason ?? null,
+        })),
+      }
+    : null;
   return {
     id: row.id,
     number: row.number,
     state: row.state,
+    documentDate: row.documentDate ? new Date(row.documentDate).toISOString().slice(0, 10) : null,
+    shipDate: row.shipDate ? new Date(row.shipDate).toISOString().slice(0, 10) : null,
+    warehouseId: row.warehouseId,
+    carrierName: row.carrierName,
+    vehicleNumber: row.vehicleNumber,
+    driverName: row.driverName,
+    freightAmount: row.freightAmount?.toString() ?? null,
     salesOrderId: row.salesOrderId,
     notes: row.notes,
-    handoverAt: row.handoverAt,
-    receiverName: row.receiverName,
-    evidenceId: row.evidenceId,
+    receipt,
+    handoverAt: receipt?.handoverAt ?? null,
+    receiverName: receipt?.receiverName ?? null,
+    receiverTitle: receipt?.receiverTitle ?? null,
+    evidenceId: receipt?.evidenceId ?? null,
     issuedAt: row.issuedAt,
     createdAt: row.createdAt,
     salesOrder: row.salesOrder,
@@ -558,6 +734,10 @@ export function deliveryNoteView(row: Awaited<ReturnType<typeof getDeliveryNote>
       id: line.id,
       salesOrderLineId: line.salesOrderLineId,
       quantity: line.quantity.toString(),
+      unit:
+        snapshot?.products?.[line.salesOrderLineId]?.unit ??
+        line.salesOrderLine.product.baseUom?.name ??
+        null,
       deliveredQuantity: line.deliveredQuantity?.toString() ?? null,
       rejectedQuantity: line.rejectedQuantity.toString(),
       warehouseId: line.warehouseId,

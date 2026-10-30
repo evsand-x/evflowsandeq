@@ -1,5 +1,12 @@
 # User Flow — lintas peran dan pengecualian
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Simpan draft atau langsung Terbitkan Surat Jalan (simpan perubahan dahulu) -> SJ Terbit tanpa modal penerimaan -> Buat Invoice tersedia. Setelah pelanggan menerima, buka detail -> Penerimaan Barang -> isi waktu, penerima, jumlah dan bukti -> Simpan penerimaan. Sesudah tersimpan tampil ringkasan/bukti/qty dan tombol tidak ditampilkan lagi. Penerimaan belum dicatat bukan status gagal issue.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 > **Alur Release 1 O2C:** SO → Surat Jalan draft → isi bukti serah terima dan jumlah kirim → terbitkan Surat Jalan (stok, pendapatan, HPP) → Invoice dari Surat Jalan. Alur picking, checking, Packing List, POD dan dispatch lama di dokumen ini adalah scope lanjutan.
 
 
@@ -675,5 +682,10 @@ Pada Release 1, pengguna membuat Surat Jalan langsung dari SO, dapat mengirim pa
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Pilih SJ terbit → tinjau nomor/tanggal/termin/barang → Simpan draft atau Submit → AR posted → Terima Pembayaran dengan bank/referensi/bukti → kas+alokasi atomik → status parsial/lunas. Potongan wajib bukti yang belum lengkap menyisakan AR; lengkapi bukti untuk settlement. Jatuh tempo selalu issuedAt SJ + TOP snapshot SO. Pembayaran tidak mengubah nilai/nomor/tanggal Invoice posted.

@@ -1,28 +1,18 @@
 "use client";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import Decimal from "decimal.js";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { useSession } from "../session-provider";
-import { ErrorBox, Upload, Evidence } from "./workspace";
-import { remainingQuantity } from "./surat-jalan-utils";
+import { ErrorBox, Evidence } from "./workspace";
+import { SuratJalanListPage } from "./surat-jalan-list";
+import { SuratJalanFormPage } from "./surat-jalan-form";
+import { ReceiptDialog } from "./surat-jalan-receipt";
+import { handoverText, quantityText } from "./surat-jalan-utils";
 import "./outbound.css";
 
-type Line = {
-  id: string;
-  product: { name: string; code: string; baseUom?: { name: string } };
-  orderedQuantity?: string;
-  ordered?: string;
-  accepted?: string;
-  deliveredQuantity?: string;
-  remaining?: string;
-  warehouseId?: string | null;
-};
 type Note = {
   id: string;
   number: string;
@@ -33,23 +23,36 @@ type Note = {
     id: string;
     salesOrderLineId: string;
     quantity: string;
+    unit?: string | null;
     deliveredQuantity?: string;
     product?: { name: string; code: string };
   }[];
+  receipt?: {
+    handoverAt: string;
+    receiverName: string;
+    receiverTitle?: string | null;
+    evidenceId: string;
+    lines: {
+      sales_order_line_id: string;
+      delivered_quantity: string;
+      discrepancy_reason?: string | null;
+    }[];
+  } | null;
   issuedAt?: string | null;
   receiverName?: string | null;
   evidenceId?: string | null;
   notes?: string | null;
 };
-const keyFor = (url: string, body: unknown) => `${url}:${JSON.stringify(body)}`;
 
 export function SuratJalanWorkspace({ path }: { path: string[] }) {
   const id = path[1];
   const fromOrder = path[1] === "from-order" ? path[2] : undefined;
   const { principal, state } = useSession();
   const canRead = !!principal && hasCompanyPermission(principal, "outbound_shipping.read");
-  const canDispatch = !!principal && hasCompanyPermission(principal, "fulfillment.dispatch");
-  const canInvoice = !!principal && hasCompanyPermission(principal, "sales_invoice.post");
+  const canInvoice =
+    !!principal &&
+    hasCompanyPermission(principal, "sales_invoice.post") &&
+    hasCompanyPermission(principal, "sales_invoice.view_price");
   if (!principal)
     return (
       <main className="ob-auth">
@@ -63,9 +66,9 @@ export function SuratJalanWorkspace({ path }: { path: string[] }) {
         <p role="alert">Anda tidak memiliki izin melihat Surat Jalan.</p>
       </main>
     );
-  if (!id) return <SuratJalanList />;
-  if (fromOrder) return <SuratJalanDraft orderId={fromOrder} canDispatch={canDispatch} />;
-  return <SuratJalanDetail id={id} canDispatch={canDispatch} canInvoice={canInvoice} />;
+  if (!id) return <SuratJalanListPage />;
+  if (fromOrder) return <SuratJalanFormPage orderId={fromOrder} />;
+  return <SuratJalanDetail key={id} id={id} canInvoice={canInvoice} />;
 }
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
@@ -76,7 +79,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
           <p className="ob-eyebrow">Warehouse & Logistik · Barang Keluar</p>
           <h1>{title}</h1>
           <p className="ob-page-subtitle">
-            Surat Jalan terbit menjadi bukti serah terima dan sumber Invoice.
+            Surat Jalan terbit menjadi sumber Invoice. Penerimaan barang dicatat terpisah.
           </p>
         </div>
         <Link className="ob-link" href="/operations/orders">
@@ -87,208 +90,17 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
     </main>
   );
 }
-function useCommand() {
-  const client = useQueryClient();
-  const keys = useRef(new Map<string, string>());
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
-  const run = async (url: string, body: unknown, method = "POST") => {
-    const sig = keyFor(url, body);
-    const key = keys.current.get(sig) ?? crypto.randomUUID();
-    keys.current.set(sig, key);
-    setPending(true);
-    setError("");
-    try {
-      const r = await apiRequest<{ data: Note }>(url, {
-        method,
-        headers: { "Idempotency-Key": key, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      keys.current.delete(sig);
-      await client.invalidateQueries({ queryKey: ["surat-jalan"] });
-      return r.data;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Permintaan belum terkonfirmasi.");
-      throw e;
-    } finally {
-      setPending(false);
-    }
-  };
-  return { run, error, pending };
-}
-function SuratJalanList() {
-  const { principal } = useSession();
-  const [search, setSearch] = useState("");
-  const q = useQuery({
-    queryKey: ["surat-jalan", principal?.company_id, search],
-    queryFn: () =>
-      apiRequest<{ data: { rows: Note[]; total: number } }>(
-        `/delivery-notes?search=${encodeURIComponent(search)}`,
-      ),
-  });
-  const rows = q.data?.data.rows ?? [];
-  return (
-    <Shell title="Surat Jalan">
-      <div className="ob-toolbar">
-        <Input
-          aria-label="Cari Surat Jalan"
-          placeholder="Cari nomor, SO atau pelanggan"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-      {q.isPending && <p>Memuat Surat Jalan…</p>}
-      {q.isError && <ErrorBox message="Daftar Surat Jalan belum dapat dimuat." />}
-      {!q.isPending && !rows.length && <p className="ob-empty">Belum ada Surat Jalan.</p>}{" "}
-      {!!rows.length && (
-        <div className="ob-table-wrap">
-          <table className="ob-table">
-            <thead>
-              <tr>
-                <th>Nomor</th>
-                <th>Sales Order</th>
-                <th>Pelanggan</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((n) => (
-                <tr key={n.id}>
-                  <td>
-                    <Link className="ob-link" href={`/operations/delivery-notes/${n.id}`}>
-                      {n.number}
-                    </Link>
-                  </td>
-                  <td>{n.salesOrder.number}</td>
-                  <td>{n.salesOrder.customer?.name ?? "Belum tersedia"}</td>
-                  <td>
-                    <span className="ob-badge">{n.state === "ISSUED" ? "Terbit" : "Draf"}</span>
-                  </td>
-                  <td>
-                    <Link href={`/operations/delivery-notes/${n.id}`}>Buka</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Shell>
-  );
-}
-function SuratJalanDraft({ orderId, canDispatch }: { orderId: string; canDispatch: boolean }) {
+function SuratJalanDetail({ id, canInvoice }: { id: string; canInvoice: boolean }) {
   const { principal } = useSession();
   const q = useQuery({
-    queryKey: ["surat-jalan", "order", principal?.company_id, orderId],
-    queryFn: () =>
-      apiRequest<{
-        data: { id: string; number: string; lines: Line[]; customer?: { name: string } };
-      }>(`/operations/orders/${orderId}`),
-  });
-  const progress = useQuery({
-    queryKey: ["surat-jalan", "delivered", principal?.company_id, orderId],
-    queryFn: () => apiRequest<{ data: Record<string, string> }>(`/delivery-notes/orders/${orderId}/delivered`),
-  });
-  const { run, error, pending } = useCommand();
-  const [notes, setNotes] = useState("");
-  const [qty, setQty] = useState<Record<string, string>>({});
-  const lines = q.data?.data.lines ?? [];
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const payload = {
-      sales_order_id: orderId,
-      notes,
-      lines: lines
-        .filter((l) => qty[l.id] && new Decimal(qty[l.id] ?? "0").gt(0))
-        .map((l) => ({
-          sales_order_line_id: l.id,
-          quantity: qty[l.id],
-          ...(l.warehouseId ? { warehouse_id: l.warehouseId } : {}),
-        })),
-    };
-    if (!payload.lines.length || progress.isPending || progress.isError) return;
-    const note = await run("/delivery-notes", payload);
-    window.location.href = `/operations/delivery-notes/${note.id}`;
-  };
-  return (
-    <Shell title="Buat Surat Jalan">
-      <form className="ob-panel" onSubmit={submit}>
-        {error && <ErrorBox message={error} />} {q.isPending && <p>Memuat Sales Order…</p>}
-        {q.isError && <ErrorBox message="Sales Order belum dapat dimuat." />}
-        {progress.isPending && <p>Memuat jumlah terkirim…</p>}
-        {progress.isError && <ErrorBox message="Jumlah terkirim belum dapat dimuat." />}
-        {lines.map((l) => {
-          const delivered = progress.data?.data[l.id] ?? "0";
-          const ordered = l.orderedQuantity ?? l.ordered ?? "0";
-          const rem = remainingQuantity(ordered, delivered);
-          return (
-            <div className="ob-line" key={l.id}>
-              <div>
-                <strong>{l.product.name}</strong>
-                <small>
-                  {l.product.code} · Dipesan {ordered} · Terkirim {delivered} · Sisa {rem}
-                </small>
-              </div>
-              <Input
-                aria-label={`Jumlah ${l.product.name}`}
-                inputMode="decimal"
-                value={qty[l.id] ?? ""}
-                placeholder={rem}
-                onChange={(e) => setQty((old) => ({ ...old, [l.id]: e.target.value }))}
-              />
-            </div>
-          );
-        })}
-        <label className="ob-field">
-          <span>Catatan</span>
-          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </label>
-        <footer className="ob-actions">
-          <Button type="submit" disabled={!canDispatch || pending || progress.isPending || progress.isError}>
-            {pending ? "Menyimpan…" : "Simpan draf"}
-          </Button>
-        </footer>
-      </form>
-    </Shell>
-  );
-}
-function SuratJalanDetail({
-  id,
-  canDispatch,
-  canInvoice,
-}: {
-  id: string;
-  canDispatch: boolean;
-  canInvoice: boolean;
-}) {
-  const { principal } = useSession();
-  const q = useQuery({
-    queryKey: ["surat-jalan", principal?.company_id, id],
+    queryKey: ["surat-jalan", principal?.company_id, principal?.user_id, id],
     queryFn: () => apiRequest<{ data: Note }>(`/delivery-notes/${id}`),
   });
-  const { run, error, pending } = useCommand();
-  const [receiver, setReceiver] = useState("");
-  const [handover, setHandover] = useState(() => new Date().toISOString().slice(0, 16));
-  const [evidence, setEvidence] = useState("");
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const canReceive = !!principal && hasCompanyPermission(principal, "fulfillment.dispatch");
   const note = q.data?.data;
-  const issue = async () => {
-    if (!note) return;
-    const result = await run(`/delivery-notes/${id}/issue`, {
-      handover_at: new Date(handover).toISOString(),
-      receiver_name: receiver,
-      evidence_id: evidence,
-      lines: note.lines.map((l) => ({
-        sales_order_line_id: l.salesOrderLineId,
-        delivered_quantity: l.quantity,
-      })),
-    });
-    window.location.href = `/operations/delivery-notes/${result.id}`;
-  };
-  const invoice = async () => {
-    const result = await run("/sales-invoices/from-delivery-note", { surat_jalan_id: id });
-    window.location.href = `/operations/invoices/${result.id}`;
-  };
+  // Draft dibuka di form (canvas SJ-form); detail lama tetap untuk Surat Jalan terbit.
+  if (note?.state === "DRAFT") return <SuratJalanFormPage noteId={id} />;
   return (
     <Shell title={note ? `${note.number} · Surat Jalan` : "Surat Jalan"}>
       {q.isPending && <p>Memuat Surat Jalan…</p>}
@@ -306,41 +118,47 @@ function SuratJalanDetail({
                 <dd>{note.state === "ISSUED" ? "Terbit" : "Draf"}</dd>
               </div>
             </dl>
-            {error && <ErrorBox message={error} />}{" "}
-            {note.state === "DRAFT" && (
-              <>
-                <label className="ob-field">
-                  <span>Diterima oleh *</span>
-                  <Input required value={receiver} onChange={(e) => setReceiver(e.target.value)} />
-                </label>
-                <label className="ob-field">
-                  <span>Waktu serah terima *</span>
-                  <Input
-                    type="datetime-local"
-                    required
-                    value={handover}
-                    onChange={(e) => setHandover(e.target.value)}
-                  />
-                </label>
-                <Upload purpose="SURAT_JALAN" onChange={setEvidence} />
-                <Button
-                  disabled={!canDispatch || pending || !receiver || !evidence}
-                  onClick={() => void issue()}
-                >
-                  Terbitkan Surat Jalan
-                </Button>
-              </>
-            )}
             {note.state === "ISSUED" && (
               <>
-                <p className="ob-success">Surat Jalan terbit dan tercatat sebagai serah terima.</p>
-                <Evidence id={note.evidenceId ?? ""} />
-                {canInvoice && (
-                  <Button disabled={pending} onClick={() => void invoice()}>
-                    Buat Invoice
-                  </Button>
-                )}
+                <p className="ob-success">Surat Jalan sudah terbit.</p>
+                <div className="flex flex-wrap gap-3">
+                  {!note.receipt && canReceive && (
+                    <Button onClick={() => setReceiptOpen(true)}>Penerimaan Barang</Button>
+                  )}
+                  {/* Invoice dibuat lewat form (draft lalu Submit), bukan langsung terposting. */}
+                  {canInvoice && (
+                    <Button asChild>
+                      <Link href={`/operations/invoices/new?surat_jalan_id=${id}`}>
+                        Buat Invoice
+                      </Link>
+                    </Button>
+                  )}
+                </div>
               </>
+            )}
+          </section>
+          <section className="ob-panel">
+            <h2>Penerimaan barang</h2>
+            {note.receipt ? (
+              <>
+                <dl className="ob-summary">
+                  <div>
+                    <dt>Waktu penerimaan</dt>
+                    <dd>{handoverText(note.receipt.handoverAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Nama penerima</dt>
+                    <dd>{note.receipt.receiverName}</dd>
+                  </div>
+                  <div>
+                    <dt>Jabatan / unit</dt>
+                    <dd>{note.receipt.receiverTitle || "—"}</dd>
+                  </div>
+                </dl>
+                <Evidence id={note.receipt.evidenceId} />
+              </>
+            ) : (
+              <p>Penerimaan belum dicatat.</p>
             )}
           </section>
           <section className="ob-panel">
@@ -348,11 +166,42 @@ function SuratJalanDetail({
             <ul>
               {note.lines.map((l) => (
                 <li key={l.id}>
-                  {l.product?.name ?? l.salesOrderLineId} · {l.quantity}
+                  {l.product?.name ?? l.salesOrderLineId} · Dikirim{" "}
+                  {quantityText(l.deliveredQuantity ?? l.quantity, l.unit)}
+                  {note.receipt &&
+                    (() => {
+                      const received = note.receipt.lines.find(
+                        (r) => r.sales_order_line_id === l.salesOrderLineId,
+                      );
+                      return received ? (
+                        <span>
+                          {" "}
+                          · Diterima {quantityText(received.delivered_quantity, l.unit)}
+                          {received.discrepancy_reason && <> · {received.discrepancy_reason}</>}
+                        </span>
+                      ) : null;
+                    })()}
                 </li>
               ))}
             </ul>
           </section>
+          {canReceive && !note.receipt && note.state === "ISSUED" && (
+            <ReceiptDialog
+              open={receiptOpen}
+              noteId={note.id}
+              lines={note.lines.map((l) => ({
+                id: l.salesOrderLineId,
+                name: l.product?.name ?? "Barang",
+                unit: l.unit ?? "unit",
+                sent: l.deliveredQuantity ?? l.quantity,
+              }))}
+              onClose={() => setReceiptOpen(false)}
+              onReceived={() => {
+                setReceiptOpen(false);
+                void q.refetch();
+              }}
+            />
+          )}
         </>
       )}
     </Shell>

@@ -15,6 +15,7 @@ import {
   createCustomerReturnSchema,
   postCustomerRefundSchema,
   idempotencySchema,
+  isAccessAdministrator,
 } from "@evflow/contracts";
 import {
   BadRequestException,
@@ -37,6 +38,7 @@ import { OtcPtpService } from "./otc-ptp.service";
 import { recordOrderPrint } from "./sales/order-print";
 import { closeRemainder, releaseBatch, resolvePick, reviseOrder } from "./sales/o2c-lifecycle";
 import { issueProforma } from "./sales/proforma";
+import { invoiceWithoutPrices } from "./finance/invoice-privacy";
 
 const parse = <T>(
   schema: { safeParse: (value: unknown) => { success: boolean; data?: T; error?: unknown } },
@@ -346,7 +348,7 @@ export class OtcPtpController {
       .then((data) => ({ data }));
   }
   @Post("sales-invoices/from-delivery-note")
-  @RequirePermissions("sales_invoice.post")
+  @RequirePermissions("sales_invoice.post", "sales_invoice.view_price")
   invoiceFromDeliveryNote(
     @Body() body: unknown,
     @Headers("idempotency-key") key: string | undefined,
@@ -432,7 +434,15 @@ export class OtcPtpController {
         parse(allocateCustomerReceiptSchema, body),
         commandKey(key),
       )
-      .then((data) => ({ data }));
+      .then((data) => {
+        const prices = isAccessAdministrator(req.auth) || req.auth.permissions.some(p =>
+          p.code === "sales_invoice.view_price" && ["company", "privileged"].includes(p.scope_type) &&
+          (!p.scope_id || p.scope_id === req.auth.company_id));
+        if (prices) return { data };
+        return { data: "invoice" in data
+          ? { invoice: invoiceWithoutPrices(data.invoice), allocation: { id: data.allocation.id } }
+          : invoiceWithoutPrices(data) };
+      });
   }
 
   @Post("purchase-requests/:id/approve")

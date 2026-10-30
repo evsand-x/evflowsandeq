@@ -1,5 +1,12 @@
 # Domain Finance
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Jurnal SJ memakai waktu penerbitan server (issuedAt) sebagai event posting. Pendapatan/HPP tidak menunggu bukti pelanggan dan tidak diposting ulang saat penerimaan dicatat. Basis jatuh tempo tetap issuedAt dalam zona perusahaan + TOP snapshot SO. Catatan selisih penerimaan tidak otomatis mengoreksi invoice/AR/HPP.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 > **Batas Finance Release 1 O2C:** Pendapatan dan HPP diposting saat Surat Jalan terbit dengan bukti serah terima. Invoice dibuat dari Surat Jalan terbit dan membentuk AR dengan TOP yang disnapshot dari SO. Model unbilled AR, POD dan Packing List tetap menjadi scope lanjutan.
 
 
@@ -2932,5 +2939,18 @@ Finance menerima sumber Invoice dari Surat Jalan terbit. Penerbitan Surat Jalan 
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 
+
+
+## Invoice dan Terima Pembayaran — keputusan 30 Oktober 2026
+
+Acuan: [desain backend Invoice](../superpowers/specs/2026-10-30-invoice-payment-backend-design.md) dan mockup `docs/mockup/evflow-office-design.pen`.
+
+- Jatuh tempo = **tanggal penerbitan Surat Jalan (`issuedAt`) dalam zona waktu perusahaan + termin snapshot SO**. Bukan tanggal serah terima yang diketik, tanggal dokumen SJ, tanggal Invoice, input atau cetak. Keputusan ini menggantikan basis jatuh tempo lama untuk Invoice baru; tanggal historis tidak ditulis ulang.
+- Nomor Invoice diusulkan dari Setting, boleh diubah selama draft dan wajib unik per perusahaan. Draft belum membentuk AR. Submit memposting AR terhadap piutang belum ditagih pada tanggal Invoice, tanpa mengulang pendapatan/HPP dari SJ; sesudah posting dokumen immutable.
+- Sumber hanya SJ terbit, satu Invoice per SJ. Jumlah, harga, pajak, ongkir dan termin dari snapshot sumber; catatan dan alamat penagihan disimpan untuk dokumen.
+- Terima Pembayaran mencatat kas/bank dan alokasi invoice atomik, dengan referensi bank unik, bukti transfer, periode terbuka dan pemeriksaan outstanding terkini. Potongan memakai master aktif dan snapshot akun; persen dihitung dari **nilai barang net sebelum PPN (subtotal)**, yaitu basis berlabel DPP pada mockup (2% × Rp28.700.000 = Rp574.000), bukan DPP nilai lain khusus perhitungan PPN. Tarif bukan konstanta backend.
+- Potongan wajib bukti tanpa bukti tetap AR berstatus menunggu bukti. Bukti potong memiliki nomor, tanggal dan file terpisah dari bukti transfer. Penyelesaian bukti memposting pengurangan AR tepat sekali. Jika pelanggan kemudian melunasi dengan kas, histori pending tetap terlihat tetapi tidak dapat mengurangi AR di bawah nol.
+- `sales_invoice.read` dan `customer_receipt.read/post` tetap independen. Nilai Invoice memerlukan `sales_invoice.view_price` (Lihat harga); daftar/detail baru tetap menyediakan identitas tanpa nilai bila hak itu tidak ada. Form/mutasi finansial dan endpoint Invoice lama memerlukan hak nilai; hak pembayaran tidak memerlukan `sales_invoice.read`. Migrasi mempertahankan hak nilai yang sebelumnya dimiliki melalui grant Invoice/pembayaran dan mengaudit setiap penambahan tanpa memberikan hak baca/posting baru.
+- Scope implementasi ini backend, kontrak API, database dan pengujian. Pembangunan layar frontend sesuai mockup merupakan tahap berikutnya, bukan hasil yang diklaim selesai di sini.

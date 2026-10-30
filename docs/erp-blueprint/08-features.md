@@ -1,5 +1,12 @@
 # Features — backlog dan tahap implementasi
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Cakupan tambahan: pemisahan penerbitan dan pencatatan penerimaan di detail SJ, tanpa menu POD terpisah. Penerimaan bertahap, reversal dan penyelesaian selisih otomatis tidak termasuk. Verifikasi dicatat pada docs/development/sj-penerimaan-terpisah-2026-10-30.md.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
 ## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
 
 Implementasi Bagian 2 mencakup backend dan Office detail SO, uang muka/verifikasi, dana PREPAY, dokumen terkait, cetak/duplikat dan tindakan. Belum dinyatakan siap rilis: full suite dan QA browser operasional masih gate terpisah. Bagian 1 frontend serta Bagian 3–5 tidak ikut diklaim selesai.
@@ -282,5 +289,13 @@ Release 1 mencakup SO → Surat Jalan → Invoice. Picking, checking, packing, P
 
 ## O2C Release 1 (29 October 2026)
 
-Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
 
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Tahap backend Invoice & Terima Pembayaran mencakup API daftar/form/detail/draft/Submit, penerimaan atomik, bukti dan potongan, izin nilai, snapshot dan migrasi. Sumber tetap Release 1 SJ terbit. UI mockup, koreksi/reversal khusus pembayaran langsung dan release gate produksi belum dinyatakan selesai. Laporan verifikasi berada pada docs/development/invoice-payment-backend-2026-10-30.md.
+# Persediaan vertical slice — 30 Oktober 2026
+
+Backend tahap pertama mencakup daftar Persediaan, detail produk, Kartu Stok dan opname/adjustment minimum sesuai mockup. PTP, retur supplier, recall, pemusnahan dan konsinyasi tetap ditunda; UI tidak dinyatakan selesai hanya karena kontrak API tersedia.

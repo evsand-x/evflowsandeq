@@ -37,6 +37,22 @@ Atas permintaan pengguna backend dilengkapi (kontrak di `04-api.md`, bagian Rele
 - PPN ditampilkan sebagai tarif efektif (tarif × faktor DPP): bawaan 12% × 11/12 tampil **11%** di Ringkasan form dan kolom/ringkasan detail.
 - Pelanggan di form SO memakai field yang diketik langsung untuk mencari (`SearchSelectField`), bukan dropdown; mockup canvas dan `.pen` diselaraskan.
 
+## Lanjutan 30 Oktober 2026: Daftar Surat Jalan
+
+- Route `/operations/delivery-notes` mengikuti canvas `SJ-list`/`.pen`: tab Semua, Draft, Terbit belum diinvoice, Sudah diinvoice (dua tab terakhir, kolom Invoice dan banner hanya dengan `sales_invoice.read`); cari nomor SJ, SO atau pelanggan; filter gudang; kolom Nomor | Sales Order | Pelanggan | Gudang | Serah terima | Barang | Status | Invoice.
+- Tombol "Surat Jalan dari SO" membuka Daftar SO tab Perlu dikirim (keputusan pengguna); Surat Jalan tetap dibuat dari detail SO. Tombol tampil bagi pemegang `fulfillment.dispatch` dan `sales_order.read`.
+- Tab **Siap dibuatkan SJ** (keputusan pengguna 30 Oktober 2026): SO diajukan yang masih punya sisa belum dikirim, dari daftar SO yang sudah ada (`GET /operations/lists/orders?queue=TO_SHIP`, jumlah dari `summary.toShip`); kolom Nomor SO | Tanggal SO | Pelanggan | Termin | Sisa dikirim | Pengiriman | Buat Surat Jalan. Tab hanya untuk pemegang `sales_order.read` dan `fulfillment.dispatch`; tidak ada endpoint baru.
+- Tab **Semua** menggabungkan SO siap dikirim dalam satu tabel (keputusan pengguna 30 Oktober 2026): baris SO tampil di atas dengan tombol Buat Surat Jalan di kolom Nomor, status "Belum dibuat", Gudang/Serah terima/Invoice "—", Barang = sisa dikirim. Hitungan Semua = dokumen Surat Jalan + SO siap dikirim. Baris SO hanya di halaman 1 dan tidak tampil saat filter gudang aktif (SO belum punya gudang kirim); daftar lengkapnya di tab Siap dibuatkan SJ.
+
+## Lanjutan 30 Oktober 2026: Form Surat Jalan
+
+- Route `/operations/delivery-notes/from-order/:soId` (draft baru) dan `/operations/delivery-notes/:id` untuk draft membuka form canvas `SJ-form`; Surat Jalan terbit tetap memakai halaman detail lama sampai Detail SJ dibangun.
+- Memakai kontrak backend form Surat Jalan 29 Oktober (`number`, `document_date`, `ship_date`, `warehouse_id`, `carrier_name`, `vehicle_number`, `driver_name`, `freight_amount`; lihat `o2c-delivery-note-form-backend-2026-10-29.md`). Tambahan 30 Oktober: `receiver_title` pada penerbitan dan read model `GET /delivery-notes/form`.
+- Nomor SJ diisi usulan Setting dan hanya dikirim bila diubah (tanpa nomor server memakai urutan). Gudang asal satu per Surat Jalan; kolom Stok = stok layak di gudang itu.
+- Dialog Terbitkan: waktu serah terima, penerima, jabatan, qty diterima per baris (selisih menjadi `rejected_quantity` dengan alasan), bukti serah terima dan konfirmasi; sukses hanya setelah server menjawab.
+- Nama ekspedisi berupa isian teks dengan saran dari nama yang pernah dipakai (belum ada master ekspedisi). Alasan selisih: pilihan mockup + "Lainnya" dengan keterangan.
+- Ongkir (keputusan pengguna 30 Oktober 2026): ditagihkan hanya bila ongkir SO ditanggung pelanggan; nilai yang diisi menggantikan estimasi SO, kosong = estimasi SO. Bila ongkir SO ditanggung perusahaan, nilai di Surat Jalan hanya dicatat sebagai biaya kirim (`freight_amount`) dan tidak masuk tagihan, pendapatan, maupun Invoice.
+
 ## Gap yang masih tercatat
 
 | Mockup | Kondisi |

@@ -47,6 +47,7 @@ export const actionColumns = [
 ] as const;
 
 export const actionLabels: Record<string, string> = {
+  view_price: "Lihat harga",
   read: "Lihat",
   create: "Buat",
   update: "Ubah",
