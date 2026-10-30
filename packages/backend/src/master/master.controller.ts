@@ -585,11 +585,36 @@ function parseVersion(value: string | undefined) {
  * none of these keys and pass through unchanged.
  */
 function customerResponse(req: AuthenticatedRequest, value: unknown) {
-  return serialize(
+  const redacted =
     value && typeof value === "object" && !Array.isArray(value)
       ? redactCustomerCredit(req.auth, value as Record<string, unknown>)
-      : value,
+      : value;
+  return serialize(
+    redacted && typeof redacted === "object" && !Array.isArray(redacted)
+      ? {
+          ...redacted,
+          legalDocuments: normalizeCustomerLegalDocuments(
+            (redacted as Record<string, unknown>).legalDocuments,
+          ),
+        }
+      : redacted,
   );
+}
+
+/** Legacy imports may store legal documents as a keyed object; the UI contract is an array. */
+function normalizeCustomerLegalDocuments(value: unknown) {
+  if (value == null || Array.isArray(value)) return value;
+  if (typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if ("number" in record || "type" in record || "issuer" in record)
+    return [record];
+  return Object.entries(record)
+    .filter(([, number]) => number != null && String(number).trim() !== "")
+    .map(([type, number]) => ({
+      type,
+      number: String(number),
+      verificationState: "UNVERIFIED",
+    }));
 }
 
 function serialize(value: unknown): unknown {
