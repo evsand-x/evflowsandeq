@@ -16,6 +16,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
+import { DiscountLimitField } from "./discount-limit-field";
 import {
   Select,
   SelectContent,
@@ -387,6 +388,14 @@ export function UsersView() {
               ))}
             </div>
           </div>
+          {selected ? (
+            <DiscountLimitField
+              kind="users"
+              id={selected.user_id}
+              value={selected.discount_limit ?? null}
+              version={selected.version}
+            />
+          ) : null}
           {selected ? <EffectivePanel roles={roles.data?.data ?? []} roleIds={roleIds} /> : null}
           {error ? (
             <Alert variant="destructive">
@@ -684,6 +693,14 @@ export function RoleFormDrawer({
               className="h-9 rounded-sm"
             />
           </label>
+          {selected ? (
+            <DiscountLimitField
+              kind="roles"
+              id={selected.id}
+              value={selected.discount_limit ?? null}
+              version={selected.version}
+            />
+          ) : null}
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>

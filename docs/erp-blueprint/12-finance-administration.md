@@ -1,5 +1,28 @@
 # Domain Finance
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Jurnal SJ memakai waktu penerbitan server (issuedAt) sebagai event posting. Pendapatan/HPP tidak menunggu bukti pelanggan dan tidak diposting ulang saat penerimaan dicatat. Basis jatuh tempo tetap issuedAt dalam zona perusahaan + TOP snapshot SO. Catatan selisih penerimaan tidak otomatis mengoreksi invoice/AR/HPP.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+> **Batas Finance Release 1 O2C:** Pendapatan dan HPP diposting saat Surat Jalan terbit dengan bukti serah terima. Invoice dibuat dari Surat Jalan terbit dan membentuk AR dengan TOP yang disnapshot dari SO. Model unbilled AR, POD dan Packing List tetap menjadi scope lanjutan.
+
+
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+Catat uang muka SO hanya pada DRAFT/OPEN, jumlah positif, total tersedia dan kumulatif catatan pending/verified tidak melampaui total. Bukti PAYMENT dan rekening perusahaan aktif wajib. Verifikasi pengguna berbeda mengunci catatan/versi, memeriksa periode tanggal penerimaan lalu memposting Kas/Bank–Uang Muka Pelanggan melalui posting profile dan pajak uang muka yang berlaku. Penolakan menyimpan alasan tanpa jurnal. Receipt SO-bound tidak boleh dialokasikan ke invoice SO lain. Sisa tagihan = total SO − receipt unallocated POSTED terkait − pembayaran invoice POSTED; nilai ini tidak menggandakan uang muka yang sudah dialokasikan.
+
+## Keputusan 24 Oktober 2026 — pajak dan potongan
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md), FIN-17 dan FIN-18: daftar pajak dan pemetaan akun pindah ke Setting; Finance memuat Piutang (Invoice, Terima Pembayaran, bukti potong), Kas & Bank, Akuntansi (Daftar Akun, Jurnal) dan Faktur Pajak. Aturan pajak per pelanggan × produk dan WAPU/PPh per pelanggan dihentikan; menu Kredit & TOP Pelanggan dihapus.
+
+
+## Keputusan 24 Oktober 2026 — termin, kredit dan ongkos kirim
+
+Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Hanya Rupiah. Termin dipilih pada SO dan diwarisi invoice; dapat diubah sebelum invoice diposting (OTC-17). Limit kredit opsional dengan mode Nonaktif/Peringatan/Blokir, default Peringatan; pengecualian mode Blokir diajukan melalui mesin persetujuan umum. Ongkos kirim penjualan: Ditanggung perusahaan (biaya kirim aktual ke akun COGS/biaya pengiriman, tidak ditagih) atau Dibebankan ke pelanggan dengan Sebelum PPN (masuk DPP) atau Sesudah PPN (tidak dikenai pajak); pilihan bawaan dan akun diatur di Setting tanpa akun tertanam di kode. Rekonsiliasi dapat memakai persetujuan bila aturannya aktif.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Keputusan aktif: submenu bernama **Finance → Akuntansi → Akun**. Master impor pengguna (156 akun) menggantikan template enam digit sebagai daftar aktif; kode tetap teks persis sumber dan nama boleh berulang. Kelompok lima jenis dengan kategori rinci sumber, tipe Header/Detail, saldo normal, induk opsional untuk akar, PSAK 118, keterangan dan status Aktif/Nonaktif. Cakupan saat ini daftar/buat/edit/detail; tidak memakai Draft/approval rutin. Izin aktif account.read/create/update/import; update mencakup field aman dan status dengan constraint. Klasifikasi akun terpakai ditolak pada edit biasa. Saldo awal terpisah. Target lengkap CoA di bagian berikut tetap rancangan lanjutan untuk dimensi, reklasifikasi, import/export UI dan laporan. Migrasi yang disetujui: transit/karantina → 1-10200, WAPU → 1-10500, kas/bank → 1-10001, PPN Penjualan 11% → 2-20500; akun bersejarah nonaktif, jurnal lama tidak ditulis ulang.
@@ -99,7 +122,7 @@ Matriks lengkap kejadian, debit/kredit, POD, GRNI, retur, persediaan, ongkir, pe
 | Uang muka pelanggan diterima | Bank | Uang Muka Pelanggan; pajak bila telah terutang |
 | Uang muka dialokasikan ke invoice | Uang Muka Pelanggan | Piutang Usaha |
 
-Kebijakan final Gelombang A adalah mengakui pendapatan dan HPP ketika jumlah diterima pelanggan dibuktikan melalui POD. Invoice yang diposting setelah POD memindahkan saldo dari Piutang Belum Ditagih ke Piutang Usaha dan tidak mengakui pendapatan kedua kali. Bila kontrak tertentu memindahkan kendali pada waktu berbeda, transaksi tersebut memerlukan profil posting tersendiri.
+Kebijakan final Gelombang A adalah mengakui pendapatan dan HPP ketika Surat Jalan diterbitkan dengan bukti serah terima. Invoice yang diposting setelah POD memindahkan saldo dari Piutang Belum Ditagih ke Piutang Usaha dan tidak mengakui pendapatan kedua kali. Bila kontrak tertentu memindahkan kendali pada waktu berbeda, transaksi tersebut memerlukan profil posting tersendiri.
 
 ### Retur penjualan
 
@@ -580,20 +603,20 @@ Komitmen dapat ditampilkan pada laporan operasional/anggaran, tetapi bukan jurna
 
 ## 4. Penjualan normal
 
-Default kebijakan: pendapatan dan HPP diakui pada **POD yang mengonfirmasi jumlah diterima pelanggan**. Jatuh tempo tetap dihitung dari tanggal POD + TOP. Kontrak khusus dengan waktu perpindahan kendali berbeda membutuhkan posting profile tersendiri yang disetujui finance.
+Default Release 1: pendapatan dan HPP diakui pada **Surat Jalan terbit dengan bukti serah terima**. Jatuh tempo dihitung dari waktu serah terima Surat Jalan + TOP. Kontrak khusus dengan waktu perpindahan kendali berbeda membutuhkan posting profile tersendiri yang disetujui finance.
 
 | Kejadian | Debit | Kredit | Sumber/dimensi wajib |
 |---|---|---|---|
 | Dispatch dari gudang | 113003 Persediaan Dalam Perjalanan | 113001 Persediaan Barang Dagang — Gudang | Shipment, SO, produk, batch, qty, gudang/locator, biaya yang dibawa |
-| POD diterima pelanggan — HPP | 511001 HPP Barang Dagang | 113003 Persediaan Dalam Perjalanan | POD, shipment, pelanggan, produk/kategori, sales, biaya dispatch |
-| POD diterima pelanggan — pendapatan | 112002 Piutang Belum Ditagih | 411001 Penjualan Barang Dagang | POD, SO, pelanggan, produk/kategori, sales, nilai net sebelum pajak/ongkir |
+| Surat Jalan terbit — HPP | 511001 HPP Barang Dagang | 113003 Persediaan Dalam Perjalanan | POD, shipment, pelanggan, produk/kategori, sales, biaya dispatch |
+| Surat Jalan terbit — pendapatan | 112002 Piutang Belum Ditagih | 411001 Penjualan Barang Dagang | POD, SO, pelanggan, produk/kategori, sales, nilai net sebelum pajak/ongkir |
 | Ongkir ditagihkan dan menjadi hak perusahaan | 112002 Piutang Belum Ditagih | 411002 Pendapatan Ongkos Kirim Ditagihkan | POD/invoice stage, pelanggan, shipment; hanya nilai yang belum diakui |
 | PPN keluaran terutang pada POD | 112002 Piutang Belum Ditagih atau akun transisi pajak sesuai profil | 212001 PPN Keluaran | Tax profile, DPP, tarif, tanggal terutang |
 | Invoice resmi diposting | 112001 Piutang Usaha | 112002 Piutang Belum Ditagih | Invoice, pelanggan, POD lines, jatuh tempo; hanya jumlah diterima yang belum ditagih |
 
 Jika PPN telah diakui sebelum invoice komersial diposting, posting invoice tidak mengakui PPN kedua kali. Jika profil pajak menetapkan saat terutang berbeda, bagian pajak memakai event dan akun transisi yang sesuai tanpa mengubah waktu pengakuan pendapatan secara otomatis.
 
-Invoice asli yang dibawa saat pengiriman dapat berstatus **Diterbitkan — Menunggu POD**. Nomor dan snapshot dokumen dipertahankan; jurnal invoice dilakukan setelah POD tervalidasi. Kekurangan/penolakan penerimaan menyesuaikan jumlah yang boleh diposting, bukan menghapus histori dokumen pengiriman.
+Pada Release 1, Invoice hanya dibuat dari Surat Jalan terbit. Bukti serah terima disimpan pada Surat Jalan; tidak ada status menunggu POD atau validasi POD sebagai prasyarat. Nomor dan snapshot dokumen dipertahankan, dan posting Invoice hanya mereklasifikasi saldo yang dibentuk saat Surat Jalan terbit tanpa mengakui pendapatan atau HPP kedua kali. Kekurangan atau penolakan yang dicatat pada proses lanjutan tidak menghapus histori Surat Jalan terbit.
 
 ### Contoh penjualan
 
@@ -669,8 +692,11 @@ Jika barang milik perusahaan dikembalikan ke supplier:
 | Sebelum invoice supplier diposting | 211003 GRNI | 113001/113002 Persediaan terkait |
 | Setelah invoice supplier diposting dan debit note/credit supplier diterima | 211001 Utang Supplier atau piutang/refund supplier | 113001/113002 Persediaan; pembalikan PPN Masukan bila berlaku |
 | Supplier mengganti barang tanpa perubahan tagihan | 112004 Piutang/Claim Supplier bila claim bernilai diperlukan | Persediaan yang dikirim kembali; penerimaan pengganti menutup akun claim |
+| Nota debit klaim tanpa barang keluar (potongan harga, kurang kirim yang sudah ditagih) — keputusan 24 Oktober 2026 | 211001 Utang Supplier, atau 112004 bila tagihan sudah lunas | Persediaan tersisa dan 511002 Penyesuaian HPP secara proporsional untuk potongan harga; GRNI/penyesuaian untuk kurang kirim; pembalikan PPN Masukan bila berlaku |
 
 Nilai retur memakai biaya yang dapat ditelusuri. Selisih harga atau nilai yang disengketakan tetap terlihat sebagai open exception sampai diselesaikan.
+
+Keputusan 24 Oktober 2026: retur ke supplier mendukung dua jalur. Retur barang dicatat Logistik (stock movement keluar dari locator layak atau karantina), lalu Finance menerbitkan nota debit tertaut retur itu. Klaim tanpa barang keluar hanya berupa nota debit. Nilai nota debit tidak melebihi sisa tagihan asal setelah nota debit sebelumnya; nota debit posted mengurangi outstanding AP. Persetujuan mengikuti CFG-12.
 
 ## 8. Pergerakan dan penyesuaian persediaan
 
@@ -763,7 +789,7 @@ Satu penerimaan dapat dialokasikan ke beberapa invoice pelanggan yang sama. Pemb
 | Biaya administrasi bank | 641009 Beban Administrasi Bank | Kas/Bank |
 | Transfer antar-rekening sendiri | Kas/Bank tujuan | Kas/Bank sumber |
 
-Persetujuan atau status sudah ditransfer belum mengurangi utang sampai pembayaran diposting. Referensi bank, tanggal nilai, bukti dan alokasi disimpan. Reversal pembayaran membuka kembali settlement dan open item secara atomik.
+Keputusan 24 Oktober 2026: satu pembayaran dapat dialokasikan ke beberapa tagihan supplier yang sama, termasuk sebagian; pembayaran tanpa tagihan menjadi Uang Muka Supplier yang dialokasikan kemudian. Bila persetujuan pembayaran aktif (CFG-12, bawaan aktif), pembayaran tidak dapat dieksekusi/diposting sebelum disetujui. Persetujuan atau status sudah ditransfer belum mengurangi utang sampai pembayaran diposting. Referensi bank, tanggal nilai, bukti dan alokasi disimpan. Reversal pembayaran membuka kembali settlement dan open item secara atomik.
 
 ## 12. Pajak
 
@@ -833,8 +859,8 @@ Permission minimum:
 - `journal.post`
 - `journal.reverse`
 - `journal.control_account.adjust`
-- `posting_profile.read`
-- `posting_profile.manage`
+- `account_mapping.read` (Setting › Pemetaan Akun, pemetaan jurnal otomatis; menggantikan `posting_profile.read`)
+- `account_mapping.manage` (menggantikan `posting_profile.manage` untuk jenis `profile`; jenis `account` memakai `account.create`, `period` memakai `finance_period.close`, `bank` memakai `bank_account.manage`)
 - `posting_exception.resolve`
 - `inventory.cost.read`
 
@@ -1325,9 +1351,9 @@ Tampilan default ringkas tetap menyediakan drill-down ke baris sumber. Saldo ber
 
 Invoice hanya masuk kartu piutang setelah status **Posted**. Jatuh tempo disimpan pada invoice sebagai snapshot:
 
-`tanggal POD aktual + TOP pelanggan`
+`waktu serah terima Surat Jalan aktual + TOP pelanggan`
 
-Untuk pelanggan baru, mode pembayaran default adalah **COD saat barang diterima** selama tiga bulan berturut-turut atau **Bayar sebelum pengiriman** bila Finance menetapkan mode yang lebih ketat. COD berarti TOP 0 hari, sehingga jatuh tempo sama dengan tanggal POD. Fasilitas Tempo baru dapat ditetapkan setelah evaluasi Finance dan tidak muncul otomatis setelah pelanggan dibuat.
+Termin dipilih pada SO (keputusan 24 Oktober 2026); kebijakan COD awal pelanggan baru bersifat opsional, default nonaktif. COD berarti TOP 0 hari, sehingga jatuh tempo sama dengan waktu serah terima Surat Jalan. Limit kredit opsional dan diperiksa sesuai mode Nonaktif/Peringatan/Blokir.
 
 Jika invoice fisik dibawa saat pengiriman dengan status Menunggu POD, invoice belum masuk Piutang Usaha. Setelah POD diposting dan invoice resmi diposting, saldo masuk kartu dengan jatuh tempo yang sudah dihitung dari POD. Perubahan TOP pelanggan tidak mengubah invoice historis.
 
@@ -1341,7 +1367,7 @@ Bucket awal:
 - 61–90 hari;
 - lebih dari 90 hari.
 
-Bucket dapat diubah melalui Setting → Kebijakan Operasional (OPS-FIN-08). Simpan langsung membuat versi otomatis; tanggal berlaku bersifat opsional. Past due berarti tanggal acuan melewati jatuh tempo dan outstanding masih positif. Invoice sengketa tetap terlihat di bucket aslinya dengan penanda sengketa; sistem tidak menyembunyikannya dari total tanpa kebijakan tertulis.
+Bucket dapat diubah melalui Setting → Kebijakan Umum (OPS-FIN-08). Simpan langsung membuat versi otomatis; tanggal berlaku bersifat opsional. Past due berarti tanggal acuan melewati jatuh tempo dan outstanding masih positif. Invoice sengketa tetap terlihat di bucket aslinya dengan penanda sengketa; sistem tidak menyembunyikannya dari total tanpa kebijakan tertulis.
 
 ## 4. Kartu Utang Supplier dan Vendor
 
@@ -1476,7 +1502,7 @@ Saldo awal piutang/utang tidak diisi sebagai angka ringkas pada master pelanggan
 
 - pihak dan tipe kartu;
 - nomor invoice/tagihan asli;
-- tanggal invoice dan tanggal POD/penerimaan bila tersedia;
+- tanggal invoice dan waktu serah terima Surat Jalan/penerimaan bila tersedia;
 - tanggal jatuh tempo;
 - nilai awal dan saldo belum dibayar;
 - mata uang;
@@ -1895,10 +1921,10 @@ Sumber yang dicocokkan:
 
 ### Pelanggan dan kredit
 
-1. Pelanggan baru menjalani **COD selama tiga bulan berturut-turut** sebagai kebijakan awal. COD pada ERP berarti pelanggan membayar saat barang diterima. Finance dapat menetapkan pilihan yang lebih ketat, yaitu bayar sebelum pengiriman.
+1. Kebijakan COD awal untuk pelanggan baru bersifat opsional (default nonaktif sejak 24 Oktober 2026). COD pada ERP berarti pelanggan membayar saat barang diterima. Finance dapat menetapkan pilihan yang lebih ketat, yaitu bayar sebelum pengiriman.
 2. Pelanggan baru tidak langsung mendapat fasilitas Tempo. Setelah periode COD selesai, Finance mengevaluasi riwayat pembayaran dan dapat menetapkan TOP serta limit kredit melalui hak berwenang. Penyelesaian tiga bulan tidak otomatis memberi kredit.
-3. Sistem mencatat mode pembayaran pada pelanggan dan SO: **COD saat barang diterima** atau **Bayar sebelum pengiriman**. Mode bayar sebelum pengiriman menahan dispatch sampai dana terverifikasi.
-4. Invoice COD diposting setelah POD dan jatuh tempo pada tanggal barang diterima karena TOP = 0 hari. Invoice bayar sebelum pengiriman tetap dapat diterbitkan sesuai alur dokumen, tetapi dispatch menunggu dana yang terverifikasi.
+3. Sistem mencatat termin pada SO (bawaan dari pelanggan bila ada): **COD saat barang diterima** atau **Bayar sebelum pengiriman**. Mode bayar sebelum pengiriman menahan dispatch sampai dana terverifikasi.
+4. Invoice COD diposting setelah Surat Jalan terbit dan jatuh tempo pada tanggal barang diterima karena TOP = 0 hari. Invoice bayar sebelum pengiriman tetap dapat diterbitkan sesuai alur dokumen, tetapi dispatch menunggu dana yang terverifikasi.
 5. Pelanggan dengan invoice outstanding **H+30 dari tanggal jatuh tempo** dapat dibekukan. H-7, hari H, H+3, H+7 dan H+14 menjadi pengingat/follow-up; H+30 menjadi titik eskalasi/freeze sesuai policy. Freeze tidak menghapus invoice atau saldo dan dapat dikecualikan melalui unlock yang disetujui.
 6. TOP yang digunakan adalah Net 15, Net 30, Net 45, Net 60, Net 90 dan COD. TOP pelanggan pemerintah harus dikoordinasikan/ditetapkan bersama Finance.
 
@@ -1947,10 +1973,10 @@ Aturan perjalanan dan klaim dirinci pada [Perjalanan Dinas](13-hris.md). Ringkas
 
 | Sumber lama | Penyesuaian ERP |
 |---|---|
-| Tanda tangan supervisor pada nota pesanan/SO | Diganti validasi sistem dan hak akses. SO normal tidak memakai approval manual; approval hanya untuk unlock atau kebijakan lain yang dikonfigurasi |
+| Tanda tangan supervisor pada nota pesanan/SO | Diganti validasi sistem dan hak akses. Persetujuan SO dapat dinyalakan pada mesin persetujuan umum (24 Oktober 2026); tanpa aturan aktif SO berjalan otomatis |
 | PR dan PO diserahkan ke Finance | PR dan PO berada di Warehouse & Logistik → Pengadaan. Finance memverifikasi tagihan, AP dan pembayaran |
 | Picking mengurangi kartu stok manual | Sistem mengalokasikan/reservasi, mencatat picking aktual, lalu dispatch memindahkan stok ke transit. Tidak boleh mengurangi stok dua kali |
-| Invoice dibuat dari surat jalan bertanda tangan | Invoice mengikuti POD. Pilihan invoice asli dibawa saat pengiriman tetap tersedia dengan status Menunggu POD |
+| Invoice dibuat dari Surat Jalan terbit | Invoice mengikuti Surat Jalan. Pilihan invoice asli dibawa saat pengiriman tetap tersedia dengan status Menunggu POD |
 | Tagihan supplier dicatat pada AR dalam SOP | Dikoreksi menjadi AP Supplier/Vendor, sesuai konteks dan kartu utang |
 | WhatsApp dan bantex sebagai arsip utama | Diganti dokumen digital, nomor, handoff, lampiran dan audit; kanal komunikasi dapat dicatat sebagai bukti |
 | PPN 11% tertulis tetap di SOP | Sistem memakai tax profile bertanggal efektif dan tidak mengunci tarif dari SOP lama |
@@ -1961,7 +1987,7 @@ Keputusan pengguna terbaru pada bagian ini menjadi acuan lebih tinggi daripada n
 
 - freeze: **H+30**, bukan H+60;
 - pelanggan baru: **COD tiga bulan atau bayar sebelum pengiriman**, bukan otomatis Tempo;
-- jatuh tempo COD: tanggal POD;
+- jatuh tempo COD: waktu serah terima Surat Jalan;
 - Finance dan Accounting memegang verifikasi/penutupan piutang, sedangkan Sales melakukan tukar faktur/follow-up sesuai penugasan;
 - aturan perjalanan dinas dan klaim memakai batas PPT sampai ada revisi tertulis.
 
@@ -2108,7 +2134,7 @@ Untuk setiap produk, perusahaan, mata uang dan satuan dasar:
 
 `Nilai rata-rata baru = (Nilai stok sebelum + Nilai penerimaan yang dapat dikapitalisasi) / (Qty stok sebelum + Qty penerimaan layak dinilai)`
 
-HPP pengeluaran dihitung dengan rata-rata yang berlaku sebelum pergerakan. Setiap pergerakan menyimpan unit cost snapshot sehingga koreksi periode tidak mengubah transaksi historis secara diam-diam.
+HPP pengeluaran dihitung dengan rata-rata yang berlaku sebelum pergerakan. Keputusan 24 Oktober 2026: batch/lot tetap dilacak untuk FEFO/FIFO, expiry, recall dan karantina, tetapi nilai tidak dihitung per batch; seluruh batch produk yang sama memakai rata-rata yang sama. Setiap pergerakan menyimpan unit cost snapshot sehingga koreksi periode tidak mengubah transaksi historis secara diam-diam.
 
 Barang yang belum layak dijual, seperti karantina atau ditolak, tidak masuk available stock. Perlakuan nilainya mengikuti status: tetap dalam persediaan karantina, direklasifikasi, dikembalikan ke supplier, atau di-write-off dengan approval.
 
@@ -2901,3 +2927,30 @@ Draft Invoice berbasis POD dapat disimpan dan diperbarui sebelum posting. Endpoi
 
 ### Reversal akun nonaktif setelah migrasi master
 Reversal sumber yang sudah melalui otorisasi/approval boleh menggunakan akun historis nonaktif hanya jika setiap baris tepat membalik akun, ledger kind dan debit/kredit jurnal sumber dalam perusahaan/mata uang yang sama. Posting biasa tetap memerlukan akun Detail aktif. Ini menjaga koreksi historis tanpa mengaktifkan kembali akun uji untuk transaksi baru.
+
+## O2C Release 1 (29 Oktober 2026)
+
+### Addendum normatif Release 1
+
+Finance mengakui pendapatan dan HPP pada Surat Jalan terbit dengan bukti serah terima, lalu membuat Invoice hanya dari Surat Jalan terbit. TOP dipilih pada SO dan disnapshot untuk jatuh tempo. Tabel atau narasi lama yang memakai POD/Packing List sebagai event posting atau prasyarat Invoice adalah referensi/later scope dan tidak berlaku untuk Release 1.
+
+Finance menerima sumber Invoice dari Surat Jalan terbit. Penerbitan Surat Jalan memicu posting pendapatan/HPP secara atomik; snapshot TOP diwariskan untuk jatuh tempo Invoice.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+
+
+
+## Invoice dan Terima Pembayaran — keputusan 30 Oktober 2026
+
+Acuan: [desain backend Invoice](../superpowers/specs/2026-10-30-invoice-payment-backend-design.md) dan mockup `docs/mockup/evflow-office-design.pen`.
+
+- Jatuh tempo = **tanggal penerbitan Surat Jalan (`issuedAt`) dalam zona waktu perusahaan + termin snapshot SO**. Bukan tanggal serah terima yang diketik, tanggal dokumen SJ, tanggal Invoice, input atau cetak. Keputusan ini menggantikan basis jatuh tempo lama untuk Invoice baru; tanggal historis tidak ditulis ulang.
+- Nomor Invoice diusulkan dari Setting, boleh diubah selama draft dan wajib unik per perusahaan. Draft belum membentuk AR. Submit memposting AR terhadap piutang belum ditagih pada tanggal Invoice, tanpa mengulang pendapatan/HPP dari SJ; sesudah posting dokumen immutable.
+- Sumber hanya SJ terbit, satu Invoice per SJ. Jumlah, harga, pajak, ongkir dan termin dari snapshot sumber; catatan dan alamat penagihan disimpan untuk dokumen.
+- Terima Pembayaran mencatat kas/bank dan alokasi invoice atomik, dengan referensi bank unik, bukti transfer, periode terbuka dan pemeriksaan outstanding terkini. Potongan memakai master aktif dan snapshot akun; persen dihitung dari **nilai barang net sebelum PPN (subtotal)**, yaitu basis berlabel DPP pada mockup (2% × Rp28.700.000 = Rp574.000), bukan DPP nilai lain khusus perhitungan PPN. Tarif bukan konstanta backend.
+- Potongan wajib bukti tanpa bukti tetap AR berstatus menunggu bukti. Bukti potong memiliki nomor, tanggal dan file terpisah dari bukti transfer. Penyelesaian bukti memposting pengurangan AR tepat sekali. Jika pelanggan kemudian melunasi dengan kas, histori pending tetap terlihat tetapi tidak dapat mengurangi AR di bawah nol.
+- `sales_invoice.read` dan `customer_receipt.read/post` tetap independen. Nilai Invoice memerlukan `sales_invoice.view_price` (Lihat harga); daftar/detail baru tetap menyediakan identitas tanpa nilai bila hak itu tidak ada. Form/mutasi finansial dan endpoint Invoice lama memerlukan hak nilai; hak pembayaran tidak memerlukan `sales_invoice.read`. Migrasi mempertahankan hak nilai yang sebelumnya dimiliki melalui grant Invoice/pembayaran dan mengaudit setiap penambahan tanpa memberikan hak baca/posting baru.
+- Scope implementasi ini backend, kontrak API, database dan pengujian. Pembangunan layar frontend sesuai mockup merupakan tahap berikutnya, bukan hasil yang diklaim selesai di sini.

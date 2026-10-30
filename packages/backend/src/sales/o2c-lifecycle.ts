@@ -1,13 +1,15 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
 import { z } from "zod";
-import { createSalesOrderSchema } from "@evflow/contracts";
-import { operationalTaxSnapshot } from "../finance/operational-tax";
+import { createSalesOrderSchema, lineDiscountSchema, salesOrderNumberSchema } from "@evflow/contracts";
+import { resolveOrderHeader, resolveOrderNumber } from "./order-header";
+import { rejectTaxChoice } from "./pricing-controls";
 import { freightValues } from "./proforma";
 import { transactionCommand } from "../common/transaction-command";
 import { AuditService } from "../common/audit.service";
 import { lockCustomer } from "./transaction-controls";
 import { issueDocument, requireEvidence } from "./document-controls";
+import { assertLineDiscounts } from "./discount-limit";
 
 const audit = new AuditService();
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -323,9 +325,14 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
     .object({
       version: z.number().int().positive(),
       reason,
-      evidence_id: z.string().uuid(),
-      customer_reference: reason,
-      delivery_address: reason,
+      number: salesOrderNumberSchema.optional(),
+      evidence_id: createSalesOrderSchema.shape.evidence_id.nullable(),
+      customer_reference: createSalesOrderSchema.shape.customer_reference,
+      delivery_address: createSalesOrderSchema.shape.delivery_address,
+      order_date: createSalesOrderSchema.shape.order_date,
+      payment_term_code: createSalesOrderSchema.shape.payment_term_code,
+      salesperson_id: createSalesOrderSchema.shape.salesperson_id,
+      warehouse_id: createSalesOrderSchema.shape.warehouse_id,
       freight: createSalesOrderSchema.shape.freight.nullable(),
       lines: z
         .array(
@@ -334,6 +341,9 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
               line_id: z.string().uuid(),
               quantity: z.string().regex(/^\d+(\.\d{1,10})?$/),
               unit_price: z.string().regex(/^\d+(\.\d{1,8})?$/),
+              discount_rate: lineDiscountSchema.optional(),
+              warehouse_id: z.string().uuid().nullable().optional(),
+              /** Refused (LINE_TAX_NOT_ALLOWED): every line uses the default sales tax. */
               tax_master_id: z.string().uuid().optional(),
             })
             .strict(),
@@ -343,6 +353,7 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
     })
     .strict()
     .parse(body);
+  rejectTaxChoice({ lines: input.lines, freight: input.freight });
   return transactionCommand(c, a, `orders/${id}/revise`, key, input, async (tx) => {
     const ref = await tx.salesOrder.findFirst({ where: { companyId: c, id } });
     if (!ref) throw new NotFoundException();
@@ -355,6 +366,7 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
     if (order.version !== input.version || !["DRAFT", "OPEN"].includes(order.state))
       throw new ConflictException("ORDER_STATE_OR_VERSION_CHANGED");
     if (
+      (await tx.deliveryNote.count({ where: { companyId:c, salesOrderId:id, state:"ISSUED" } })) > 0 ||
       order.fulfillments.some((b) => b.state !== "CANCELLED") ||
       order.lines.some((l) => l.closedQuantity.gt(0))
     )
@@ -364,15 +376,51 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
       new Set(input.lines.map((l) => l.line_id)).size !== input.lines.length
     )
       throw new ConflictException("REVISION_LINES_REQUIRED");
-    await requireEvidence(tx, c, input.evidence_id, "SALES_ORDER");
+    // The SO number may only change while the order is still a draft.
+    const number =
+      input.number && input.number !== order.number
+        ? order.state === "DRAFT"
+          ? await resolveOrderNumber(tx, c, input.number)
+          : (() => {
+              throw new ConflictException({
+                code: "ORDER_NUMBER_LOCKED",
+                message: "Nomor SO hanya dapat diubah saat SO masih Draft.",
+              });
+            })()
+        : null;
+    const customer = await tx.customer.findFirstOrThrow({ where: { id: order.customerId, companyId: c } });
+    const { lineWarehouseIds, ...header } = await resolveOrderHeader(tx, c, a, {
+      customer_id: order.customerId,
+      currency: order.currency,
+      order_date: input.order_date ?? order.orderDate.toISOString().slice(0, 10),
+      payment_term_code: input.payment_term_code ?? order.paymentTermCode ?? undefined,
+      salesperson_id: input.salesperson_id ?? order.salespersonId ?? order.createdById,
+      warehouse_id: input.warehouse_id ?? order.warehouseId ?? undefined,
+      customer_reference: input.customer_reference ?? order.customerReference ?? undefined,
+      delivery_address: input.delivery_address ?? order.deliveryAddress ?? undefined,
+      evidence_id: input.evidence_id === undefined ? order.evidenceId ?? undefined : input.evidence_id ?? undefined,
+      lines: input.lines.map(line => ({
+        product_id: order.lines.find(l => l.id === line.line_id)?.productId ?? line.line_id,
+        quantity: line.quantity, unit_price: line.unit_price,
+        warehouse_id: line.warehouse_id === undefined ? order.lines.find(l => l.id === line.line_id)?.warehouseId ?? undefined : line.warehouse_id ?? undefined,
+      })),
+    }, customer);
     if (input.freight) {
-      await freightValues(tx, c, order.customerId, {
+      await freightValues(tx, c, {
         amount: input.freight.estimate,
         tax_mode: input.freight.tax_mode,
-        tax_rule_id: input.freight.tax_rule_id,
       });
     }
-    for (const line of input.lines) {
+    await assertLineDiscounts(
+      tx,
+      c,
+      a,
+      input.lines.map((line) => ({
+        productId: order.lines.find((l) => l.id === line.line_id)?.productId ?? line.line_id,
+        discountRate: line.discount_rate,
+      })),
+    );
+    for (const [index, line] of input.lines.entries()) {
       if (
         !order.lines.some((l) => l.id === line.line_id) ||
         new Prisma.Decimal(line.quantity).lte(0)
@@ -383,15 +431,13 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
         data: {
           orderedQuantity: line.quantity,
           unitPrice: line.unit_price,
+          discountRate: line.discount_rate ?? 0,
+          warehouseId: lineWarehouseIds[index] ?? null,
           allocatedQuantity: 0,
           backorderQuantity: 0,
           priceSnapshot: Prisma.DbNull,
-          taxSnapshot: line.tax_master_id
-            ? {
-                ...(await operationalTaxSnapshot(tx, c, line.tax_master_id, new Date(), "SALES")),
-                operational_tax_id: line.tax_master_id,
-              }
-            : Prisma.DbNull,
+          // Re-priced with the default sales tax when the revised order is submitted.
+          taxSnapshot: Prisma.DbNull,
         },
       });
     }
@@ -406,9 +452,8 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
         version: { increment: 1 },
         materialRevision: { increment: 1 },
         paymentSnapshot: Prisma.DbNull,
-        customerReference: input.customer_reference,
-        deliveryAddress: input.delivery_address,
-        evidenceId: input.evidence_id,
+        ...header,
+        ...(number ? { number } : {}),
         ...(input.freight !== undefined
           ? {
               freightEstimate: input.freight?.estimate ?? null,
@@ -439,3 +484,4 @@ export async function reviseOrder(c: string, a: string, id: string, body: unknow
     return after;
   });
 }
+

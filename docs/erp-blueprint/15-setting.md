@@ -1,5 +1,32 @@
 # Domain Setting
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Tidak ada grant/preset peran baru. Penerimaan pada detail SJ berada pada tindakan fulfillment.dispatch milik submenu Surat Jalan, baca memakai outbound_shipping.read. Grant delivery_receipt.* / fulfillment.pod lama tetap milik submenu lain, tidak menjadi fallback. Penomoran/termin/policy stok dan posting tetap di Setting.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+Izin sales_order_advance.create/verify dimigrasikan hanya dari grant customer_receipt.post; sales_order.print hanya dari sales_order.read, scope dipertahankan dan pemberian diaudit. Peran lain tidak diperluas. Dokumen terkait Pick Slip memakai outbound_picking.read, Packing List outbound_checking.read, Surat Jalan outbound_shipping.read, Surat Jalan outbound_shipping.read, Proforma proforma.read, invoice/nota kredit sales_invoice.read. Ini menyelaraskan rencana Bagian 2 dengan invariant izin submenu independen.
+
+## Konfigurasi kepala SO — backend 25 Oktober 2026
+
+CFG-08: OPS-FLX-10 (kode gudang bawaan, null), OPS-FLX-11 (gudang per barang, false), OPS-FLX-12 (No. SP wajib, false), OPS-FLX-13 (lampiran wajib, false) disimpan sebagai policy versi yang dapat diedit. Kelompok sales dimiliki izin terms_credit.read/update melalui API policy yang ada. Migration menyediakan nilai awal bagi perusahaan beranggota aktif tanpa menimpa pilihan lama, dengan audit sistem; perusahaan baru memakai provisioning. Opsi form SO hanya memuat metadata yang diperlukan dan tidak membuka konfigurasi pribadi/keuangan lain. Pesan konfigurasi menyediakan settings_href menuju /setting/sales. Kartu kontrol khusus baru masih pekerjaan frontend berikutnya.
+
+
+## Keputusan 24 Oktober 2026 — konsolidasi pengaturan
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Submenu Setting: Profil Perusahaan, Pengguna, Peran (termasuk batas diskon per peran dan per orang), Kebijakan Umum (zona waktu, tahun buku, mata uang dari data perusahaan; format angka), Penomoran Dokumen (IAM-06), Pajak (FIN-17), Termin & Kredit (daftar termin, mode kredit, ongkir bawaan), Jenis Potongan (FIN-18), Pemetaan Akun, Persetujuan (persetujuan sementara P2P CFG-12 sejak tahap 5; mesin umum tahap 4). Setiap submenu memiliki izin sendiri (CFG-11). Kebijakan duplikat identitas perusahaan (`OPS-COMP-01..03`) dihentikan.
+
+
+## Keputusan 24 Oktober 2026 — Pengaturan terpusat
+
+Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Setting menjadi satu tempat untuk mengatur aplikasi seperti ERP SaaS pada umumnya. Semua parameter bisnis dapat diedit pengguna berizin, dan konfigurasi yang dibutuhkan transaksi tersedia sejak awal sebagai nilai bawaan (CFG-08). Profil Perusahaan (nama, alamat, kontak, NPWP, logo) diedit langsung (IAM-10). Hanya Rupiah; format angka diatur (CFG-09). Struktur Organisasi (IAM-12) dan mesin persetujuan umum (IAM-02/07) dikelola di sini. Peran dibuat bebas tanpa preset (IAM-13); Pengguna, Peran dan Hak Akses tetap khusus Admin Sistem untuk mencegah pengguna menaikkan haknya sendiri, sedangkan pengaturan lain memakai izin per submenu sehingga dapat didelegasikan. Menu yang belum berfungsi disembunyikan (CFG-10). Master pajak tetap di Finance → Pajak dan ditautkan dari Setting.
+
+**Implementasi tahap 2 (24 Oktober 2026):** hub `/setting`, Profil Perusahaan (`/setting/company`), Penomoran Dokumen (`/setting/numbering`), Termin, Ongkos Kirim & Kredit (`/setting/sales`, kebijakan `OPS-FLX-01..04`) dan Kebijakan Operasional (`/setting/policies`). Navigasi menampilkan Kebijakan Pelanggan Baru dan Kredit & Exposure sebagai satu entri "Termin, Ongkos Kirim & Kredit"; matriks izin tetap memisahkan capability-nya. Nilai bawaan dan 156 akun dibuat oleh provisioning idempotent. Bukti: [catatan implementasi](../development/setting-hub-2026-10-24.md).
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Matriks menampilkan Finance → Akuntansi → Akun dengan izin independen account.read, account.create, account.update, account.import. Admin Sistem tetap penuh dalam perusahaan aktif; grant peran biasa lama tidak diperluas otomatis. Mapping jurnal dan akun pajak tetap konfigurasi Finance berbasis ID akun, bukan hardcode kode sumber. Kode pada migrasi lokal hanya data konfigurasi pengguna. Riwayat audit mencatat impor, pemetaan dan penonaktifan akun uji.
@@ -25,7 +52,7 @@ Pengaturan master pajak operasional berada pada Finance → Pajak → Daftar & A
 
 Ketentuan ini menggantikan pemetaan bersama CRM/Master Data yang sebelumnya diterima sebagai tampilan sementara.
 
-Keputusan terbaru 16 Oktober 2026: Admin Sistem dapat mengatur izin semua menu yang operasional. Tujuh tampilan Dashboard memiliki izin baca tersendiri, sementara data tetap dibatasi izin/scope sumber. Menu belum operasional tetap terlihat tanpa checkbox semu. Pengosongan grant peran biasa lama yang diminta pengguna telah dilakukan pada database development lokal secara auditabel, bukan sebagai migrasi global.
+Keputusan terbaru 16 Oktober 2026: Admin Sistem dapat mengatur izin semua menu yang operasional. Tujuh tampilan Dashboard memiliki izin baca tersendiri, sementara data tetap dibatasi izin/scope sumber. Sejak 24 Oktober 2026 menu yang belum berfungsi disembunyikan dari navigasi dan matriks. Pengosongan grant peran biasa lama yang diminta pengguna telah dilakukan pada database development lokal secara auditabel, bukan sebagai migrasi global.
 
 Penghapusan, penonaktifan, atau perubahan grant peran biasa mencabut sesi anggota yang kehilangan atau mendapat izin baru. Bila anggota itu tetap memegang peran aktif `ADMIN_SYSTEM`, sesinya dipertahankan: hak Admin Sistem tidak berubah dan principal/izin dibaca ulang dari database pada setiap request. Pengubahan keanggotaan atau penonaktifan Admin Sistem sendiri tetap mengikuti aturan pencabutan sesi dan perlindungan administrator terakhir.
 
@@ -55,16 +82,22 @@ Status: sumber domain kanonis untuk pengaturan lintas ERP. Setting mengatur iden
 1. Profil Perusahaan
 2. Pengguna
 3. Peran (termasuk Matriks Hak Akses pada detail peran)
-4. Kebijakan Operasional
-5. Kebijakan Pelanggan Baru
-6. Kredit & Exposure
-7. Pengaturan Persetujuan
-8. Template Cetak
-9. Penomoran Dokumen
-10. Daftar Referensi & Alasan
-11. Periode & Closing
-12. Impor/Ekspor & Arsip
-13. Audit
+4. Struktur Organisasi
+5. Kebijakan Operasional (termasuk format angka Rupiah)
+6. Termin & Ongkos Kirim
+7. Kebijakan Pelanggan Baru (opsional)
+8. Kredit & Exposure (mode Nonaktif/Peringatan/Blokir)
+
+Butir 6–8 tampil di navigasi sebagai satu halaman "Termin, Ongkos Kirim & Kredit".
+9. Pengaturan Persetujuan
+10. Template Cetak
+11. Penomoran Dokumen
+12. Daftar Referensi & Alasan
+13. Periode & Closing
+14. Impor/Ekspor & Arsip
+15. Audit
+
+Submenu hanya tampil setelah berfungsi (CFG-10).
 
 Master Data, transaksi, posting, stok, payroll, laporan dan Dashboard tetap dimiliki modul masing-masing. Setting hanya menyediakan konfigurasi, IAM, approval, nomor, template, referensi, periode, import orchestration dan audit read-only.
 
@@ -90,13 +123,13 @@ Kelompok policy: Perusahaan & Lokalisasi, Finance & Penagihan, Gudang & Pengadaa
 
 ### 4.1 Kebijakan pelanggan, TOP dan kredit
 
-**Kebijakan Pelanggan Baru** menetapkan mode awal COD saat barang diterima atau Bayar sebelum Pengiriman. Setelah evaluasi Finance, pengguna berwenang dapat menetapkan fasilitas Tempo, TOP, limit kredit, tanggal efektif, toleransi dan status freeze/unlock pada kebijakan pelanggan tertentu. Nilai tersebut bukan atribut bebas yang mengubah saldo pada Master Data.
+**Kebijakan Pelanggan Baru** bersifat opsional (default nonaktif): bila dinyalakan, menetapkan mode awal COD saat barang diterima atau Bayar sebelum Pengiriman beserta durasinya. Pengguna berwenang dapat menetapkan termin bawaan, limit kredit (opsional), tanggal efektif, toleransi dan status freeze/unlock pada kebijakan pelanggan tertentu. Nilai tersebut bukan atribut bebas yang mengubah saldo pada Master Data.
 
-TOP dan limit kredit pelanggan dikelola melalui **Finance → Kredit & TOP Pelanggan** dengan referensi pelanggan dan versi kebijakan. Setting hanya menyediakan policy global/default; Finance menjadi pemilik evaluasi fasilitas, exposure, past due dan keputusan kredit. Sales membaca hasil kebijakan saat membuat atau mengevaluasi SO. SO dan invoice menyimpan snapshot TOP/limit/policy yang dipakai sehingga perubahan berikutnya tidak mengubah histori.
+Sejak konsolidasi 24 Oktober 2026, termin bawaan, limit kredit, freeze dan toleransi menjadi atribut **Master Data › Pelanggan** (izin kredit pelanggan). Ketentuan lama: TOP dan limit kredit pelanggan dikelola melalui Finance → Kredit & TOP Pelanggan dengan referensi pelanggan dan versi kebijakan. Setting menyediakan policy global/default, daftar termin dan mode kredit; Finance menjadi pemilik evaluasi fasilitas, exposure, past due dan keputusan kredit. Sales memilih termin pada SO; termin bawaan pelanggan hanya mengisi otomatis. SO dan invoice menyimpan snapshot TOP/limit/policy yang dipakai sehingga perubahan berikutnya tidak mengubah histori.
 
 #### Pengaturan fasilitas per pelanggan
 
-Alur layar: **Finance → Kredit & TOP Pelanggan → pilih pelanggan → Tambah/Revisi Fasilitas**. Form menampilkan identitas pelanggan dan histori versi, lalu menyediakan:
+Alur layar (digantikan konsolidasi 24 Oktober 2026: Master Data › Pelanggan › Kredit): Finance → Kredit & TOP Pelanggan → pilih pelanggan → Tambah/Revisi Fasilitas. Form menampilkan identitas pelanggan dan histori versi, lalu menyediakan:
 
 - mode pembayaran: COD, Prepay atau Tempo;
 - TOP dan dasar jatuh tempo;
@@ -111,9 +144,11 @@ TOP Supplier/Vendor tidak diatur pada Kredit & Exposure pelanggan. TOP tersebut 
 
 ## 5. Pengaturan Persetujuan
 
-Policy approval memiliki jenis pengajuan, kondisi, scope, dasar nilai/mata uang, batas, tahap berurutan, mode any/all, approver user/role/atasan, delegasi, self-approval, reminder, escalation, pemicu reapproval, effective date dan version. Self-approval default nonaktif; nilai awal reminder 4 jam kerja dan escalation 1 hari kerja dapat dikonfigurasi.
+Keputusan 24 Oktober 2026 — persetujuan sementara P2P (CFG-12). Tahap 5 (P2P) dibangun sebelum mesin persetujuan umum. Sampai mesin umum aktif, Setting › Persetujuan menampilkan satu baris per jenis dokumen: PO (bawaan nonaktif), Pembayaran Supplier (bawaan aktif) dan Retur/Nota Debit Supplier (bawaan nonaktif). Setiap baris hanya berisi aktif/nonaktif; pemberi persetujuan adalah pemegang izin `purchase_order.approve`, `supplier_payment.approve` atau `supplier_return.approve`. Mengubah toggle diaudit dan hanya berlaku untuk pengajuan baru. Pengaju tidak menyetujui pengajuannya sendiri; tanpa pemegang izin, pengajuan dialihkan ke Admin Sistem. Persetujuan opname/penyesuaian dan pemusnahan wajib dan tidak ditampilkan sebagai toggle. Saat mesin umum (tahap 4) aktif, setiap toggle aktif dimigrasikan menjadi aturan setara dan pengajuan berjalan tetap pada statusnya.
 
-Lifecycle: Draft → Validate/Simulate → Active → Inactive. Aktivasi ditolak bila assignee, scope, limit, fallback, prioritas atau jalur keputusan belum valid. Simulasi tidak menghasilkan keputusan. SO normal tidak memiliki approval rutin; approval dipakai untuk unlock SO dan exception domain.
+Policy approval memiliki jenis pengajuan, kondisi, scope, dasar nilai/mata uang, batas, tahap berurutan, mode any/all, pemberi persetujuan orang/peran/atasan langsung/atasan N tingkat/kepala departemen dari Struktur Organisasi, delegasi, self-approval, reminder, escalation, pemicu reapproval, effective date dan version. Self-approval default nonaktif; nilai awal reminder 4 jam kerja dan escalation 1 hari kerja dapat dikonfigurasi.
+
+Lifecycle: Draft → Validate/Simulate → Active → Inactive. Aktivasi ditolak bila assignee, scope, limit, fallback, prioritas atau jalur keputusan belum valid. Simulasi tidak menghasilkan keputusan. Persetujuan dapat dipasang ke jenis dokumen apa pun, termasuk SO dan pengecualian kredit (24 Oktober 2026); tanpa aturan aktif, dokumen berjalan tanpa persetujuan. Pengajuan tanpa pemberi persetujuan dialihkan ke Admin Sistem.
 
 Pengajuan: Draft → Menunggu Persetujuan → Disetujui / Perlu Revisi / Ditolak, dengan Dibatalkan atau Kedaluwarsa bila didukung. Revisi bisnis material membatalkan keputusan lama dan memulai evaluasi ulang. Delegasi tidak memperluas kewenangan; delegator dan pelaksana sebenarnya disimpan.
 
@@ -146,7 +181,7 @@ Model data utama: `companies`, `users`, `auth_sessions`, `refresh_tokens`, `comp
 - alokasi tidak melebihi saldo/qty sah;
 - batch recall, expired, blocked atau karantina tidak dapat dikirim;
 - izin, scope dan company isolation selalu diperiksa backend;
-- SO normal tidak memakai approval manual rutin;
+- persetujuan tidak pernah lolos otomatis; pengajuan tanpa pemberi persetujuan dialihkan ke Admin Sistem;
 - PR/PO berada di Warehouse & Logistik, invoice/AP/pembayaran di Finance;
 - dokumen issued mempertahankan snapshot identitas, nilai, template dan policy.
 
@@ -180,3 +215,33 @@ Workspace Pengguna/Peran memakai halaman daftar, form penuh, detail bertab dan m
 ## Implementasi pemisahan submenu — 16 Oktober 2026
 
 Migration `20261016210000_independent_submenu_permissions` menggantikan grant induk CRM/Master Data dan baca fulfillment dengan grant anak terpisah. Peran lama mempertahankan tindakan/scope efektif yang sudah dimiliki; peran tanpa grant tetap kosong. Pemetaan diaudit oleh sistem. Admin Sistem tetap penuh dan sesinya tidak dicabut selama peran aktif. Matriks memiliki pilihan semua per kelompok/per tindakan, status sebagian, jumlah izin dipilih, serta buka/tutup seluruh menu. Kontrol tersebut hanya mengubah grant anak individual. Catatan pelaksanaan dan gate pada [hak akses fleksibel](../development/flexible-access-2026-10-16.md).
+
+## Implementasi tahap 2b — konsolidasi pengaturan (24 Oktober 2026)
+
+Setiap submenu Setting memiliki izin sendiri: `setting_general`, `terms_credit`, `tax_setting`, `deduction_type`, `account_mapping`, `numbering_rule`, `customer_credit`, `discount_limit`, `bank_account.manage`, `special_price.approve`. Tidak ada grant induk bersama.
+
+- **Penomoran:** format `Prefix.YYYY|YY.MM.Urutan`; reset Bulanan atau Tahunan. Perubahan reset berlaku pada periode berikutnya.
+- **Kebijakan Umum** (`/setting/general`): zona waktu dan awal tahun buku. `OPS-COMP-01..03` dan `OPS-FLX-05` dihentikan sebagai kebijakan.
+- **Pajak:** PPN bawaan 12% × DPP 11/12 untuk penjualan dan pembelian. Aturan pajak per pelanggan × produk dihapus; pajak per baris ditolak (`LINE_TAX_NOT_ALLOWED`).
+- **Termin & Kredit** (`/setting/terms`): limit, pembekuan, toleransi jatuh tempo, termin bawaan dan kode faktur pajak bawaan menjadi atribut pelanggan. Pelanggan tanpa termin bawaan memakai COD sementara tahap 3.
+- **Jenis Potongan:** 4 jenis bawaan, akun pelunasan dan aturan bukti.
+- **Pemetaan Akun** (`/setting/account-mapping`): izin per jenis konfigurasi Finance.
+- **Batas diskon:** per peran dan per orang (Admin Sistem saja), per produk (`discount_limit.manage`), bawaan perusahaan `OPS-FLX-09`; nilai terkecil menang.
+- Menu `/operations/controls` dihapus; satu menu hanya di satu modul; pesan galat menautkan halaman Setting terkait.
+
+Rencana: [2b](../superpowers/plans/2026-10-24-konsolidasi-pengaturan-2b.md). Catatan: [setting-consolidation-2026-10-24.md](../development/setting-consolidation-2026-10-24.md).
+
+## O2C Release 1 (29 Oktober 2026)
+
+Termin/TOP aktif dipilih pada SO dan disnapshot. Perubahan Setting hanya berlaku untuk SO baru; izin Surat Jalan memakai grant outbound yang telah ada dan tetap terpisah dari izin SO/Invoice.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Penomoran customer_receipt tersedia sebagai default editable RC dengan reset bulanan. Nomor Invoice dapat diganti selama draft dan harus unik per perusahaan. Capability sales_invoice.view_price (Lihat harga) tidak menggantikan izin Invoice maupun pembayaran; grant awal hanya mempertahankan akses nilai lama secara teraudit. Pajak potong dan Jenis Potongan tetap dikelola di Setting; form pembayaran menyediakan lookup terbatas tanpa memberikan izin pengelolaan Setting.

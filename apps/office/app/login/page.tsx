@@ -260,12 +260,6 @@ export default function LoginPage() {
                 <AlertDescription>Sesi berakhir. Silakan masuk kembali.</AlertDescription>
               </Alert>
             )}
-            {state === "error" && !error && stage !== "verify" && (
-              <Alert role="status" className="login-status login-status-info">
-                <Info aria-hidden="true" />
-                <AlertDescription>Sesi belum dapat diperiksa. Coba masuk kembali.</AlertDescription>
-              </Alert>
-            )}
             {error && (
               <Alert
                 ref={errorSummary}

@@ -6,24 +6,32 @@ import { issueProformaSchema, previewProformaSchema } from "@evflow/contracts";
 import { transactionCommand } from "../common/transaction-command";
 import { AuditService } from "../common/audit.service";
 import { issueDocument } from "./document-controls";
-import { lineAmounts, assertPriceGrants } from "./pricing-controls";
+import { lineAmounts, assertPriceGrants, rejectTaxChoice } from "./pricing-controls";
+import { defaultSalesTaxOn } from "../finance/operational-tax";
 import { lockCustomer, assertDispatchLots } from "./transaction-controls";
+import { availablePrepayFunds } from "./prepay-funds";
 
 type Tx = Prisma.TransactionClient;
 export const proformaKinds = { startsWith: "PROFORMA" } as const;
 
+export const proformaBatchInclude = {
+      salesOrder: { include: { customer: true, company: true } },
+      allocations: {
+        orderBy: { id: "asc" as const },
+        include: { salesOrderLine: { include: { product: { include: { baseUom: true } } } } },
+      },
+} satisfies Prisma.FulfillmentBatchInclude;
+
 async function source(tx: Tx, companyId: string, batchId: string) {
   const batch = await tx.fulfillmentBatch.findFirst({
     where: { id: batchId, companyId },
-    include: {
-      salesOrder: { include: { customer: true, company: true } },
-      allocations: {
-        orderBy: { id: "asc" },
-        include: { salesOrderLine: { include: { product: { include: { baseUom: true } } } } },
-      },
-    },
+    include: proformaBatchInclude,
   });
   if (!batch) throw new NotFoundException("Tahap pemenuhan tidak ditemukan.");
+  return proformaSource(batch);
+}
+
+export function proformaSource(batch: Prisma.FulfillmentBatchGetPayload<{ include: typeof proformaBatchInclude }>) {
   const order = batch.salesOrder;
   const allocations = batch.allocations
     .filter((a) => a.quantity.gt(0))
@@ -88,7 +96,7 @@ async function source(tx: Tx, companyId: string, batchId: string) {
 }
 
 // Legacy originals are kept and reused if their printed content still matches the allocation.
-function matches(saved: Prisma.JsonValue, current: Awaited<ReturnType<typeof source>>) {
+export function matchesProformaSource(saved: Prisma.JsonValue, current: ReturnType<typeof proformaSource>) {
   const value = saved as Record<string, unknown> | null;
   if (typeof value?.source_version === "string") return value.source_version === current.version;
   const compact = (v: Record<string, unknown>) =>
@@ -122,6 +130,8 @@ function matches(saved: Prisma.JsonValue, current: Awaited<ReturnType<typeof sou
   return !!value && compact(value) === compact(current.snapshot);
 }
 
+const matches = matchesProformaSource;
+
 async function latest(tx: Tx, companyId: string, batchId: string) {
   return tx.fulfillmentDocument.findFirst({
     where: { companyId, batchId, kind: proformaKinds },
@@ -132,48 +142,15 @@ async function latest(tx: Tx, companyId: string, batchId: string) {
 export async function freightValues(
   tx: Tx,
   companyId: string,
-  customerId: string,
   input: { amount: string; tax_mode: "NON_TAXABLE" | "TAXABLE"; tax_rule_id?: string | undefined },
 ) {
+  rejectTaxChoice({ freight: input });
   const amount = new Prisma.Decimal(input.amount);
   if (input.tax_mode === "NON_TAXABLE")
     return { amount, tax: new Prisma.Decimal(0), snapshot: null };
-  const rule = await tx.salesTaxRule.findFirst({
-    where: {
-      ...(input.tax_rule_id ? { id: input.tax_rule_id } : {}),
-      companyId,
-      customerId,
-      state: "ACTIVE",
-      effectiveFrom: { lte: new Date() },
-      effectiveTo: { gt: new Date() },
-    },
-    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
-  });
-  if (!rule) throw new ConflictException("FREIGHT_TAX_RULE_INVALID");
-  const rounding = (
-    {
-      HALF_UP: Prisma.Decimal.ROUND_HALF_UP,
-      HALF_EVEN: Prisma.Decimal.ROUND_HALF_EVEN,
-      DOWN: Prisma.Decimal.ROUND_DOWN,
-    } as Record<string, Prisma.Decimal.Rounding>
-  )[rule.rounding];
-  if (rounding === undefined) throw new ConflictException("FREIGHT_TAX_ROUNDING_REQUIRED");
-  const dpp = amount.mul(rule.dppFactor).toDecimalPlaces(rule.decimalPlaces, rounding);
-  const tax = dpp.mul(rule.rate).toDecimalPlaces(rule.decimalPlaces, rounding);
-  return {
-    amount,
-    tax,
-    snapshot: {
-      rule_id: rule.id,
-      name: rule.name,
-      legal_reference: rule.legalReference,
-      rate: rule.rate.toString(),
-      dpp_factor: rule.dppFactor.toString(),
-      decimal_places: rule.decimalPlaces,
-      rounding: rule.rounding,
-      taxable_event: rule.taxableEvent,
-    },
-  };
+  // Taxable freight uses the default sales tax; per-customer rules are no longer read.
+  const { tax, snapshot } = await defaultSalesTaxOn(tx, companyId, amount);
+  return { amount, tax, snapshot };
 }
 
 async function lockedSource(tx: Tx, c: string, id: string) {
@@ -192,16 +169,12 @@ async function lockedSource(tx: Tx, c: string, id: string) {
   if (!current.snapshot.allocations.length)
     throw new ConflictException("Proforma memerlukan alokasi dengan jumlah positif.");
   if (current.batch.reservationExpiresAt && current.batch.reservationExpiresAt <= new Date()) {
-    const funds = await tx.customerReceipt.aggregate({
-      where: {
-        companyId: c,
-        fulfillmentBatchId: id,
-        state: "POSTED",
-        currency: current.snapshot.currency,
-      },
-      _sum: { unallocatedAmount: true },
+    const funds = await availablePrepayFunds(tx, c, {
+      id,
+      salesOrderId: current.batch.salesOrderId,
+      currency: current.snapshot.currency,
     });
-    if ((funds._sum.unallocatedAmount ?? new Prisma.Decimal(0)).lt(current.snapshot.total))
+    if (funds.lt(current.snapshot.total))
       throw new ConflictException("Reservasi kedaluwarsa. Evaluasi kembali tahap pemenuhan.");
   }
   await assertPriceGrants(
@@ -219,12 +192,13 @@ async function lockedSource(tx: Tx, c: string, id: string) {
 
 export function previewProforma(c: string, id: string, body: unknown = {}) {
   const input = previewProformaSchema.parse(body);
+  rejectTaxChoice({ freight: input.freight });
   return prisma.$transaction(async (tx) => {
     const current = await lockedSource(tx, c, id);
     const document = await latest(tx, c, id);
     let snapshot = current.snapshot;
     if (input.freight) {
-      const values = await freightValues(tx, c, current.batch.salesOrder.customerId, input.freight);
+      const values = await freightValues(tx, c, input.freight);
       const tax = new Prisma.Decimal(snapshot.tax).sub(snapshot.freight.tax).add(values.tax);
       snapshot = {
         ...snapshot,
@@ -252,6 +226,7 @@ export function previewProforma(c: string, id: string, body: unknown = {}) {
 export function issueProforma(c: string, a: string, id: string, body: unknown, key: string) {
   z.string().uuid().parse(id);
   const input = issueProformaSchema.parse(body);
+  rejectTaxChoice({ freight: input.freight });
   return transactionCommand(
     c,
     a,
@@ -265,12 +240,7 @@ export function issueProforma(c: string, a: string, id: string, body: unknown, k
           "Alokasi atau nilai berubah. Muat ulang pratinjau sebelum menerbitkan.",
         );
       if (input.freight) {
-        const values = await freightValues(
-          tx,
-          c,
-          current.batch.salesOrder.customerId,
-          input.freight,
-        );
+        const values = await freightValues(tx, c, input.freight);
         await tx.fulfillmentBatch.update({
           where: { id },
           data: {

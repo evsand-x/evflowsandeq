@@ -7,7 +7,7 @@ import {
   HandoffStatus,
   InvoiceProgress,
 } from "./sales-experience";
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,9 +24,10 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import Decimal from "decimal.js";
+import { formatMoney } from "@/lib/format";
 import { SelectionField } from "@/components/web/selection-field";
 import { Switch } from "@/components/ui/switch";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, settingsHrefOf } from "@/lib/api";
 import { hasCompanyPermission } from "@/lib/navigation";
 import { invoicePaymentStatus, invoiceDocumentNote } from "@/lib/invoice-status";
 import { useSession } from "../session-provider";
@@ -37,7 +38,7 @@ import "../crm/crm.css";
 import "./workflow.css";
 import "./sales-order.css";
 import "./sales-order-modern.css";
-import { Controls } from "./controls";
+import { StockQuality } from "./stock-quality";
 import { SalesExceptions, TaxComponents, FinanceWorkspace, Backorders } from "./extended-controls";
 
 type Option = { id: string; name: string };
@@ -156,13 +157,17 @@ const titles: Record<string, string> = {
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleDateString("id-ID") : "—";
 }
-function money(value?: string | null, currency = "IDR") {
-  if (value == null) return "—";
-  const [integer = "0", fraction = "00"] = new Decimal(value).toFixed(2).split(".");
-  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return `${currency} ${grouped},${fraction}`;
+// Currency stays Rupiah (CFG-09); the argument is kept for existing call sites.
+function money(value?: string | null, _currency = "IDR") {
+  return value == null ? "—" : formatMoney(value);
 }
-export function ErrorBox({ message }: { message: string }) {
+export function ErrorBox({
+  message,
+  settingsHref,
+}: {
+  message: string;
+  settingsHref?: string | undefined;
+}) {
   const messages: Record<string, string> = {
     RECEIPT_ALLOCATION_EXCEEDED: "Jumlah alokasi melebihi sisa penerimaan atau sisa piutang.",
     CREDIT_HOLD:
@@ -178,7 +183,8 @@ export function ErrorBox({ message }: { message: string }) {
       "Harga acuan belum dikonfigurasi untuk produk, satuan, dan mata uang ini.",
     TAX_POLICY_REQUIRED:
       "Aturan pajak yang berlaku belum tersedia. Lengkapi konfigurasi sebelum submit.",
-    PAYMENT_POLICY_REQUIRED: "Kebijakan pembayaran pelanggan belum tersedia.",
+    PAYMENT_POLICY_REQUIRED:
+      "Daftar termin tidak memiliki termin COD untuk pelanggan tanpa termin bawaan. Periksa Setting › Termin & Kredit.",
     STOCK_NOT_ELIGIBLE:
       "Stok sudah tidak layak dikirim. Periksa mutu, kedaluwarsa, gudang dan locator.",
     SHIPMENT_DETAILS_REQUIRED: "Simpan pengemudi dan kendaraan sebelum dispatch.",
@@ -208,7 +214,17 @@ export function ErrorBox({ message }: { message: string }) {
   };
   return (
     <Alert variant="destructive" role="alert">
-      <AlertDescription>{messages[message] ?? message}</AlertDescription>
+      <AlertDescription>
+        {messages[message] ?? message}
+        {settingsHref && (
+          <>
+            {" "}
+            <Link href={settingsHref} className="underline">
+              Buka pengaturan
+            </Link>
+          </>
+        )}
+      </AlertDescription>
     </Alert>
   );
 }
@@ -330,10 +346,7 @@ const warehouseStageTitles: Record<string, string> = {
 };
 
 const outboundStages = [
-  { key: "picking", label: "Picking", href: "/operations/pick-slips" },
-  { key: "checking", label: "Checking / Packing", href: "/operations/warehouse?stage=checking" },
-  { key: "shipping", label: "Pengiriman", href: "/operations/warehouse?stage=shipping" },
-  { key: "pod", label: "POD", href: "/operations/warehouse?stage=pod" },
+  { key: "shipping", label: "Surat Jalan", href: "/operations/delivery-notes" },
   { key: "returns", label: "Retur", href: "/operations/returns" },
 ] as const;
 
@@ -410,18 +423,13 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
   const kind = path[0] ?? "orders",
     id = path[1],
     creating = id === "new",
-    configuring = kind === "controls",
+    stockQuality = kind === "stock-quality",
     invoiceCreation = kind === "invoice-create",
-    financeControl = [
-      "reconciliation",
-      "accounting",
-      "bank-statements",
-      "tax-rules",
-      "tax-documents",
-    ].includes(kind);
+    financeControl = ["reconciliation", "bank-statements", "tax-documents"].includes(kind);
   const [page, setPage] = useState(1),
     [search, setSearch] = useState(""),
     [error, setError] = useState(""),
+    [errorHref, setErrorHref] = useState<string | undefined>(),
     [pending, setPending] = useState(false);
   const keys = useRef(new Map<string, string>());
   const can = (permission: string) => !!principal && hasCompanyPermission(principal, permission);
@@ -439,20 +447,13 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     }[kind] ?? "";
   const enabled =
     !!principal &&
-    (configuring
-      ? [
-          "customer.payment_policy.manage",
-          "sales_tax_rule.manage",
-          "transaction_approval.manage",
-          "inventory.quality.decide",
-        ].some(can)
+    (stockQuality
+      ? can("inventory.quality.decide")
       : financeControl
         ? can(
             (
               {
-                accounting: "posting_profile.read",
                 "bank-statements": "bank_statement.import",
-                "tax-rules": "tax_rule.read",
                 "tax-documents": "tax_component.read",
               } as Record<string, string>
             )[kind] ?? "bank_reconciliation.read",
@@ -485,7 +486,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     enabled:
       enabled &&
       !creating &&
-      !configuring &&
+      !stockQuality &&
       !financeControl &&
       !invoiceCreation &&
       !["backorders", "warehouse-backorders", "returns"].includes(kind),
@@ -505,6 +506,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
     }
     setPending(true);
     setError("");
+    setErrorHref(undefined);
     try {
       const result = await apiRequest<{ data: Row }>(url, {
         method: "POST",
@@ -521,6 +523,7 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
       } else toast.success("Transaksi tersimpan.");
       return result;
     } catch (e) {
+      setErrorHref(settingsHrefOf(e));
       setError(
         e instanceof Error
           ? e.message
@@ -800,7 +803,9 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
         principal={principal}
         {...(outboundStage ? { outboundStage } : {})}
         activeView={
-          ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
+          ["warehouse", "pick-slips", "warehouse-backorders", "returns", "stock-quality"].includes(
+            kind,
+          )
             ? "warehouse"
             : kind === "invoices"
               ? "finance"
@@ -809,11 +814,15 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
         activeSection={
           ["orders", "backorders"].includes(kind) || proformaDocument
             ? "sales"
-            : ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
+            : [
+                  "warehouse",
+                  "pick-slips",
+                  "warehouse-backorders",
+                  "returns",
+                  "stock-quality",
+                ].includes(kind)
               ? "warehouse"
-              : configuring
-                ? "setting"
-                : "finance"
+              : "finance"
         }
       />
       <SidebarInset className="min-w-0">
@@ -826,27 +835,23 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
               <nav className="executive-breadcrumb" aria-label="Breadcrumb">
                 {["orders", "backorders"].includes(kind) || proformaDocument
                   ? "Sales & Marketing / Pesanan Pelanggan"
-                  : ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
-                    ? "Warehouse & Logistik / Barang Keluar"
-                    : kind.startsWith("tax-")
-                      ? "Finance / Pajak"
-                      : kind === "accounting"
-                        ? "Finance / Akuntansi"
+                  : kind === "stock-quality"
+                    ? "Warehouse & Logistik / Persediaan"
+                    : ["warehouse", "pick-slips", "warehouse-backorders", "returns"].includes(kind)
+                      ? "Warehouse & Logistik / Barang Keluar"
+                      : kind.startsWith("tax-")
+                        ? "Finance / Pajak"
                         : ["reconciliation", "bank-statements"].includes(kind)
                           ? "Finance / Kas & Bank"
-                          : configuring
-                            ? "Setting / Kontrol transaksi"
-                            : "Finance / Piutang (AR)"}
+                          : "Finance / Piutang (AR)"}
               </nav>
               <h1>
-                {configuring
-                  ? "Kontrol transaksi"
+                {stockQuality
+                  ? "Kelayakan Stok"
                   : financeControl
                     ? {
                         reconciliation: "Rekonsiliasi",
-                        accounting: "Pengaturan Jurnal Otomatis",
                         "bank-statements": "Impor Mutasi Bank",
-                        "tax-rules": "Profil & Aturan Pajak",
                         "tax-documents": "Faktur Keluaran",
                       }[kind]
                     : creating
@@ -977,7 +982,10 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
           ) : (
             <>
               {(error || query.error || candidateQuery.error) && (
-                <ErrorBox message={error || String(query.error || candidateQuery.error)} />
+                <ErrorBox
+                  message={error || String(query.error || candidateQuery.error)}
+                  settingsHref={errorHref}
+                />
               )}
               {query.isFetching && <p role="status">Memuat data terbaru…</p>}
               {invoiceCreation ? (
@@ -1002,8 +1010,8 @@ export function OperationsWorkspace({ path, stage }: { path: string[]; stage?: s
                   command={command}
                   pending={pending}
                 />
-              ) : configuring ? (
-                <Controls can={can} command={command} pending={pending} />
+              ) : stockQuality ? (
+                <StockQuality command={command} pending={pending} />
               ) : creating ? (
                 <OrderForm
                   command={command}
@@ -1387,35 +1395,17 @@ function Warehouse({
   stage?: string;
 }) {
   const isChecking = stage === "checking";
-  const isPicking = stage === "picking";
   const isShipping = stage === "shipping";
   const isPod = stage === "pod";
-  const canManualInvoice =
-    row.state === "ALLOCATED" && can("sales_invoice.issue");
+
   const [driver, setDriver] = useState(""),
-    [vehicle, setVehicle] = useState(""),
-    [receiver, setReceiver] = useState(""),
-    [proof, setProof] = useState("");
-  const [accepted, setAccepted] = useState<Record<string, string>>({});
-  const [picked, setPicked] = useState<Record<string, string>>({});
-  const [checkCondition, setCheckCondition] = useState<Record<string, string>>({});
-  const [packageCount, setPackageCount] = useState("");
-  const [totalWeight, setTotalWeight] = useState("");
-  const [packageType, setPackageType] = useState("Dus");
-  const [packingNotes, setPackingNotes] = useState("");
-  const [labelAttached, setLabelAttached] = useState(false);
+    [vehicle, setVehicle] = useState("");
   const [freightEnabled, setFreightEnabled] = useState(false),
     [freightAmount, setFreightAmount] = useState(""),
     [freightTaxable, setFreightTaxable] = useState(false);
   const run = (url: string, data?: unknown) => {
     void command(url, data).catch(() => undefined);
   };
-  useEffect(() => {
-    if (!row.pickList) return;
-    setPicked(
-      Object.fromEntries(row.pickList.lines.map((line) => [line.id, line.assignedQuantity])),
-    );
-  }, [row.pickList]);
   return (
     <>
       <Panel
@@ -1434,245 +1424,16 @@ function Warehouse({
         </p>
         <p>{row.salesOrder?.deliveryAddress}</p>
       </Panel>
-      {isPicking ? (
-        <form
-          className="web-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!row.pickList) return;
-            run(`/pick-lists/${row.pickList.id}/confirm-pick`, {
-              lines: row.pickList.lines.map((line) => ({
-                pick_list_line_id: line.id,
-                picked_quantity: picked[line.id] ?? "0",
-              })),
-            });
-          }}
-        >
-          <Panel title="Barang yang diambil">
-            <DataTable
-              formTable
-              showColumns={false}
-              data={(row.allocations ?? []).map((allocation) => ({
-                ...allocation,
-                pickLine: row.pickList?.lines.find(
-                  (line) => line.fulfillmentAllocationId === allocation.id,
-                ),
-              }))}
-              total={row.allocations?.length ?? 0}
-              columns={[
-                {
-                  id: "product",
-                  header: "Produk",
-                  cell: ({ row: r }) => r.original.stockLot.product.name,
-                },
-                {
-                  id: "batch",
-                  header: "Batch · ED",
-                  cell: ({ row: r }) =>
-                    `${r.original.stockLot.batchNo} · ${r.original.stockLot.expiryDate?.slice(0, 7) ?? "—"}`,
-                },
-                {
-                  id: "locator",
-                  header: "Locator",
-                  cell: ({ row: r }) => r.original.stockLot.locator?.code ?? "—",
-                },
-                { accessorKey: "quantity", header: "Alokasi" },
-                {
-                  id: "picked",
-                  header: "Diambil",
-                  cell: ({ row: r }) => (
-                    <Input
-                      inputMode="decimal"
-                      aria-label={`Jumlah diambil ${r.original.stockLot.product.name}`}
-                      value={picked[r.original.pickLine?.id ?? ""] ?? ""}
-                      onChange={(event) =>
-                        setPicked((old) => ({
-                          ...old,
-                          [r.original.pickLine?.id ?? ""]: event.target.value,
-                        }))
-                      }
-                      disabled={!r.original.pickLine || row.pickList?.state !== "OPEN"}
-                    />
-                  ),
-                },
-                {
-                  id: "difference",
-                  header: "Selisih",
-                  cell: ({ row: r }) => (
-                    <Badge variant="outline">
-                      {r.original.pickLine &&
-                      picked[r.original.pickLine.id] === r.original.pickLine.assignedQuantity
-                        ? "Sesuai"
-                        : "Perlu ditinjau"}
-                    </Badge>
-                  ),
-                },
-              ]}
-            />
-            <p className="so-help">
-              Jumlah diambil tidak boleh melebihi alokasi. Selisih membutuhkan tindak lanjut sesuai
-              aturan backorder.
-            </p>
-          </Panel>
-          <div className="so-footer so-detail-actions">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                setPicked(
-                  Object.fromEntries(
-                    (row.pickList?.lines ?? []).map((line) => [line.id, line.assignedQuantity]),
-                  ),
-                )
-              }
-            >
-              Isi semua sesuai alokasi
-            </Button>
-            <Button
-              type="submit"
-              disabled={pending || !row.pickList || row.pickList.state !== "OPEN"}
-            >
-              Konfirmasi picking
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <DataTable
-          data={row.allocations ?? []}
-          total={row.allocations?.length ?? 0}
-          columns={[
-            {
-              id: "product",
-              header: "Produk",
-              cell: ({ row: r }) => r.original.stockLot.product.name,
-            },
-            { id: "batch", header: "Batch", cell: ({ row: r }) => r.original.stockLot.batchNo },
-            { accessorKey: "quantity", header: "Dialokasikan" },
-            { accessorKey: "inTransitQuantity", header: "Dalam perjalanan" },
-          ]}
-        />
-      )}
-      {isChecking && (
-        <form
-          className="web-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            run(`/pick-lists/${row.pickList!.id}/confirm-check`, {
-              checks: (row.pickList?.lines ?? []).map((line) => ({
-                pick_list_line_id: line.id,
-                condition: checkCondition[line.id] ?? "BAIK",
-              })),
-              packing: {
-                package_count: packageCount || undefined,
-                total_weight_kg: totalWeight || undefined,
-                package_type: packageType || undefined,
-                notes: packingNotes || undefined,
-                label_attached: labelAttached,
-              },
-            });
-          }}
-        >
-          <Panel title="Checking & Packing">
-            <p className="so-help">
-              Checking memverifikasi hasil picking. Packing List diterbitkan server setelah jumlah
-              picking lengkap.
-            </p>
-            <DataTable
-              formTable
-              showColumns={false}
-              data={(row.allocations ?? []).map((allocation) => ({
-                ...allocation,
-                pickLine: row.pickList?.lines.find(
-                  (line) => line.fulfillmentAllocationId === allocation.id,
-                ),
-              }))}
-              total={row.allocations?.length ?? 0}
-              columns={[
-                {
-                  id: "product",
-                  header: "Produk",
-                  cell: ({ row: r }) => r.original.stockLot.product.name,
-                },
-                {
-                  id: "picked",
-                  header: "Diambil",
-                  cell: ({ row: r }) => r.original.pickLine?.assignedQuantity ?? "—",
-                },
-                {
-                  id: "checked",
-                  header: "Dicek",
-                  cell: ({ row: r }) => r.original.pickLine?.assignedQuantity ?? "—",
-                },
-                {
-                  id: "condition",
-                  header: "Kondisi",
-                  cell: ({ row: r }) => (
-                    <select
-                      aria-label={`Kondisi ${r.original.stockLot.product.name}`}
-                      value={checkCondition[r.original.pickLine?.id ?? ""] ?? "BAIK"}
-                      onChange={(event) =>
-                        setCheckCondition((old) => ({
-                          ...old,
-                          [r.original.pickLine?.id ?? ""]: event.target.value,
-                        }))
-                      }
-                    >
-                      <option value="BAIK">Baik</option>
-                      <option value="RUSAK">Rusak</option>
-                      <option value="KURANG">Kurang</option>
-                    </select>
-                  ),
-                },
-              ]}
-            />
-            <div className="otc-form-grid">
-              <TextField label="Jumlah koli" value={packageCount} onChange={setPackageCount} />
-              <TextField label="Berat total (kg)" value={totalWeight} onChange={setTotalWeight} />
-              <TextField label="Jenis kemasan" value={packageType} onChange={setPackageType} />
-              <TextField label="Catatan packing" value={packingNotes} onChange={setPackingNotes} />
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={labelAttached}
-                onChange={(event) => setLabelAttached(event.target.checked)}
-              />{" "}
-              Label koli sudah ditempel
-            </label>
-            <Button
-              type="submit"
-              disabled={pending || !row.pickList || row.pickList.state !== "PICKED"}
-            >
-              Konfirmasi checking & terbitkan Packing List
-            </Button>
-          </Panel>
-          <div className="crm-actions">
-            {row.state === "ALLOCATED" && !row.pickList && can("fulfillment.pick") && (
-              <Button
-                disabled={pending}
-                onClick={() => run(`/fulfillment-batches/${row.id}/create-picking`)}
-              >
-                Buat Picking Slip
-              </Button>
-            )}
-            {row.pickList?.state === "OPEN" && can("fulfillment.pick") && (
-              <Button
-                disabled={pending}
-                onClick={() =>
-                  run(`/pick-lists/${row.pickList!.id}/confirm-pick`, {
-                    lines: row.pickList!.lines.map((l) => ({
-                      pick_list_line_id: l.id,
-                      picked_quantity: l.assignedQuantity,
-                    })),
-                  })
-                }
-              >
-                Konfirmasi seluruh picking
-              </Button>
-            )}
-          </div>
-        </form>
-      )}
+      <DataTable
+        data={row.allocations ?? []}
+        total={row.allocations?.length ?? 0}
+        columns={[
+          { id: "product", header: "Produk", cell: ({ row: r }) => r.original.stockLot.product.name },
+          { id: "batch", header: "Batch", cell: ({ row: r }) => r.original.stockLot.batchNo },
+          { accessorKey: "quantity", header: "Dialokasikan" },
+          { accessorKey: "inTransitQuantity", header: "Dalam perjalanan" },
+        ]}
+      />
       {isShipping && row.state === "ALLOCATED" && can("fulfillment.dispatch") && (
         <form
           className="web-form"
@@ -1739,55 +1500,6 @@ function Warehouse({
           </Panel>
         </form>
       )}
-      {canManualInvoice && (
-          <Panel title="Invoice">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={() => run(`/fulfillment-batches/${row.id}/issue-invoice`)}
-            >
-              Buat Invoice manual
-            </Button>
-          </Panel>
-        )}
-      {isPod &&
-        ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
-        can("delivery_receipt.confirm") && (
-          <form
-            className="web-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              run(`/fulfillment-batches/${row.id}/pod`, {
-                receiver_name: receiver,
-                evidence_id: proof,
-                lines: (row.allocations ?? [])
-                  .filter((l) => accepted[l.id] && !/^0+(\.0*)?$/.test(accepted[l.id]!))
-                  .map((l) => ({
-                    fulfillment_allocation_id: l.id,
-                    accepted_quantity: accepted[l.id],
-                  })),
-              });
-            }}
-          >
-            <Panel title="Bukti penerimaan pelanggan (POD)">
-              <FieldGroup>
-                <TextField label="Nama penerima" value={receiver} onChange={setReceiver} />
-                {row.allocations?.map((l) => (
-                  <TextField
-                    key={l.id}
-                    label={`Diterima ${l.stockLot.product.name} (${l.stockLot.batchNo})`}
-                    value={accepted[l.id] ?? ""}
-                    onChange={(v) => setAccepted({ ...accepted, [l.id]: v })}
-                    required={false}
-                  />
-                ))}
-                <Upload purpose="POD" onChange={setProof} />
-                <Button disabled={pending || !proof}>Konfirmasi POD</Button>
-              </FieldGroup>
-            </Panel>
-          </form>
-        )}
       {isShipping && (
         <Panel title="Surat Jalan">
           {row.documents?.map((doc) => (
@@ -1799,45 +1511,110 @@ function Warehouse({
           ))}
         </Panel>
       )}
-      {isPod && (
-        <Panel title="POD & penagihan">
-          {row.deliveryReceipts?.map((pod) => (
-            <div key={pod.id}>
-              <p>Penerima: {pod.receiverName}</p>
-              {can("delivery_receipt.read") && <Evidence id={pod.evidenceId} />}
-              {pod.invoices.length
-                ? pod.invoices.map((i) => (
-                    <p key={i.id}>
-                      <Link
-                        href={`/operations/invoices/${i.id}`}
-                        className="text-primary underline"
-                      >
-                        {i.number}
-                      </Link>
-                    </p>
-                  ))
-                : <p className="sales-notice">Belum ada invoice.</p>}
-            </div>
-          ))}
-        </Panel>
-      )}
     </>
   );
 }
-function InvoiceCreation({ rows, pending, command }: { rows: Row[]; pending: boolean; command: Command; onCreated: () => void }) {
+function InvoiceCreation({
+  rows,
+  pending,
+  command,
+}: {
+  rows: Row[];
+  pending: boolean;
+  command: Command;
+  onCreated: () => void;
+}) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState("");
   const selected = rows.find((row) => row.id === selectedId);
-  const create = async () => { if (!selected) return; const result = await command(`/fulfillment-batches/${selected.id}/issue-invoice`, {}); router.push(`/operations/invoices/${result.data.id}`); };
-  return <div className="web-form sales-compose">
-    <Button className="sales-back" variant="outline" asChild><Link href="/operations/invoices">← Kembali ke daftar</Link></Button>
-    <ProformaContents review documentType="Invoice" snapshot={selected?.snapshot ?? { allocations: [] }} beforeContent={<Panel title="Pilih Packing List">
-      <SelectionField label="Pilih Packing List" options={rows.map((r) => ({ id: r.id, name: `${r.salesOrder?.number} · ${r.salesOrder?.customer?.name} · ${r.fulfillmentBatch?.number}` }))} value={selectedId ? [selectedId] : []} onChange={(v) => setSelectedId(v[0] ?? "")} />
-      <DataTable data={rows} total={rows.length} showColumns={false} columns={[{ id: "select", header: "Pilih", cell: ({ row: r }) => <input type="radio" name="invoice-packing" aria-label={`Pilih Packing List ${r.original.salesOrder?.number}`} checked={selectedId === r.original.id} onChange={() => setSelectedId(r.original.id)} /> }, { id: "so", header: "Sales Order", cell: ({ row: r }) => r.original.salesOrder?.number ?? "—" }, { id: "packing", header: "Packing List", cell: ({ row: r }) => r.original.fulfillmentBatch?.number ?? "—" }, { id: "customer", header: "Pelanggan", cell: ({ row: r }) => r.original.salesOrder?.customer?.name ?? "—" }]} />
-      {!rows.length && <p>Belum ada Packing List yang siap dibuatkan Invoice.</p>}
-    </Panel>} notes={<p className="sales-notice">Kuantitas, harga, pajak, dan ongkir mengikuti hasil checking Packing List. Jatuh tempo dihitung dari tanggal Invoice + termin.</p>} asideContent={<p className="sales-notice">Invoice diposting setelah dikonfirmasi dan langsung membentuk AR.</p>} />
-    <footer className="so-footer so-detail-actions"><Button variant="outline" asChild><Link href="/operations/invoices">Batal</Link></Button><Button disabled={pending || !selected} onClick={() => void create().catch(() => undefined)}>Buat Invoice</Button></footer>
-  </div>;
+  const create = async () => {
+    if (!selected) return;
+    const result = await command(`/fulfillment-batches/${selected.id}/issue-invoice`, {});
+    router.push(`/operations/invoices/${result.data.id}`);
+  };
+  return (
+    <div className="web-form sales-compose">
+      <Button className="sales-back" variant="outline" asChild>
+        <Link href="/operations/invoices">← Kembali ke daftar</Link>
+      </Button>
+      <ProformaContents
+        review
+        documentType="Invoice"
+        snapshot={selected?.snapshot ?? { allocations: [] }}
+        beforeContent={
+          <Panel title="Pilih Packing List">
+            <SelectionField
+              label="Pilih Packing List"
+              options={rows.map((r) => ({
+                id: r.id,
+                name: `${r.salesOrder?.number} · ${r.salesOrder?.customer?.name} · ${r.fulfillmentBatch?.number}`,
+              }))}
+              value={selectedId ? [selectedId] : []}
+              onChange={(v) => setSelectedId(v[0] ?? "")}
+            />
+            <DataTable
+              data={rows}
+              total={rows.length}
+              showColumns={false}
+              columns={[
+                {
+                  id: "select",
+                  header: "Pilih",
+                  cell: ({ row: r }) => (
+                    <input
+                      type="radio"
+                      name="invoice-packing"
+                      aria-label={`Pilih Packing List ${r.original.salesOrder?.number}`}
+                      checked={selectedId === r.original.id}
+                      onChange={() => setSelectedId(r.original.id)}
+                    />
+                  ),
+                },
+                {
+                  id: "so",
+                  header: "Sales Order",
+                  cell: ({ row: r }) => r.original.salesOrder?.number ?? "—",
+                },
+                {
+                  id: "packing",
+                  header: "Packing List",
+                  cell: ({ row: r }) => r.original.fulfillmentBatch?.number ?? "—",
+                },
+                {
+                  id: "customer",
+                  header: "Pelanggan",
+                  cell: ({ row: r }) => r.original.salesOrder?.customer?.name ?? "—",
+                },
+              ]}
+            />
+            {!rows.length && <p>Belum ada Packing List yang siap dibuatkan Invoice.</p>}
+          </Panel>
+        }
+        notes={
+          <p className="sales-notice">
+            Kuantitas, harga, pajak, dan ongkir mengikuti hasil checking Packing List. Jatuh tempo
+            dihitung dari tanggal Invoice + termin.
+          </p>
+        }
+        asideContent={
+          <p className="sales-notice">
+            Invoice diposting setelah dikonfirmasi dan langsung membentuk AR.
+          </p>
+        }
+      />
+      <footer className="so-footer so-detail-actions">
+        <Button variant="outline" asChild>
+          <Link href="/operations/invoices">Batal</Link>
+        </Button>
+        <Button
+          disabled={pending || !selected}
+          onClick={() => void create().catch(() => undefined)}
+        >
+          Buat Invoice
+        </Button>
+      </footer>
+    </div>
+  );
 }
 
 function CustomerReturnForm({ command, pending }: { command: Command; pending: boolean }) {
@@ -2155,7 +1932,8 @@ function Invoice({
                   />
                 </label>
                 <p className="so-help">
-                  Simpan draft sebelum posting. Harga, jumlah, pajak dan ongkir mengikuti Packing List.
+                  Simpan draft sebelum posting. Harga, jumlah, pajak dan ongkir mengikuti Packing
+                  List.
                 </p>
               </div>
             ) : (

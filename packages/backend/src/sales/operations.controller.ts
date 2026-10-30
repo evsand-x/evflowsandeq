@@ -18,12 +18,14 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { z } from "zod";
+import { stockAvailability } from "./order-availability";
 import { prisma } from "@evflow/database";
 import { AuthGuard } from "../identity/auth.guard";
 import { PermissionGuard } from "../identity/permission.guard";
 import { RequirePermissions } from "../identity/permissions.decorator";
 import type { AuthenticatedRequest } from "../identity/auth.types";
 import { OperationsService } from "./operations.service";
+import { orderActions } from "./order-actions";
 import { previewProforma } from "./proforma";
 import { orderListFilterSchema } from "./order-list-filters";
 import { requestException, decideException, manageException } from "./exception-controls";
@@ -32,6 +34,7 @@ import { processExceptionEvaluations } from "./exception-evaluation";
 import { isAccessAdministrator, shipmentSchema } from "@evflow/contracts";
 import { outboundList, returnList, returnDetail, returnSources } from "./outbound-read";
 import { listHandoffs, saveHandoff } from "./commercial-handoff";
+import { orderRelated } from "./order-related";
 
 const uuid = (v: string) => z.string().uuid().parse(v);
 const key = (v?: string) => {
@@ -46,6 +49,7 @@ const readPermission: Record<string, string> = {
   WAREHOUSE_CONTROL: "outbound_checking.read",
   SALES_ORDER: "sales_order.read",
   POD: "delivery_receipt.read",
+  SURAT_JALAN: "outbound_shipping.read",
   PAYMENT: "customer_receipt.read",
   TAX: "tax_component.read",
   TAX_OUTPUT: "tax_output.read",
@@ -58,6 +62,7 @@ const writePermission: Record<string, string> = {
   WAREHOUSE_CONTROL: "fulfillment.check",
   SALES_ORDER: "sales_order.create",
   POD: "delivery_receipt.confirm",
+  SURAT_JALAN: "fulfillment.dispatch",
   PAYMENT: "customer_receipt.post",
   TAX: "tax_component.create",
   TAX_OUTPUT: "tax_output.update",
@@ -88,6 +93,11 @@ export class OperationsController {
     @Inject(OperationsService) private readonly service: OperationsService,
     @Inject(OtcPtpService) private readonly otc: OtcPtpService,
   ) {}
+  @Get("orders/:id/actions")
+  @RequirePermissions("sales_order.read")
+  async orderActions(@Param("id") id:string,@Req() req:AuthenticatedRequest) {
+    return {data:await orderActions(req.auth.company_id,req.auth.user_id,uuid(id),p=>hasPermission(req,p))};
+  }
   @Get("fulfillment-batches/:id/proforma-preview")
   @RequirePermissions("proforma.issue")
   async previewProforma(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
@@ -331,6 +341,7 @@ export class OperationsController {
           "PRODUCT_MASTER",
           "SALES_ORDER",
           "POD",
+          "SURAT_JALAN",
           "PAYMENT",
           "TAX",
           "TAX_OUTPUT",
@@ -350,6 +361,8 @@ export class OperationsController {
       .parse(body);
     if (i.purpose === "CUSTOMER_MASTER")
       allowedAny(req, ["master_customer.create", "master_customer.update"]);
+    else if (i.purpose === "PAYMENT")
+      allowedAny(req, ["customer_receipt.post", "sales_order_advance.create"]);
     else allowed(req, writePermission[i.purpose]!);
     return {
       data: await this.service.upload(
@@ -368,6 +381,14 @@ export class OperationsController {
     });
     if (!metadata) throw new NotFoundException();
     if (metadata.purpose === "CUSTOMER_MASTER") allowed(req, "master_customer.read");
+    else if (metadata.purpose === "PAYMENT" && !hasPermission(req, "customer_receipt.read")) {
+      allowedAny(req, ["sales_order_advance.create", "sales_order_advance.verify"]);
+      // Advance access does not expose unrelated Finance attachments. Recorders
+      // may preview their own upload before attaching it to a pending advance.
+      const ownUpload = hasPermission(req, "sales_order_advance.create") && metadata.actorId === req.auth.user_id;
+      if (!ownUpload && !await prisma.salesOrderAdvance.findFirst({where:{companyId:req.auth.company_id,evidenceId:metadata.id},select:{id:true}}))
+        throw new ForbiddenException();
+    }
     else if (metadata.purpose === "PROFORMA_HANDOFF") allowed(req, "proforma.read");
     else if (
       metadata.purpose === "TAX" &&
@@ -434,13 +455,21 @@ export class OperationsController {
     allowed(req, canCreate ? "sales_order.create" : "sales_order.update");
     return { data: await this.service.lookups(req.auth.company_id) };
   }
+  @Get("stock-availability")
+  @RequirePermissions("sales_order.create")
+  async stockAvailability(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const parsed = z.object({ warehouse_id: z.string().uuid(), product_ids: z.string().transform(value => value.split(",")).pipe(z.array(z.string().uuid()).min(1).max(100)) }).strict().parse(query);
+    return { data: await stockAvailability(req.auth.company_id, parsed.warehouse_id, parsed.product_ids) };
+  }
   @Get("control-options/:kind")
   async controlOptions(@Param("kind") kind: string, @Req() req: AuthenticatedRequest) {
-    const type = z.enum(["credit", "tax", "approval", "quality"]).parse(kind);
+    // "tax" serves the customer list of the WAPU/PPh receipt rules screen (ReceiptTaxRule stays
+    // until stage 3); per customer x product sales tax rules are retired. Customer credit is
+    // edited on Master Data > Pelanggan (stage 2b), so there is no "credit" kind any more.
+    const type = z.enum(["tax", "approval", "quality"]).parse(kind);
     allowed(
       req,
       {
-        credit: "customer.payment_policy.manage",
         tax: "sales_tax_rule.manage",
         approval: "transaction_approval.manage",
         quality: "inventory.quality.decide",
@@ -477,31 +506,6 @@ export class OperationsController {
         },
       };
     return { data: await this.service.lookups(c) };
-  }
-  @Post("tax-rules")
-  @RequirePermissions("sales_tax_rule.manage")
-  async tax(
-    @Body() body: unknown,
-    @Req() req: AuthenticatedRequest,
-    @Headers("idempotency-key") k: string | undefined,
-  ) {
-    const i = z
-      .object({
-        customer_id: z.string().uuid(),
-        product_id: z.string().uuid(),
-        name: z.string().min(1).max(200),
-        legal_reference: z.string().min(1).max(500),
-        taxable_event: z.enum(["POD", "ADVANCE"]).optional(),
-        rate: z.string().regex(/^\d+(\.\d{1,8})?$/),
-        dpp_factor: z.string().regex(/^\d+(\.\d{1,8})?$/),
-        decimal_places: z.number().int().min(0).max(8),
-        rounding: z.enum(["HALF_UP", "HALF_EVEN", "DOWN"]),
-        effective_from: z.string().datetime(),
-        effective_to: z.string().datetime(),
-      })
-      .strict()
-      .parse(body);
-    return { data: await this.service.tax(req.auth.company_id, req.auth.user_id, i, key(k)) };
   }
   @Post("approval-policies")
   @RequirePermissions("transaction_approval.manage")
@@ -605,6 +609,7 @@ export class OperationsController {
     @Req() req: AuthenticatedRequest,
   ) {
     const type = z.enum(["orders", "warehouse", "pick-slips", "invoices", "proformas"]).parse(kind);
+    if (type === "invoices") allowed(req, "sales_invoice.view_price");
     if (type === "proformas") allowed(req, "proforma.read");
     else
       allowed(
@@ -644,15 +649,21 @@ export class OperationsController {
         to: z.string().optional(),
         fulfillment: z.string().optional(),
         remainder: z.string().optional(),
+        status: z.string().optional(),
+        queue: z.string().optional(),
       })
       .strict()
       .parse(query);
-    const { customer_id, from, to, fulfillment, remainder, ...base } = q;
+    const { customer_id, from, to, fulfillment, remainder, status, queue, ...base } = q;
     // Filter pelanggan/periode/pemenuhan/sisa hanya berlaku untuk daftar Sales Order.
     const orderFilters =
       type === "orders"
-        ? orderListFilterSchema.parse({ customer_id, from, to, fulfillment, remainder })
+        ? orderListFilterSchema.parse({ customer_id, from, to, fulfillment, remainder, status, queue })
         : undefined;
+    // Billing status of an SO is invoice data: only for readers of sales invoices.
+    const billing = type === "orders" && hasPermission(req, "sales_invoice.read");
+    if (orderFilters?.queue === "UNINVOICED" && !billing)
+      throw new ForbiddenException("Izin atau scope tidak mencukupi.");
     return {
       data: await (orderFilters
         ? this.service.list(
@@ -664,6 +675,8 @@ export class OperationsController {
             base.stage,
             base.view,
             orderFilters,
+            ["sales_order_advance.create", "sales_order_advance.verify", "customer_receipt.read"].some(permission => hasPermission(req, permission)),
+            billing,
           )
         : this.service.list(
             req.auth.company_id,
@@ -690,7 +703,12 @@ export class OperationsController {
   @Get("orders/:id")
   @RequirePermissions("sales_order.read")
   async order(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    return { data: await this.service.order(req.auth.company_id, uuid(id)) };
+    return { data: await this.service.order(req.auth.company_id, uuid(id), permission => hasPermission(req, permission)) };
+  }
+  @Get("orders/:id/related")
+  @RequirePermissions("sales_order.read")
+  async orderRelated(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return { data: await orderRelated(req.auth.company_id, uuid(id), permission => hasPermission(req, permission)) };
   }
   @Get("warehouse/:id")
   @RequirePermissions("outbound_checking.read")
@@ -698,9 +716,9 @@ export class OperationsController {
     return { data: await this.service.batch(req.auth.company_id, uuid(id)) };
   }
   @Get("invoices/:id")
-  @RequirePermissions("sales_invoice.read", "customer_receipt.read")
+  @RequirePermissions("sales_invoice.read", "sales_invoice.view_price")
   async invoice(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    return { data: await this.service.invoice(req.auth.company_id, uuid(id)) };
+    return { data: await this.service.invoice(req.auth.company_id, uuid(id), hasPermission(req, "customer_receipt.read")) };
   }
   @Post("warehouse/:id/shipment")
   @RequirePermissions("fulfillment.dispatch")
@@ -774,3 +792,4 @@ export class OperationsController {
     };
   }
 }
+

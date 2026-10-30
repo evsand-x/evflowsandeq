@@ -1,5 +1,16 @@
 # Architecture evflow — web kantor, aplikasi mobile, satu backend modular
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Issue tetap transactionCommand + customer/finance/SO/lot locks, audit dan outbox atomik. Receipt memakai transactionCommand + row lock SJ, unique per SJ, audit delivery_note.received dan outbox; tidak memanggil posting/inventory mutation. Payload issue berasal dari draft tersimpan. Snapshot replay tidak menggandakan efek.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+## Dampak keputusan 24 Oktober 2026
+
+Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Mesin persetujuan umum dan Struktur Organisasi berada di modul Identity/Setting. Modul domain (Sales, Finance, HRIS, Warehouse) mendaftarkan jenis dokumen, kondisi yang didukung dan aksi lanjutan setelah keputusan; mesin tidak memuat aturan bisnis domain. Keputusan diteruskan ke domain melalui transaksi atau outbox yang idempotent. Nilai bawaan konfigurasi dibuat oleh proses penyiapan perusahaan yang idempotent, bukan konstanta kode.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Akun tetap di modul Finance backend. transactionCommand, lock perusahaan lalu finance, optimistic version, audit dan isolasi perusahaan berlaku pada mutasi. UI Next.js memakai TanStack Query/Table, SelectionField dan Sonner. Posting/tax/bank/profile hanya menerima akun Detail aktif. Migrasi konfigurasi lokal memakai command atomik terjaga lingkungan dan admin, versi profile/pajak serta audit; tidak mengubah ledger. Seed finance uji diblokir sesudah migrasi.
@@ -80,8 +91,8 @@ Scheduler periode pipeline memakai timezone perusahaan, cut-off durable, event o
 ## 3. Kepemilikan modul
 
 - Identity/Setting memiliki users, scopes, approvals, nomor dan audit. Modul bisnis meminta keputusan izin; tidak menulis role sendiri.
-- Sales memiliki customer interaction, pipeline bulanan/PO-SP terverifikasi, strategi maintain, quote/harga khusus, kunjungan/follow-up, pengajuan sampel/trial, SO/target. Warehouse memiliki reservasi, quality dan pergerakan sampel/penjualan/return aktual. Sampel/trial tidak otomatis menghasilkan penjualan/AR; Finance menentukan posting biaya/kepemilikan/pajak yang sesuai. Identity/Setting melayani approval atasan/harga/sampel; approval ini tidak menambah approval manual rutin pada SO.
-- SO normal dijalankan melalui pipeline otomatis pada submit/evaluate: validasi data/ketentuan pembayaran → past due/limit untuk tempo → stok → alokasi/release. Pelanggan baru default COD tiga bulan; Finance dapat memilih prepay. Pada COD invoice menunggu POD, sedangkan prepay mensyaratkan dana terverifikasi sebelum dispatch. Finance memiliki penerimaan dan pengikatan dana ke tahap agar tidak digunakan dua kali. Query stok informatif berizin tersedia saat input tanpa membuat reservasi. Approval engine digunakan untuk dokumen `sales_order_unlock`, bukan setiap SO.
+- Sales memiliki customer interaction, pipeline bulanan/PO-SP terverifikasi, strategi maintain, quote/harga khusus, kunjungan/follow-up, pengajuan sampel/trial, SO/target. Warehouse memiliki reservasi, quality dan pergerakan sampel/penjualan/return aktual. Sampel/trial tidak otomatis menghasilkan penjualan/AR; Finance menentukan posting biaya/kepemilikan/pajak yang sesuai. Identity/Setting melayani approval atasan/harga/sampel; persetujuan SO hanya berjalan bila aturannya aktif (24 Oktober 2026).
+- SO normal dijalankan melalui pipeline otomatis pada submit/evaluate: validasi data/ketentuan pembayaran → past due/limit untuk tempo → stok → alokasi/release. Pelanggan baru default COD tiga bulan; Finance dapat memilih prepay. Pada COD invoice menunggu Surat Jalan terbit, sedangkan prepay mensyaratkan dana terverifikasi sebelum dispatch. Finance memiliki penerimaan dan pengikatan dana ke tahap agar tidak digunakan dua kali. Query stok informatif berizin tersedia saat input tanpa membuat reservasi. Approval engine digunakan untuk dokumen `sales_order_unlock`, bukan setiap SO.
 - SO menyimpan seluruh permintaan; fulfillment_batches menghubungkan alokasi tersedia per tahap dengan proforma/picking serta packing aktual. Backorder/penutupan sisa/pembatalan tidak menulis ulang ordered quantity. Sales dan Warehouse berkoordinasi dalam transaksi PostgreSQL yang sama untuk membekukan/melepas jumlah, komitmen dan dokumen; close/cancel serta dispatch memakai lock konsisten. Pekerjaan pengembalian picking dapat berlangsung beberapa langkah dengan state pending yang durable, lalu finalisasi atomik setelah bukti gudang lengkap.
 - Finance memiliki valuation policy, GL, open items, settlement, budget, tax, close. Posting profile menghubungkan event operasional dengan jurnal.
 - HR memiliki hiring, candidate/private documents, employee/private compensation, kalender/shift, raw fingerprint staging, hasil kehadiran, cuti/lembur dan payroll inputs; Finance menerima payroll posting terotorisasi tanpa memberikan akses semua staf ke rincian gaji. Payroll membaca snapshot cut-off, bukan data absensi live.
@@ -189,3 +200,18 @@ Penghapusan pengguna dijalankan dalam transaksi backend dengan kunci perusahaan 
 ## Otorisasi submenu — 16 Oktober 2026
 
 IAM-01/04: `PermissionGuard` mendukung metadata resource dinamis dengan allowlist server, pemeriksaan company/scope dan tanpa fallback induk. Perubahan ID resource atau query stage memilih pemeriksaan capability fitur yang benar, bukan membuktikan otorisasi dari asal menu klien. Query data terkait tetap memeriksa izin sumber. Migrasi grant tersimpan menjaga cakupan dan audit; matriks hanya menyimpan grant individual. Admin Sistem tetap menggunakan kewenangan bawaan.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Jalur Release 1 mempertahankan batas modular monolith: Surat Jalan menjadi transaksi handover yang atomik dengan stock movement dan posting pendapatan/HPP; Invoice mengonsumsi Surat Jalan terbit.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Modul Finance Invoice/payment memakai transactionCommand dan kernel posting bersama; lock pelanggan, sumber/Invoice dan finance menjaga satu sumber/nomor/alokasi. Snapshot dan outbox commit bersama ledger. Tanggal bisnis input YYYY-MM-DD dikonversi ke instant hari lokal untuk kernel posting, sehingga zona UTC negatif tidak memundurkan tanggal jurnal. Pembayaran langsung Invoice tidak menjalankan pajak uang muka. Jalur reversal uang muka lama menolak sumber penerimaan Invoice langsung.

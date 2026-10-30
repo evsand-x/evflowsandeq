@@ -7,6 +7,12 @@ import {
   PreconditionFailedException,
 } from "@nestjs/common";
 import { AuditService } from "../common/audit.service";
+import { parseDiscountLimit } from "../sales/discount-limit";
+import {
+  customerCreditOmit,
+  recordCreditChange,
+  resolveCustomerCredit,
+} from "../sales/customer-credit";
 
 type MasterState = "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
 
@@ -72,6 +78,8 @@ export class MasterService {
         return prisma.customer.findMany({
           where: { companyId, ...(contains ? { name: contains } : {}) },
           include: { channel: true, rayon: true },
+          // Credit values need customer_credit.update; this list is for master readers.
+          omit: customerCreditOmit,
           orderBy: { name: "asc" },
         });
       case "suppliers":
@@ -211,6 +219,11 @@ export class MasterService {
           storageNotes: nullable(input.storage_notes),
           storageProfile: jsonOrNull(input.storage_profile),
           shelfLifeDays: input.shelf_life_days == null ? null : Number(input.shelf_life_days),
+          minimumStock:
+            input.minimum_stock == null ? null : new Prisma.Decimal(String(input.minimum_stock)),
+          ...(input.discount_limit !== undefined
+            ? { discountLimit: parseDiscountLimit(input.discount_limit as string | null) }
+            : {}),
           createdById: actorId,
           updatedById: actorId,
           uoms: {
@@ -372,6 +385,11 @@ export class MasterService {
           storageNotes: nullable(input.storage_notes),
           storageProfile: jsonOrNull(input.storage_profile),
           shelfLifeDays: input.shelf_life_days == null ? null : Number(input.shelf_life_days),
+          minimumStock:
+            input.minimum_stock == null ? null : new Prisma.Decimal(String(input.minimum_stock)),
+          ...(input.discount_limit !== undefined
+            ? { discountLimit: parseDiscountLimit(input.discount_limit as string | null) }
+            : {}),
           version: { increment: 1 },
           updatedById: actorId,
         },
@@ -591,12 +609,13 @@ export class MasterService {
           collectionSchedule: nullable(input.collection_schedule),
           invoiceExchangeSchedule: nullable(input.invoice_exchange_schedule),
           paymentMethodPreference: nullable(input.payment_method_preference),
-          paymentToleranceDays:
-            input.payment_tolerance_days == null ? null : Number(input.payment_tolerance_days),
           legalDocuments: this.customerLegalDocuments(input.legal_documents),
           responsiblePerson: jsonOrNull(input.responsible_person),
           responsibleLicense: jsonOrNull(input.responsible_license),
           nooDocument: jsonOrNull(input.noo_document),
+          ...(input.default_tax_invoice_code
+            ? { defaultTaxInvoiceCode: String(input.default_tax_invoice_code) }
+            : {}),
           createdById: actorId,
           updatedById: actorId,
         },
@@ -605,6 +624,10 @@ export class MasterService {
     );
   }
 
+  /**
+   * Credit attributes (term, limit, freeze, grace) are only written when the input carries them;
+   * the controller rejects them without customer_credit.update.
+   */
   async updateCustomer(
     companyId: string,
     actorId: string,
@@ -636,6 +659,7 @@ export class MasterService {
         throw new ConflictException(
           "Status pelanggan bertransaksi ditetapkan oleh Finance setelah invoice diposting.",
         );
+      const credit = await resolveCustomerCredit(tx, companyId, current, input);
       const updated = await tx.customer.update({
         where: { id, companyId, version: expectedVersion },
         data: {
@@ -657,8 +681,6 @@ export class MasterService {
           collectionSchedule: nullable(input.collection_schedule),
           invoiceExchangeSchedule: nullable(input.invoice_exchange_schedule),
           paymentMethodPreference: nullable(input.payment_method_preference),
-          paymentToleranceDays:
-            input.payment_tolerance_days == null ? null : Number(input.payment_tolerance_days),
           legalDocuments: this.customerLegalDocuments(
             input.legal_documents,
             current.legalDocuments,
@@ -666,11 +688,16 @@ export class MasterService {
           responsiblePerson: jsonOrNull(input.responsible_person),
           responsibleLicense: jsonOrNull(input.responsible_license),
           nooDocument: jsonOrNull(input.noo_document),
+          defaultTaxInvoiceCode: input.default_tax_invoice_code
+            ? String(input.default_tax_invoice_code)
+            : current.defaultTaxInvoiceCode,
+          ...(credit ?? {}),
           version: { increment: 1 },
           updatedById: actorId,
         },
         include: { channel: true, rayon: true },
       });
+      if (credit) await recordCreditChange(tx, this.audit, companyId, actorId, id, current, credit);
       await this.audit.recordWith(tx, {
         companyId,
         actorId,

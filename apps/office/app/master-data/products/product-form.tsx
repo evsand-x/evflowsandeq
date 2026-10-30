@@ -49,7 +49,9 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
     max_temp: text(profile.max_temp),
     humidity_limits: text(profile.humidity_limits),
     source_document: text(profile.source_document),
+    discount_limit: text(initial?.discount_limit),
   });
+  const canDiscountLimit = useCan()("discount_limit.manage");
   const [flags, setFlags] = useState({
     batch_required: initial?.batch_required ?? true,
     expiry_required: initial?.expiry_required ?? true,
@@ -84,6 +86,10 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
     if (values.name.trim().length < 2) found.name = "Nama produk wajib diisi.";
     if (!values.category_id) found.category_id = "Pilih kategori aktif.";
     if (!values.base_uom_id) found.base_uom_id = "Pilih satuan dasar aktif.";
+    if (canDiscountLimit && values.discount_limit && !/^\d{1,3}([.,]\d{1,4})?$/.test(values.discount_limit))
+      found.discount_limit = "Isi persen 0-100, maksimal empat desimal.";
+    if (canDiscountLimit && /^\d+([.,]\d+)?$/.test(values.discount_limit) && Number(values.discount_limit.replace(",", ".")) > 100)
+      found.discount_limit = "Batas diskon maksimal 100%.";
     if (values.shelf_life_days && !/^\d+$/.test(values.shelf_life_days))
       found.shelf_life_days = "Masa simpan berupa jumlah hari.";
     for (const field of ["min_temp", "max_temp"] as const)
@@ -106,6 +112,9 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
       storage_notes: nullableText(values.storage_notes),
       storage_profile: hasStorage ? storage : null,
       shelf_life_days: values.shelf_life_days ? Number(values.shelf_life_days) : null,
+      ...(canDiscountLimit
+        ? { discount_limit: values.discount_limit ? values.discount_limit.replace(",", ".").replace(/\.$/, "") : null }
+        : {}),
     };
     setBusy(true);
     setError("");
@@ -231,6 +240,31 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
               </div>
             ),
           },
+          ...(canDiscountLimit
+            ? [
+                {
+                  id: "discount",
+                  title: "Batas diskon",
+                  description: "Batas atas diskon produk ini. Batas efektif adalah yang terkecil antara batas orang dan batas produk; kosong berarti tidak ada batas produk.",
+                  content: (
+                    <div className="page-frame-fields">
+                      <label>
+                        Batas diskon produk (%)
+                        <Input
+                          inputMode="decimal"
+                          value={values.discount_limit}
+                          aria-invalid={!!errors.discount_limit}
+                          onChange={(e) => set("discount_limit", e.target.value)}
+                        />
+                        {errors.discount_limit && (
+                          <span className="page-frame-field-error">{errors.discount_limit}</span>
+                        )}
+                      </label>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
           {
             id: "storage",
             title: "Penyimpanan & mutu",

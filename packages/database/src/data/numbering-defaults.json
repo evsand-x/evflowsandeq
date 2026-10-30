@@ -1,0 +1,98 @@
+[
+  {
+    "document_kind": "customer_receipt",
+    "label": "Penerimaan Pelanggan",
+    "prefix": "RC",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "sales_order",
+    "label": "Sales Order",
+    "prefix": "SO",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "document_PROFORMA",
+    "label": "Proforma",
+    "prefix": "PRO",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "document_PICKING",
+    "label": "Picking Slip",
+    "prefix": "PCK",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "document_PACKING",
+    "label": "Packing List",
+    "prefix": "PL",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "document_SURAT_JALAN",
+    "label": "Surat Jalan",
+    "prefix": "SJ",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "fulfillment",
+    "label": "Pemenuhan",
+    "prefix": "FUL",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "sales_invoice",
+    "label": "Invoice Penjualan",
+    "prefix": "INV",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "credit_note",
+    "label": "Nota Kredit",
+    "prefix": "CN",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "purchase_order",
+    "label": "Purchase Order",
+    "prefix": "PO",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "goods_receipt",
+    "label": "Penerimaan Barang",
+    "prefix": "GR",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  },
+  {
+    "document_kind": "supplier_invoice",
+    "label": "Tagihan Supplier",
+    "prefix": "SINV",
+    "digits": 4,
+    "year_format": "YYYY",
+    "reset_period": "MONTHLY"
+  }
+]

@@ -1,7 +1,19 @@
 # Peta Dokumen dan Sumber Kebenaran
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Keputusan terbaru pengguna pada README dan desain [SJ dan penerimaan terpisah](../superpowers/specs/2026-10-30-sj-penerimaan-terpisah-design.md) menggantikan syarat handover pada issue Release 1.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+Keputusan konsolidasi 24 Oktober 2026 ([desain](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md)): satu menu satu rumah, pengaturan umum di Setting, aturan per pasangan dihentikan, persetujuan di tempat dokumen.
+
+
 Prioritas sumber: keputusan terbaru pengguna → register keputusan pada README →
 Requirements → dokumen domain pemilik aturan → User Flow/Design/Features → model teknis.
+
+Keputusan 24 Oktober 2026 ([desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md) dan register README) menggantikan ketentuan lama yang lebih kaku tentang persetujuan SO, termin/kredit, nilai bawaan konfigurasi, ongkir, peran dan menu yang belum berfungsi.
 
 ## Acuan visual web terbaru
 
@@ -37,7 +49,7 @@ Dokumen utama 00–08 dan README tetap berlaku. Dokumen pendukung lintas modul a
 
 ## Batas lintas modul
 
-- SO normal berjalan tanpa approval manual rutin; approval hanya untuk exception seperti unlock.
+- SO berjalan otomatis bila tidak ada aturan persetujuan aktif; persetujuan SO, pengecualian kredit dan dokumen lain dikonfigurasi pada mesin persetujuan umum (keputusan 24 Oktober 2026).
 - PR dan PO milik Warehouse & Logistik; invoice, AP dan pembayaran milik Finance.
 - Dashboard menyajikan projection sesuai scope; transaksi tetap di modul asal.
 - Master Data menyimpan identitas reusable; Setting mengatur policy, izin dan konfigurasi. Kontak digunakan pada menu Sales & Marketing dengan identitas pelanggan yang sama. Layar Master Data dapat menampilkan harga, kredit, saldo, stok atau pajak sesuai izin, sedangkan mutasi dan aturan tetap dimiliki Sales, Warehouse, Finance atau Setting.
@@ -52,3 +64,18 @@ instruksi agent atau pengganti keputusan terbaru pengguna.
 
 
 ---
+
+## O2C Release 1 (29 Oktober 2026)
+
+Sumber lintas dokumen O2C Release 1 adalah desain 29 Oktober 2026: SO menjadi sumber permintaan, Surat Jalan terbit menjadi event penyerahan serta sumber kuantitas untuk Invoice.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Sumber tambahan Invoice/pembayaran adalah keputusan 30 Oktober 2026 pada README dan desain backend Invoice. Basis jatuh tempo baru issuedAt SJ + snapshot TOP; nomor draft dapat diedit. Aturan historis yang berbeda tidak berlaku untuk dokumen baru.

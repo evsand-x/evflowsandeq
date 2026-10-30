@@ -1,4 +1,52 @@
-# evflow — ERP PT Sandeq Sarana Medika
+# evflow — Blueprint ERP
+
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Keputusan pengguna: Terbitkan Surat Jalan cukup menerbitkan, tanpa konfirmasi barang diterima. Tombol Penerimaan Barang tersedia pada detail SJ terbit. Pengguna menegaskan stok, jurnal pendapatan/HPP, dan invoice tetap berjalan saat SJ terbit. Acuan: [desain](../superpowers/specs/2026-10-30-sj-penerimaan-terpisah-design.md).
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+## Keputusan pengguna — 25 Oktober 2026: Sales Order mudah, matrix pohon, pindah locator, penomoran dan pajak
+
+Acuan: [desain SO mudah](../superpowers/specs/2026-10-25-so-mudah-design.md) (draf; pendekatan A: per bagian dengan backend lebih dulu di tiap bagian — daftar + form SO, detail SO, matrix pohon, pindah locator, penomoran, pajak). Pembanding pola UI: Kledo. Backend daftar/form mulai diimplementasikan pada eksekusi 25–26 Oktober; kontrak dan dokumen domain disinkronkan. Layar baru dan bagian berikutnya belum dinyatakan selesai. Bukti dan batas verifikasi: [eksekusi backend SO](../development/so-backend-execution-2026-10-25.md).
+
+- **Daftar SO:** kolom Nomor, Pelanggan, No. SP, Tanggal, Jatuh Tempo, Status, DP, Total; filter status berupa tab. Satu **status tunggal** menggantikan tiga badge: Draft, Menunggu Persetujuan, Open, Dikirim Sebagian, Dalam Pengiriman, Selesai, Dibatalkan. SO **Selesai bila seluruh jumlah SO telah diterbitkan melalui Surat Jalan** atau sisanya ditutup; tidak menunggu invoice/pembayaran. Barang yang diterima kurang dari yang dikirim menjadi sisa yang dikirim ulang. DP adalah uang muka terverifikasi Finance yang dikaitkan ke SO, hanya ditampilkan.
+- **Form SO:** pola faktur padat; wajib bawaan hanya pelanggan, tanggal dan barang. No. SP pelanggan dan lampiran opsional secara bawaan, dapat dijadikan wajib melalui Setting dan ditegakkan backend. Alamat kirim otomatis dari pelanggan. SO memuat gudang (bawaan dari Setting; tersembunyi bila hanya satu gudang; opsi gudang per barang). Bahasa layar memakai istilah faktur, tanpa kalimat teknis sistem.
+- **Stok kurang:** peringatan pada baris; stok tidak diambil diam-diam dari gudang/locator lain. Dari form SO pengguna dapat mengajukan **pindah locator** (mis. Penerimaan → Persediaan) yang dieksekusi Gudang sebagai pergerakan stok teraudit, lalu kekurangan dialokasikan ulang. Stok karantina tidak dapat diminta pindah dari SO.
+- **Detail SO:** barang belum terpenuhi (Dipesan, Diterima pelanggan, Sisa, Status baris), panel Dokumen terkait dengan status dan nilai, tombol langkah berikutnya dan menu Buat (Proforma, Pick Slip, Surat Jalan, Invoice) sesuai izin efektif; tombol tanpa izin disembunyikan. Merevisi presentasi keputusan 23 Oktober tentang struktur detail SO. Invoice dibuat hanya dari Surat Jalan terbit pada Release 1. Pola detail mengikuti Kledo tanpa tombol Bagikan/WhatsApp. **Uang muka dapat dicatat dari halaman SO** oleh pengguna berizin dan wajib diverifikasi Finance sebelum menjadi DP, dihitung sebagai dana terverifikasi, atau diposting; pencatat tidak memverifikasi catatannya sendiri.
+- **Matrix hak akses:** pohon centang Modul → Submenu → tindakan yang berlaku, dengan centang batasan data berbahasa awam (data milik pengguna lain, lihat harga, data milik sales lain). Izin per submenu, larangan grant induk dan hak Admin Sistem tetap berlaku. Semua pengaturan akses berada di peran (tanpa override per pengguna). Tanpa Lihat harga, harga dan total tidak dikirim server di SO, Proforma, Pick Slip, Surat Jalan, Invoice, laporan dan ekspor. Pemilik data penjualan adalah isian Sales, dengan cakupan bawahan dari Struktur Organisasi. Izin baru hanya diberikan kepada peran yang saat ini sudah dapat melakukan hal tersebut, diaudit dan ditinjau.
+- **Penomoran dokumen:** kartu per kelompok dengan pencarian; format berupa teks dengan kode berbahasa awam dan contoh hasil langsung; nomor saat ini hanya dapat dinaikkan; reset tidak pernah/harian/bulanan/tahunan dengan log. Nomor tetap dibuat sistem, unik dan atomik.
+- **Penomoran (lanjutan):** format seperti Kledo tanpa kode berbasis data.
+- **Pajak:** satu pajak menyimpan akun penjualan dan pembelian sekaligus; pajak yang dipotong lawan transaksi (PPh) ditandai Pemotongan di daftar Pajak (Jenis Potongan tinggal untuk potongan non-pajak). Daftar sederhana dengan satu persen efektif, akun penjualan/pembelian dan sakelar aktif; rincian tarif × DPP tetap disimpan per dokumen untuk Coretax dan tampil saat dibuka. Pajak bawaan dan snapshot keputusan 24 Oktober tetap berlaku.
+
+## Keputusan pengguna — 24 Oktober 2026: konsolidasi pengaturan
+
+Acuan: [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Melengkapi keputusan arah fleksibel di bawah:
+
+- **Satu menu, satu rumah.** Setiap menu berada di tepat satu modul; menu yang salah tempat dihapus. Semua pengaturan di Setting (Profil Perusahaan, Pengguna, Peran, Kebijakan Umum, Penomoran Dokumen, Pajak, Termin & Kredit, Jenis Potongan, Pemetaan Akun, Persetujuan); modul lain hanya transaksi dan data kerja. Halaman `/operations/controls` dihapus.
+- **Pengaturan umum, bukan per pasangan.** Pengaturan umum di Setting → atribut sederhana di master data bila memang berbeda → nilai di dokumen terisi otomatis dan dapat diganti pengguna berizin. Aturan per pelanggan × produk dihentikan.
+- **Pajak:** semua produk kena PPN; dokumen memakai pajak penjualan bawaan (tarif × faktor DPP, bawaan 12% × 11/12) dengan snapshot. Invoice memuat kode transaksi faktur (bawaan 01, bawaan pelanggan mis. RS Pemerintah 03).
+- **Potongan pembayaran:** Terima Pembayaran memuat baris potongan (jenis, nilai, akun, bukti). Jenis Potongan di Setting menentukan akun penyelesaian dan bukti (bukti potong atau SSP/NTPN). Nilai yang wajib bukti tetap piutang berstatus Menunggu bukti potong, dihitung dalam limit kredit, dan invoice baru lunas setelah bukti diunggah.
+- **Harga dan diskon:** harga otomatis = harga khusus pelanggan yang disetujui bila ada, selain itu harga jual umum; dapat diganti di SO. Batas diskon per peran, per orang (menggantikan peran) dan per produk (plafon); berlaku yang terkecil; melebihi batas tidak dapat disimpan. Harga khusus diajukan dan disetujui di Sales & Marketing.
+- **Persetujuan di tempat dokumen;** pengaturan umumnya di Setting. Dashboard hanya menautkan.
+- **Format nomor:** `Prefix.FormatTahun.FormatBulan.NomorUrut` (contoh `SO-SSM.2026.10.0001`), toggle reset bulanan/tahunan; perubahan mode reset berlaku periode berikutnya.
+- **Identitas perusahaan** (zona waktu, tahun buku, mata uang) hanya di data perusahaan; limit kredit, freeze dan toleransi menjadi atribut Master Data › Pelanggan.
+
+
+## Keputusan pengguna — 24 Oktober 2026: aplikasi fleksibel dan mudah dipakai
+
+Acuan: [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Aplikasi dipakai sendiri oleh seluruh tim perusahaan dan harus terasa seperti ERP SaaS pada umumnya: langsung dapat dipakai, sedikit isian wajib, pengaturan terpusat. Keputusan ini menggantikan ketentuan lama yang bertentangan di seluruh blueprint:
+
+- **Pengaturan terpusat dan nilai bawaan:** profil perusahaan (nama, alamat, kontak, NPWP, logo), format angka, penomoran, pajak, termin, ongkir, kredit, struktur organisasi dan persetujuan diatur di Setting oleh pengguna berizin. Konfigurasi yang dibutuhkan transaksi dibuat otomatis dengan nilai bawaan yang dapat diedit; proses hanya tertahan bila pengguna sendiri mengosongkan atau menonaktifkan konfigurasi wajib, dengan pesan yang menautkan halaman Setting terkait. Nama perusahaan tidak ditulis tetap di kode atau panduan.
+- **Mata uang:** saat ini hanya Rupiah; format angka dan pembulatan dapat diatur. Multi-mata uang belum dalam cakupan.
+- **Sales Order:** isian wajib minimal (pelanggan, tanggal, barang, jumlah, harga). Termin dipilih pada SO (Tunai/COD, Bayar sebelum kirim, Tempo N hari); termin bawaan pelanggan hanya mengisi otomatis, diwarisi invoice dan dapat diubah sebelum invoice diposting. TOP/limit pada master pelanggan opsional. Kebijakan COD awal pelanggan baru menjadi opsi, default nonaktif. Limit kredit memakai mode perusahaan Nonaktif/Peringatan/Blokir, default Peringatan.
+- **Ongkos kirim:** Ditanggung perusahaan (COGS/biaya kirim, tidak ditagih) atau Dibebankan ke pelanggan dengan pilihan Sebelum PPN (masuk DPP) atau Sesudah PPN (tidak dikenai pajak). Default dan akun diatur di Setting.
+- **Persetujuan:** satu mesin persetujuan umum untuk jenis dokumen apa pun, termasuk SO, pengecualian kredit, permintaan biaya, perjalanan dinas, entertain, call plan harian, rekonsiliasi dan cuti. Persetujuan SO boleh dinyalakan dengan kondisi; tanpa aturan aktif SO berjalan otomatis. Urutan SO: validasi → persetujuan (bila cocok) → kredit → alokasi; stok tidak direservasi selama menunggu dan antrean alokasi dihitung sejak disetujui. Unlock kredit digabung ke mesin ini.
+- **Struktur organisasi:** departemen, jabatan dan atasan langsung berbasis data karyawan, termasuk karyawan tanpa akun. Keputusan persetujuan memerlukan akun; atasan tanpa akun dilewati ke atasan berakun berikutnya, lalu Admin Sistem.
+- **Peran:** tidak ada peran preset yang dipaksakan. Peran dibuat bebas; matriks menu × tindakan dengan cakupan data, Pilih Semua dan salin dari peran lain. Pengelolaan Pengguna, Peran dan Hak Akses tetap khusus Admin Sistem.
+- **Navigasi:** menu dan submenu yang belum berfungsi disembunyikan.
+- **Tetap berlaku:** invariant posting, stok, snapshot, nomor, idempotency, izin backend dan isolasi perusahaan. Perubahan pengaturan hanya berlaku untuk dokumen baru.
 
 ## Keputusan pengguna — 23 Oktober 2026: fondasi visual biru logo
 
@@ -6,7 +54,7 @@ Office memakai warna dari logo evflow menggantikan aksen emerald: navy untuk nav
 
 ## Keputusan pengguna — 23 Oktober 2026: struktur detail Sales Order
 
-Detail Sales Order memakai tab Ringkasan, Pemenuhan, Dokumen dan Riwayat. Tabel barang (dipesan, teralokasi, dikirim, diterima POD, backorder, ditutup, harga, subtotal) menjadi bagian tab Ringkasan; tab Barang tersendiri dihapus. Tab Tagihan dihapus: invoice tampil sebagai baris dokumen bertautan langsung pada tab Dokumen bersama Proforma, Picking Slip, Packing List, Surat Jalan dan POD, sesuai izin masing-masing. Daftar, Detail dan Form SO memakai kerangka Office (`OfficePage`). Keputusan ini hanya presentasi; command, izin, approval exception dan invariant pemenuhan tidak berubah. Acuan: OTC-01/04/05/10/11, [Design](07-design.md), [catatan redesign Sales](../development/sales-redesign-2026-10-16.md).
+Detail Sales Order memakai tab Ringkasan, Pemenuhan, Dokumen dan Riwayat. Tabel barang (dipesan, teralokasi, dikirim, diterima pada Surat Jalan terbit, backorder, ditutup, harga, subtotal) menjadi bagian tab Ringkasan; tab Barang tersendiri dihapus. Tab Tagihan dihapus: invoice tampil sebagai baris dokumen bertautan langsung pada tab Dokumen bersama Proforma, Picking Slip, Packing List, Surat Jalan dan POD, sesuai izin masing-masing. Daftar, Detail dan Form SO memakai kerangka Office (`OfficePage`). Keputusan ini hanya presentasi; command, izin, approval exception dan invariant pemenuhan tidak berubah. Acuan: OTC-01/04/05/10/11, [Design](07-design.md), [catatan redesign Sales](../development/sales-redesign-2026-10-16.md).
 
 ## Keputusan pengguna — 23 Oktober 2026: tab Kontak di Master Data › Pelanggan
 
@@ -90,7 +138,7 @@ Keputusan terbaru 26 September 2026: MFA belum wajib pada tahap implementasi saa
 | Kategori | Non Elektromedik Non Steril; Non Elektromedik Steril; Elektromedik Non Radiasi; Diagnostik In Vitro |
 | Channel | RS Pemerintah; RS Swasta; Dinas Kesehatan; Apotek/Klinik; Laboratorium; Institusi Pemerintah; Lainnya; dapat ditambah |
 | Kredit | SO diinput dahulu; verifikasi ketentuan pembayaran, cek past due/limit untuk tempo, kemudian pemeriksaan dan alokasi stok. Bayar sebelum kirim diperiksa lagi terhadap dana terverifikasi sebelum pengiriman |
-| Pelanggan baru | Dapat ditambahkan dari layar SO oleh pengguna berizin; periksa kemungkinan duplikasi. Mode awal COD saat barang diterima selama tiga bulan berturut-turut atau bayar sebelum pengiriman. Fasilitas Tempo setelah evaluasi Finance dan TOP/limit ditetapkan pengguna berwenang |
+| Pelanggan baru | Dapat ditambahkan dari layar SO oleh pengguna berizin; periksa kemungkinan duplikasi. Termin dipilih pada SO; TOP/limit di master opsional. Kebijakan COD awal pelanggan baru opsional, default nonaktif (keputusan 24 Oktober 2026) |
 | Registrasi sebelum PO | Institusi dicatat sekali di Master Pelanggan dengan tahap hubungan Prospek melalui form ringkas; kontak dan kunjungan dapat dicatat tanpa PO/SO atau kelengkapan pelanggan transaksi. Perubahan tahap mempertahankan data dan riwayat. Registrasi/kunjungan tidak dihitung sebagai pelanggan bertransaksi |
 | Database Kontak CRM | 11 atribut pengguna: kode, nama lengkap/panggilan, pelanggan tertaut master, jabatan, unit/bagian, fungsi PIC, HP/WA, email, tanggal lahir, status dan catatan. Kontak terpisah dari akun ERP; banyak kontak per institusi dan beberapa fungsi per PIC |
 | Manajemen prospek dan peluang | Penanggung jawab, sumber, status pendekatan, tindak lanjut, catatan/lampiran serta riwayat kegiatan. Status awal Baru/Dalam Pendekatan/Potensial/Ditunda/Tidak Dilanjutkan dapat diatur di Setting; penundaan/penghentian beralasan. Satu institusi dapat mempunyai beberapa peluang |
@@ -102,9 +150,9 @@ Keputusan terbaru 26 September 2026: MFA belum wajib pada tahap implementasi saa
 | Follow-up dan sampel | Tugas/pengingat/eskalasi internal terkonfigurasi, maintain saat Win; pengajuan sampel → approval → issue gudang/serah terima → trial/hasil → follow-up/pengembalian. Tidak otomatis menjadi penjualan/AR/NOO |
 | Pelanggan bertransaksi | Mulai dihitung saat invoice pertama diposting, sesuai pilihan pengguna. Status master aktif/nonaktif terpisah dari riwayat transaksi |
 | Kartu piutang pelanggan | Saldo awal, mutasi invoice/pembayaran/koreksi, saldo berjalan/akhir, invoice terbuka, jatuh tempo/aging dan riwayat penagihan per pelanggan, dengan periode dan hak akses |
-| Jatuh tempo dan pembayaran invoice | Dikonfirmasi: jatuh tempo berdasarkan tanggal aktual barang diterima di POD + termin; detail invoice menyediakan tombol Terima Pembayaran sesuai izin, dengan verifikasi dana dan alokasi ke invoice. Untuk WAPU, penyelesaian memisahkan komponen **PPN Dipungut WAPU** dan **PPh Dipotong** sebagai dua baris pajak, bukan satu potongan atau diskon |
+| Jatuh tempo dan pembayaran invoice | Dikonfirmasi: jatuh tempo berdasarkan waktu serah terima Surat Jalan terbit + termin; detail invoice menyediakan tombol Terima Pembayaran sesuai izin, dengan verifikasi dana dan alokasi ke invoice. Untuk WAPU, penyelesaian memisahkan komponen **PPN Dipungut WAPU** dan **PPh Dipotong** sebagai dua baris pajak, bukan satu potongan atau diskon |
 | Informasi stok bagi sales | Pengguna berhak dapat melihat stok tersedia saat input, termasuk stok nol. Ini informasi kondisi saat dilihat; alokasi resmi diperiksa ulang setelah aturan transaksi/ketentuan pembayaran lolos |
-| Pemrosesan SO | Tanpa approval manual rutin. Sistem memvalidasi data/aturan, kredit, lalu stok; jika lolos, lanjut otomatis. SO terkunci dapat diajukan untuk unlock manual dan diputuskan pihak yang diatur dalam sistem |
+| Pemrosesan SO | Tanpa aturan persetujuan aktif, SO lanjut otomatis setelah validasi data/aturan, kredit, lalu stok. Persetujuan SO dapat dinyalakan per kondisi (24 Oktober 2026): validasi → persetujuan → kredit → alokasi. Pengecualian kredit mode Blokir diajukan melalui mesin persetujuan umum |
 | Isi SO dan dokumen pemenuhan | Seluruh item/jumlah pesanan masuk SO, termasuk yang belum tersedia. Proforma dan Picking Slip hanya memuat stok tersedia yang dialokasikan; Packing List mengikuti barang aktual yang diambil dan lolos checking |
 | Sisa pesanan | Kekurangan per item/jumlah dapat menjadi backorder atau ditutup; satu SO dapat dipenuhi bertahap, tanpa menghapus jumlah pesanan asli |
 | Label status SO | Pesanan: Draft, Open, Selesai, Closed, Cancelled. Pemenuhan: Belum Dikirim, Sebagian, Terkirim Semua. Sisa: Backorder, Proses Pemenuhan, Ditutup |
@@ -134,7 +182,7 @@ Keputusan terbaru 26 September 2026: MFA belum wajib pada tahap implementasi saa
 
 ## Keputusan final Gelombang A — 25 September 2026
 
-IDR, tahun buku Januari–Desember dan timezone Asia/Makassar menjadi baseline perusahaan; timestamp sistem disimpan UTC. Pendapatan dan HPP normal diakui pada POD jumlah diterima. HPP memakai moving average per perusahaan dan produk dalam satuan dasar.
+IDR, tahun buku Januari–Desember dan timezone Asia/Makassar menjadi baseline perusahaan; timestamp sistem disimpan UTC. Pendapatan dan HPP normal diakui saat Surat Jalan diterbitkan dengan bukti serah terima. HPP memakai moving average per perusahaan dan produk dalam satuan dasar.
 
 Nilai awal Finance: jatuh tempo AP dari tanggal invoice lengkap diterima/diverifikasi + TOP; matching qty/harga 0; pembulatan Rp1; landed cost berdasarkan nilai pembelian net. OPS-FIN pada dokumen 40 membuat default tersebut editable melalui UI, sementara PO/MOU/charge dapat memakai override yang didukung.
 
@@ -147,7 +195,7 @@ Sumber S1: jawaban pengguna pada percakapan ini, 24 September 2026. Sumber S2: `
 | Sheet / sel S2 | Proses / catatan |
 |---|---|
 | Sheet1 C8:C15 | Penerimaan SP, validasi pricelist, serah terima ke admin |
-| Sheet2 C8:C20 | Verifikasi dan SO; arahan pengguna mengganti approval SO rutin dengan validasi otomatis dan approval hanya untuk permintaan unlock |
+| Sheet2 C8:C20 | Verifikasi dan SO; arahan pengguna mengganti approval SO rutin dengan validasi otomatis dan approval hanya untuk permintaan unlock. Dicabut 24 Oktober 2026: persetujuan SO dapat dikonfigurasi |
 | Sheet3 C8:C16 | Proforma, POD/surat jalan kembali, invoice resmi, tukar faktur |
 | Lembar1 C7:C16 | Validasi data pajak, Coretax, PDF faktur pajak |
 | Sheet4 C8:C32 | Picking, packing, surat jalan, ekspedisi, bukti terima |
@@ -191,7 +239,7 @@ Status final, mandatory configuration dan release gate register di bawah dirinci
 | D04 | **Final:** freeze H+30; follow-up H-7, H, H+3, H+7 dan H+14; pengecualian memakai unlock beralasan dan bertenggat | Pimpinan finance | Assignment/limit approver diisi pada Setting |
 | D05 | **Final:** exposure mencakup AR, unbilled POD, transit dan stok teralokasi tanpa hitung ganda, dikurangi uang muka tertaut; backorder belum dialokasikan tidak memakai limit | Pimpinan finance | Detail pada dokumen 25 |
 | D07 | **Final sebagai nilai awal OPS-COMP:** IDR, tahun buku Jan–Des dan timezone Asia/Makassar; editable melalui UI dengan validasi dampak, sedangkan timestamp sistem tetap UTC | Finance | Perubahan mata uang setelah transaksi memerlukan cut-over/company baru |
-| D08 | **Final:** SO normal tidak memakai approval manual; unlock dan transaksi exception mengikuti approval policy per jenis | Pimpinan | Multi-peran tetap berlaku |
+| D08 | **Direvisi 24 Oktober 2026:** persetujuan SO dan dokumen lain mengikuti aturan pada mesin persetujuan umum; tanpa aturan aktif SO berjalan otomatis | Pimpinan | Multi-peran tetap berlaku |
 | D09 | **Final:** fingerprint melalui impor file ke staging; raw row immutable dan commit memerlukan mapping/deduplikasi/review. Profile file perangkat diisi saat implementasi; tidak ada koneksi langsung mesin pada versi awal | HR | Payroll resmi menunggu contoh file dan hasil parallel run |
 | D10 | **Final:** invoice asli boleh dibawa saat pengiriman dengan status Diterbitkan — Menunggu POD; nomor tetap dan posting setelah POD. COD TOP 0; prepay menunggu dana terverifikasi sebelum dispatch | Finance | Proforma tetap tanpa AR/pendapatan |
 | D11 | **Final:** retur target mengikuti periode credit note posted; atribusi default 100% owner invoice/SO dan split harus tepat 100%. Komisi memakai policy aktif dan payout setelah review | Pimpinan + HR/finance | Payroll/komisi resmi tetap menunggu rule perusahaan |
@@ -213,7 +261,7 @@ Status final, mandatory configuration dan release gate register di bawah dirinci
 | D27 | **Final:** dashboard per role dan personalisasi layout/filter; perubahan committed dikirim realtime dengan target awal ≤10 detik, fallback refresh ≤5 menit, suppression <5 orang dan expiry ekspor 7 hari editable melalui OPS-SYS | Pimpinan + pemilik modul | Formula memakai definition version, as-of/freshness dan katalog template yang diizinkan |
 | D28 | **Final:** nama aplikasi adalah **evflow** pada seluruh kanal produk; nama perusahaan berasal dari Profil Perusahaan | Pimpinan | Branding, metadata aplikasi, dokumen keluaran dan komunikasi sistem |
 | D29 | **Final:** nama/profil perusahaan dapat diedit langsung melalui UI oleh pengguna berizin tanpa tanggal berlaku, alasan atau approval. Perubahan berlaku segera untuk tampilan dan dokumen baru; dokumen issued mempertahankan snapshot | Pimpinan / admin berizin | Setting, database, API, template dan cetak ulang dokumen |
-| D30 | **Final:** parameter operasional pada dokumen 40 menjadi nilai awal yang dapat diubah melalui Setting → Kebijakan Operasional. Simpan langsung menjadi default; alasan, approval dan tanggal berlaku hanya muncul bila jenis policy mengaktifkannya. Invariant pada dokumen 40 bagian 9 tetap tidak dapat dilonggarkan | Pimpinan / pemilik modul | Seluruh modul, UI Setting, policy service, snapshot dan validasi |
+| D30 | **Final:** parameter operasional pada dokumen 40 menjadi nilai awal yang dapat diubah melalui Setting → Kebijakan Umum. Simpan langsung menjadi default; alasan, approval dan tanggal berlaku hanya muncul bila jenis policy mengaktifkannya. Invariant pada dokumen 40 bagian 9 tetap tidak dapat dilonggarkan | Pimpinan / pemilik modul | Seluruh modul, UI Setting, policy service, snapshot dan validasi |
 | D31 | **Final:** Matriks Hak Akses bukan submenu mandiri. Matriks dibuka dari Setting → Peran → Atur Hak Akses dan tetap membawa konteks peran yang sedang dikonfigurasi | Pimpinan / admin sistem | Struktur sidebar, breadcrumb, deep link matriks dan dokumentasi navigasi |
 
 ## Cara menggunakan paket ini
@@ -248,4 +296,17 @@ IAM-01/04/11: pengguna dapat memiliki beberapa peran; izin efektif adalah gabung
 
 ## Keputusan pengguna — 21 Oktober 2026: Invoice dari Packing List
 
-Menu Finance → Piutang (AR) → Invoice menampilkan antrean Packing List yang telah disiapkan, dicek dan diterbitkan, tanpa menunggu Surat Jalan atau POD. Pengguna membuat Invoice secara manual dari antrean; penerbitan langsung membentuk AR dan dapat dicetak. Kuantitas mengikuti hasil checking. Pengiriman tidak membuat Invoice otomatis. Jatuh tempo dihitung dari tanggal penerbitan Invoice + TOP sesuai keputusan pengguna terbaru.
+Pada Release 1, Finance → Piutang (AR) → Invoice hanya menerima sumber Surat Jalan terbit. Pengguna membuat Invoice dari Surat Jalan tersebut; kuantitas dan snapshot TOP mengikuti Surat Jalan/SO. Satu Surat Jalan menghasilkan paling banyak satu Invoice.
+
+
+## Invoice dan Terima Pembayaran — keputusan 30 Oktober 2026
+
+Acuan: [desain backend Invoice](../superpowers/specs/2026-10-30-invoice-payment-backend-design.md) dan mockup `docs/mockup/evflow-office-design.pen`.
+
+- Jatuh tempo = **tanggal penerbitan Surat Jalan (`issuedAt`) dalam zona waktu perusahaan + termin snapshot SO**. Bukan tanggal serah terima yang diketik, tanggal dokumen SJ, tanggal Invoice, input atau cetak. Keputusan ini menggantikan basis jatuh tempo lama untuk Invoice baru; tanggal historis tidak ditulis ulang.
+- Nomor Invoice diusulkan dari Setting, boleh diubah selama draft dan wajib unik per perusahaan. Draft belum membentuk AR. Submit memposting AR terhadap piutang belum ditagih pada tanggal Invoice, tanpa mengulang pendapatan/HPP dari SJ; sesudah posting dokumen immutable.
+- Sumber hanya SJ terbit, satu Invoice per SJ. Jumlah, harga, pajak, ongkir dan termin dari snapshot sumber; catatan dan alamat penagihan disimpan untuk dokumen.
+- Terima Pembayaran mencatat kas/bank dan alokasi invoice atomik, dengan referensi bank unik, bukti transfer, periode terbuka dan pemeriksaan outstanding terkini. Potongan memakai master aktif dan snapshot akun; persen dihitung dari **nilai barang net sebelum PPN (subtotal)**, yaitu basis berlabel DPP pada mockup (2% × Rp28.700.000 = Rp574.000), bukan DPP nilai lain khusus perhitungan PPN. Tarif bukan konstanta backend.
+- Potongan wajib bukti tanpa bukti tetap AR berstatus menunggu bukti. Bukti potong memiliki nomor, tanggal dan file terpisah dari bukti transfer. Penyelesaian bukti memposting pengurangan AR tepat sekali. Jika pelanggan kemudian melunasi dengan kas, histori pending tetap terlihat tetapi tidak dapat mengurangi AR di bawah nol.
+- `sales_invoice.read` dan `customer_receipt.read/post` tetap independen. Nilai Invoice memerlukan `sales_invoice.view_price` (Lihat harga); daftar/detail baru tetap menyediakan identitas tanpa nilai bila hak itu tidak ada. Form/mutasi finansial dan endpoint Invoice lama memerlukan hak nilai; hak pembayaran tidak memerlukan `sales_invoice.read`. Migrasi mempertahankan hak nilai yang sebelumnya dimiliki melalui grant Invoice/pembayaran dan mengaudit setiap penambahan tanpa memberikan hak baca/posting baru.
+- Scope implementasi ini backend, kontrak API, database dan pengujian. Pembangunan layar frontend sesuai mockup merupakan tahap berikutnya, bukan hasil yang diklaim selesai di sini.

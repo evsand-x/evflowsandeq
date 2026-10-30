@@ -6,6 +6,7 @@ import { AuditService } from "../common/audit.service";
 import type { ApprovalSnapshot, ApprovalStep } from "../procurement/approval-controls";
 import { isCompanyAdministrator } from "../identity/administrator";
 import { requireEvidence } from "./document-controls";
+import { creditFingerprint, customerCredit } from "./customer-credit";
 import { z } from "zod";
 
 type Tx = Prisma.TransactionClient;
@@ -18,22 +19,15 @@ export async function orderBasis(tx: Tx, companyId: string, id: string) {
     include: { lines: { orderBy: { id: "asc" } } },
   });
   if (!order) throw new NotFoundException("SO tidak ditemukan.");
-  const policy = await tx.customerPaymentPolicy.findFirst({
-    where: {
-      companyId,
-      customerId: order.customerId,
-      active: true,
-      effectiveFrom: { lte: new Date() },
-    },
-    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }, { id: "asc" }],
-  });
+  // Credit attributes of the customer are business inputs: changing them invalidates grants.
+  const credit = await customerCredit(tx, companyId, order.customerId);
   const hash = createHash("sha256")
     .update(
       JSON.stringify({
         customer: order.customerId,
         material_revision: order.materialRevision,
         currency: order.currency,
-        policy: policy?.id,
+        credit: creditFingerprint(credit),
         reference: order.customerReference,
         address: order.deliveryAddress,
         lines: order.lines.map((l) => [

@@ -16,6 +16,12 @@ export const taxInput = z
       .string()
       .regex(/^\d{1,3}(\.\d{1,8})?$/)
       .refine((v) => new Prisma.Decimal(v).lte(100)),
+    /** Share of the price taxed (DPP); PPN 12% x 11/12 gives an effective 11%. */
+    dpp_factor: z
+      .string()
+      .regex(/^\d(\.\d{1,10})?$/)
+      .refine((v) => new Prisma.Decimal(v).gt(0) && new Prisma.Decimal(v).lte(1))
+      .optional(),
     decimal_places: z.number().int().min(0).max(8),
     rounding: z.enum(["HALF_UP", "HALF_EVEN", "DOWN"]),
     active: z.boolean(),
@@ -58,6 +64,12 @@ export async function saveTax(
         }))
       )
         throw new ConflictException("TAX_ACCOUNT_INVALID");
+      if (before?.isDefaultSales || before?.isDefaultPurchase) {
+        // A default must stay usable, otherwise every new document would be blocked.
+        if (!data.active) throw new ConflictException("TAX_DEFAULT_REQUIRED_ACTIVE");
+        if (!defaultEligible({ ...data, usage: data.usage ?? before.usage }, before))
+          throw new ConflictException("TAX_DEFAULT_INVALID");
+      }
       if (
         await tx.operationalTax.findFirst({
           where: {
@@ -76,6 +88,7 @@ export async function saveTax(
         effect: data.effect,
         accountId: data.account_id,
         percentage: new Prisma.Decimal(data.percentage),
+        dppFactor: new Prisma.Decimal(data.dpp_factor ?? before?.dppFactor ?? 1),
         decimalPlaces: data.decimal_places,
         rounding: data.rounding,
         active: data.active,
@@ -145,16 +158,28 @@ export async function operationalTaxSnapshot(
     account_code: account.code,
     rate: row.percentage.div(100).toString(),
     percentage: row.percentage.toString(),
-    dpp_factor: "1",
+    dpp_factor: new Prisma.Decimal(
+      (historical as { dppFactor?: Prisma.Decimal.Value }).dppFactor?.toString() ?? "1",
+    ).toString(),
     decimal_places: row.decimalPlaces,
     rounding: row.rounding as "HALF_UP" | "HALF_EVEN" | "DOWN",
     taxable_event: "POD",
     legal_reference: "Master pajak operasional",
   };
 }
+/**
+ * Tax on a base amount: DPP = base x dpp_factor (rounded to the tax precision when the factor is
+ * not 1), then tax = DPP x rate rounded the same way. Snapshots without a factor use 1.
+ */
 export function calculateOperationalTax(
   base: string | Prisma.Decimal,
-  snapshot: { rate: string; effect: string; decimal_places: number; rounding: string },
+  snapshot: {
+    rate: string;
+    effect: string;
+    decimal_places: number;
+    rounding: string;
+    dpp_factor?: string | undefined;
+  },
 ) {
   const rounding = {
     HALF_UP: Prisma.Decimal.ROUND_HALF_UP,
@@ -162,10 +187,123 @@ export function calculateOperationalTax(
     DOWN: Prisma.Decimal.ROUND_DOWN,
   }[snapshot.rounding];
   if (rounding === undefined) throw new ConflictException("TAX_ROUNDING_REQUIRED");
-  const amount = new Prisma.Decimal(base)
-    .mul(snapshot.rate)
-    .toDecimalPlaces(snapshot.decimal_places, rounding);
+  const factor = new Prisma.Decimal(snapshot.dpp_factor ?? 1);
+  const dpp = factor.eq(1)
+    ? new Prisma.Decimal(base)
+    : new Prisma.Decimal(base).mul(factor).toDecimalPlaces(snapshot.decimal_places, rounding);
+  const amount = dpp.mul(snapshot.rate).toDecimalPlaces(snapshot.decimal_places, rounding);
   return snapshot.effect === "DEDUCT" ? amount.neg() : amount;
+}
+
+type DefaultUsage = "SALES" | "PURCHASE";
+const defaultColumn = { SALES: "isDefaultSales", PURCHASE: "isDefaultPurchase" } as const;
+
+/** A default must be an active, added PPN usable for that direction (PPN on every invoice). */
+function defaultEligible(
+  tax: { kind: string; usage?: string | null; effect: string; active: boolean },
+  flags: { isDefaultSales: boolean; isDefaultPurchase: boolean },
+  usage?: DefaultUsage,
+) {
+  const needs: DefaultUsage[] = usage
+    ? [usage]
+    : [
+        ...(flags.isDefaultSales ? (["SALES"] as const) : []),
+        ...(flags.isDefaultPurchase ? (["PURCHASE"] as const) : []),
+      ];
+  return (
+    tax.active &&
+    tax.kind === "PPN" &&
+    tax.effect === "ADD" &&
+    needs.every((u) => !tax.usage || tax.usage === "BOTH" || tax.usage === u)
+  );
+}
+
+/**
+ * Marks one tax as the company default for sales or purchases. The previous default loses the
+ * mark in the same transaction; a partial unique index keeps at most one per company.
+ */
+export async function setDefaultTax(
+  c: string,
+  actor: string,
+  id: string,
+  usage: DefaultUsage,
+  version: number,
+  key: string,
+) {
+  return transactionCommand(
+    c,
+    actor,
+    `tax/master/${id}/default`,
+    key,
+    { usage, version },
+    async (tx) => {
+      await tx.$queryRaw`SELECT id FROM companies WHERE id=${c}::uuid FOR UPDATE`;
+      const column = defaultColumn[usage];
+      const target = await tx.operationalTax.findFirst({ where: { id, companyId: c } });
+      if (!target) throw new NotFoundException();
+      if (target.version !== version) throw new ConflictException("TAX_VERSION_CONFLICT");
+      if (!defaultEligible(target, target, usage))
+        throw new ConflictException("TAX_DEFAULT_INVALID");
+      if (target[column]) return target;
+      const audit = new AuditService();
+      const mark = async (
+        row: NonNullable<typeof target>,
+        value: boolean,
+      ): Promise<NonNullable<typeof target>> => {
+        const updated = await tx.operationalTax.update({
+          where: { id: row.id },
+          data: { [column]: value, version: row.version + 1 },
+        });
+        await tx.operationalTaxRevision.create({
+          data: {
+            companyId: c,
+            taxId: row.id,
+            version: updated.version,
+            snapshot: json(updated),
+            actorId: actor,
+          },
+        });
+        await audit.recordWith(tx, {
+          companyId: c,
+          actorId: actor,
+          action: value ? "operational_tax.default_set" : "operational_tax.default_cleared",
+          resourceType: "operational_tax",
+          resourceId: row.id,
+          before: json(row),
+          after: json(updated),
+        });
+        return updated;
+      };
+      const previous = await tx.operationalTax.findMany({
+        where: { companyId: c, [column]: true },
+      });
+      for (const row of previous) await mark(row, false);
+      return mark(target, true);
+    },
+  );
+}
+
+/**
+ * Snapshot of the company default sales tax as effective at `at`. Every sales line and taxable
+ * freight uses it; a missing default blocks the document instead of guessing a rate.
+ */
+export async function defaultSalesTaxSnapshot(tx: Prisma.TransactionClient, c: string, at: Date) {
+  const current = await tx.operationalTax.findFirst({
+    where: { companyId: c, isDefaultSales: true },
+  });
+  if (!current) throw new ConflictException("DEFAULT_SALES_TAX_REQUIRED");
+  return operationalTaxSnapshot(tx, c, current.id, at, "SALES");
+}
+
+/** PPN on taxable freight, from the default sales tax; the snapshot is stored on the document. */
+export async function defaultSalesTaxOn(
+  tx: Prisma.TransactionClient,
+  c: string,
+  base: Prisma.Decimal,
+  at = new Date(),
+) {
+  const snapshot = await defaultSalesTaxSnapshot(tx, c, at);
+  return { tax: calculateOperationalTax(base, snapshot), snapshot };
 }
 
 export async function recordTaxInvoice(

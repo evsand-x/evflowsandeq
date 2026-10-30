@@ -1,5 +1,13 @@
 import { RequireResourcePermission } from "../identity/resource-permissions";
-import { customerPage, customerDetail, customerHistory, customerSales } from "./customer-workspace";
+import {
+  assertCustomerCreditEdit,
+  customerAllowed,
+  customerPage,
+  customerDetail,
+  customerHistory,
+  customerSales,
+  redactCustomerCredit,
+} from "./customer-workspace";
 import {
   listResourceSchema,
   masterDetail,
@@ -40,6 +48,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   Inject,
@@ -55,6 +64,17 @@ import { AuthGuard } from "../identity/auth.guard";
 import { PermissionGuard } from "../identity/permission.guard";
 import { RequirePermissions } from "../identity/permissions.decorator";
 import { MasterService } from "./master.service";
+import { paymentTerms } from "../sales/customer-credit";
+import { DISCOUNT_LIMIT_PERMISSION } from "../sales/discount-limit";
+import type { AuthPrincipal } from "@evflow/contracts";
+
+/** Backend authority: the product discount cap needs discount_limit.manage on top of the product permission. */
+function assertDiscountLimitEdit(auth: AuthPrincipal, input: object) {
+  if ("discount_limit" in input && !customerAllowed(auth, DISCOUNT_LIMIT_PERMISSION))
+    throw new ForbiddenException(
+      "Izin batas diskon diperlukan untuk mengubah batas diskon produk.",
+    );
+}
 
 @Controller()
 @UseGuards(AuthGuard, PermissionGuard)
@@ -66,11 +86,13 @@ export class MasterController {
   async customerOptions(@Req() req: AuthenticatedRequest) {
     const where = { companyId: req.auth.company_id, state: "ACTIVE" as const };
     const select = { id: true, name: true };
-    const [channels, rayons] = await Promise.all([
+    const [channels, rayons, terms] = await Promise.all([
       prisma.customerChannel.findMany({ where, select, orderBy: { name: "asc" } }),
       prisma.rayon.findMany({ where, select, orderBy: { name: "asc" } }),
+      // Term choices for the customer's default term (active OPS-FLX-03); not sensitive.
+      paymentTerms(prisma, req.auth.company_id),
     ]);
-    return { data: { channels, rayons } };
+    return { data: { channels, rayons, payment_terms: terms } };
   }
 
   @Post("crm/master/customers")
@@ -110,6 +132,7 @@ export class MasterController {
     const result = parseCreate(resource, body);
     if (!result) throw new BadRequestException("Data master tidak valid.");
     const data = result.schema.parse(body);
+    if (resource === "products") assertDiscountLimitEdit(req.auth, data);
     const created =
       resource === "product-categories" ||
       resource === "uoms" ||
@@ -138,7 +161,7 @@ export class MasterController {
                         req.auth.user_id,
                         data,
                       );
-    return { data: serialize(created) };
+    return { data: customerResponse(req, created) };
   }
 
   @Get("master-data/workspace/:resource")
@@ -214,7 +237,9 @@ export class MasterController {
   @Get("master-data/customers/:id")
   @RequirePermissions("master_customer.read")
   async customerDetail(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    return { data: serialize(await customerDetail(req.auth, z.string().uuid().parse(id))) };
+    return {
+      data: customerResponse(req, await customerDetail(req.auth, z.string().uuid().parse(id))),
+    };
   }
 
   @Get("master-data/customers/:id/history")
@@ -242,7 +267,8 @@ export class MasterController {
       .strict()
       .parse(body);
     return {
-      data: serialize(
+      data: customerResponse(
+        req,
         await this.master.changeState(
           req.auth.company_id,
           req.auth.user_id,
@@ -267,8 +293,10 @@ export class MasterController {
     const expectedVersion = parseVersion(ifMatch);
     const input = updateCustomerSchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
+    assertCustomerCreditEdit(req.auth, input.data);
     return {
-      data: serialize(
+      data: customerResponse(
+        req,
         await this.master.updateCustomer(
           req.auth.company_id,
           req.auth.user_id,
@@ -345,14 +373,18 @@ export class MasterController {
     const input = activateMasterSchema.safeParse(body ?? {});
     if (!input.success) throw new BadRequestException(input.error.flatten());
     return {
-      data: await this.master.changeState(
-        req.auth.company_id,
-        req.auth.user_id,
-        resource,
-        id,
-        expectedVersion,
-        "ACTIVE",
-        input.data.reason,
+      // Customer rows carry credit values: strip them for readers without customer_credit.update.
+      data: redactCustomerCredit(
+        req.auth,
+        await this.master.changeState(
+          req.auth.company_id,
+          req.auth.user_id,
+          resource,
+          id,
+          expectedVersion,
+          "ACTIVE",
+          input.data.reason,
+        ),
       ),
     };
   }
@@ -388,6 +420,7 @@ export class MasterController {
   ) {
     const input = updateProductSchema.safeParse(body);
     if (!input.success) throw new BadRequestException(input.error.flatten());
+    assertDiscountLimitEdit(req.auth, input.data);
     return {
       data: serialize(
         await this.master.updateProduct(req.auth.company_id, req.auth.user_id, id, input.data),
@@ -493,14 +526,18 @@ export class MasterController {
     const input = activateMasterSchema.safeParse(body ?? {});
     if (!input.success) throw new BadRequestException(input.error.flatten());
     return {
-      data: await this.master.changeState(
-        req.auth.company_id,
-        req.auth.user_id,
-        resource,
-        id,
-        expectedVersion,
-        "INACTIVE",
-        input.data.reason,
+      // Customer rows carry credit values: strip them for readers without customer_credit.update.
+      data: redactCustomerCredit(
+        req.auth,
+        await this.master.changeState(
+          req.auth.company_id,
+          req.auth.user_id,
+          resource,
+          id,
+          expectedVersion,
+          "INACTIVE",
+          input.data.reason,
+        ),
       ),
     };
   }
@@ -540,6 +577,19 @@ function parseVersion(value: string | undefined) {
   if (!Number.isInteger(version) || version < 1)
     throw new BadRequestException('Header If-Match wajib berisi versi, contoh: "1".');
   return version;
+}
+
+/**
+ * Single serializer for responses that may carry a customer row: credit values (limit, freeze,
+ * grace) are removed unless the caller holds customer_credit.update. Rows of other masters have
+ * none of these keys and pass through unchanged.
+ */
+function customerResponse(req: AuthenticatedRequest, value: unknown) {
+  return serialize(
+    value && typeof value === "object" && !Array.isArray(value)
+      ? redactCustomerCredit(req.auth, value as Record<string, unknown>)
+      : value,
+  );
 }
 
 function serialize(value: unknown): unknown {

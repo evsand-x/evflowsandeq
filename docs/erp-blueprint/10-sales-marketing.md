@@ -1,5 +1,39 @@
 # Domain Sales & Marketing
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Progres SO dan jumlah dapat ditagih dihitung dari jumlah SJ terbit; penerimaan tidak membuka kembali sisa SO atau menghitung pengiriman dua kali.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+> **Batas Release 1 O2C:** Surat Jalan terbit adalah bukti serah terima dan event stok, pendapatan serta HPP. Invoice hanya berasal dari Surat Jalan terbit. Termin/TOP dipilih di SO. Aturan yang masih menyebut POD, Packing List atau invoice menunggu POD berlaku setelah Release 1.
+
+
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+Detail SO menghitung progress setiap barang serta dokumen terkait, termasuk invoice menunggu Surat Jalan terbit. DP sekarang mencakup receipt POSTED tertaut langsung SO atau batch SO, dikurangi refund tanpa hitung ganda. Catatan uang muka pending tidak masuk DP. Daftar/detail menyembunyikan DP tanpa izin receipt/advance; invoice dan dokumen warehouse mengikuti izin submenu masing-masing. Duplikat membuat draft baru dengan default kepala terbaru, referensi/bukti kosong dan harga diperiksa saat submit.
+
+## Backend daftar dan form SO — 25 Oktober 2026
+
+Tanggal dokumen tersimpan sebagai tanggal bisnis; default hari ini zona perusahaan, boleh di periode akuntansi terkunci. No. SP dan lampiran opsional dengan sakelar wajib pada OPS-FLX-12/13; lampiran yang disertakan tetap divalidasi perusahaan dan tujuan. Alamat bawaan dari alamat kirim utama/alamat pelanggan. Sales bawaan pembuat dan harus anggota aktif perusahaan. Termin dipilih dari daftar aktif OPS-FLX-03, disimpan di kepala SO dan disnapshot saat submit; perubahan katalog tidak mengubah snapshot SO yang sudah diajukan. Termin draft yang tidak lagi tersedia ditolak.
+
+Gudang dipilih pada kepala; kode gudang bawaan OPS-FLX-10, atau satu-satunya gudang aktif. Banyak gudang tanpa pilihan/default menghasilkan pesan Setting. Gudang per barang hanya jika OPS-FLX-11 aktif. Alokasi dan alokasi ulang mengikuti gudang baris/kepala serta FEFO/FIFO dan kelayakan lot; tanpa stok cukup, sisa tetap terbuka. SO lama tanpa gudang tetap mempertahankan perilaku lama lintas gudang sampai direvisi; tidak menulis ulang alokasi lama.
+
+Status tampilan tunggal mengikuti urutan CANCELLED, DRAFT dengan exception SUBMITTED belum kedaluwarsa, DRAFT, selesai/semua jumlah diterima setelah dikurangi jumlah ditutup, semua dikirim, sebagian dikirim, OPEN. Jumlah terkirim untuk status = diterima + dalam perjalanan; jumlah ditolak kembali menjadi kebutuhan. Filter tanggal menggunakan tanggal SO, bukan waktu record dibuat. Jatuh tempo perkiraan hanya untuk Tempo (tanggal SO + hari); invoice tetap memakai tanggal terbit + snapshot TOP.
+
+DP sementara berasal dari penerimaan POSTED yang terkait batch SO, dikurangi pengembalian dana; penerimaan tanpa tautan batch tidak ikut. Command penerimaan yang ada membukukan dana melalui akun uang muka. Pencatatan uang muka langsung dari SO dan verifikasi Finance ada pada bagian 2, belum dibangun dalam tahap ini. Daftar hanya mengirim field aman, tidak mengekspos snapshot limit kredit.
+
+
+## Keputusan 24 Oktober 2026 — harga dan diskon
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md) dan OTC-18/19: harga otomatis dari harga khusus pelanggan atau harga umum; batas diskon per peran/orang/produk; Harga Khusus diajukan dan disetujui di Penawaran & Harga. Ketentuan versi penawaran dan harga khusus lama yang bertentangan diganti keputusan ini.
+
+
+## Keputusan 24 Oktober 2026 — Sales Order fleksibel
+
+Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md): isian SO minimal; termin dipilih pada SO dan diwarisi invoice (OTC-17); TOP/limit master opsional; kredit mengikuti mode Nonaktif/Peringatan/Blokir; ongkos kirim Ditanggung perusahaan atau Dibebankan ke pelanggan Sebelum/Sesudah PPN; persetujuan SO hanya bila aturan aktif, dijalankan sebelum kredit dan alokasi tanpa reservasi stok selama menunggu. Pengecualian kredit memakai mesin persetujuan umum. Ketentuan lama di bawah yang bertentangan diganti keputusan ini.
+
 ## Keputusan 7 Oktober 2026 — penerbitan proforma manual
 
 Setelah submit SO berhasil, alokasi/tahap pemenuhan tetap otomatis. Proforma belum
@@ -101,7 +135,7 @@ Perubahan pelanggan, produk, satuan, nilai harga/diskon atau syarat yang menjadi
 
 Tanggapan pelanggan: Menunggu, Diterima, Diterima Sebagian, Minta Revisi, Ditolak; catat tanggal, kontak pemberi tanggapan, alasan/bukti dan qty/item yang diterima. Persetujuan penawaran saja belum otomatis Win; Win mengikuti PO/SP terverifikasi.
 
-Tindakan Buat SO memilih item/qty sesuai PO/SP dan penawaran yang diterima, mempertahankan harga/syarat versi sumber. Sisa qty yang belum dipindahkan terlihat. Cegah konversi berulang melebihi qty yang diterima; perubahan qty/pesanan harus ditelusuri. Penawaran kedaluwarsa/harga tidak valid memerlukan pembaruan atau keputusan berizin sesuai aturan sebelum dapat dipakai. SO tetap tanpa approval manual rutin dan seluruh item pesanan pelanggan masuk SO, termasuk stok kosong. Penawaran tidak memesan stok atau menciptakan PR.
+Tindakan Buat SO memilih item/qty sesuai PO/SP dan penawaran yang diterima, mempertahankan harga/syarat versi sumber. Sisa qty yang belum dipindahkan terlihat. Cegah konversi berulang melebihi qty yang diterima; perubahan qty/pesanan harus ditelusuri. Penawaran kedaluwarsa/harga tidak valid memerlukan pembaruan atau keputusan berizin sesuai aturan sebelum dapat dipakai. SO memakai persetujuan hanya bila aturannya aktif, dan seluruh item pesanan pelanggan masuk SO, termasuk stok kosong. Penawaran tidak memesan stok atau menciptakan PR.
 
 ## 4. Kunjungan berizin, foto dan perubahan
 
@@ -308,11 +342,11 @@ Backorder yang belum dialokasikan tidak memakai limit. Saat stok tersedia dan ak
 
 ## 2. Mode pelanggan
 
-- **COD:** TOP 0, jatuh tempo pada POD; tidak memerlukan limit kredit, tetapi pembayaran tetap dipantau.
+- **COD:** TOP 0, jatuh tempo pada waktu serah terima Surat Jalan terbit; tidak memerlukan limit kredit, tetapi pembayaran tetap dipantau.
 - **Prepay:** dispatch memerlukan dana terverifikasi dan ditautkan; dana tersebut tidak dapat digunakan dua kali.
 - **Credit/Tempo:** memerlukan TOP, limit, tanggal efektif dan pengguna berwenang.
 
-Pelanggan baru mengikuti COD tiga bulan atau prepay sesuai policy. Tempo hanya diberikan setelah evaluasi Finance.
+Termin dipilih pada SO; kebijakan COD awal pelanggan baru opsional (keputusan 24 Oktober 2026).
 
 ## 3. Pemakaian dan pelepasan limit
 
@@ -387,7 +421,7 @@ Sales mencatat referensi SP/PO pelanggan sebagai sumber pesanan, lalu memiliki S
 
 SP/PO pelanggan → validasi pelanggan/harga → SO Draft → input seluruh item → Submit → validasi data dan kebijakan pembayaran → cek past due/limit/exposure → bila hold, unlock request → evaluasi ulang → cek stok dan alokasi atomik → fulfillment batch → proforma/picking → checking/packing/SJ → dispatch → monitoring transit → POD → invoice resmi → AR/follow-up → pembayaran.
 
-SO normal tidak membutuhkan approval manusia. Unlock saja menggunakan approval policy. Semua item pelanggan wajib masuk SO, termasuk stok kosong.
+SO tanpa aturan persetujuan aktif tidak membutuhkan approval manusia. Persetujuan SO dan pengecualian kredit memakai mesin persetujuan umum (24 Oktober 2026). Semua item pelanggan wajib masuk SO, termasuk stok kosong.
 
 ## 3. Status dan aturan kuantitas
 
@@ -405,7 +439,7 @@ Ordered quantity tidak pernah ditulis ulang. Allocated, picked, shipped, deliver
 
 Submit menjalankan validasi server berurutan: pelanggan, alamat/PIC, pricelist/harga, payment policy, past due/freeze, limit/exposure, lalu stok. Exposure mengikuti [Kebijakan Kredit dan Exposure](10-sales-marketing.md). Backorder belum dialokasikan tidak memakai limit. Alokasi baru memeriksa ulang kredit secara atomik.
 
-Pelanggan baru mengikuti COD saat barang diterima selama tiga bulan atau prepay sesuai policy Finance. Tempo memerlukan evaluasi, TOP dan limit. Prepay menahan dispatch sampai dana terverifikasi.
+Termin dipilih pada SO (Tunai/COD, Bayar sebelum kirim, Tempo N hari); TOP/limit master opsional dan kebijakan COD awal opsional. Prepay menahan dispatch sampai dana terverifikasi.
 
 Picking memilih batch/locator yang layak berdasarkan FEFO/FIFO. Expired, karantina, recall dan hold tidak boleh dialokasikan. Sales dapat melihat availability informatif, tetapi alokasi resmi hanya hasil service Warehouse.
 
@@ -413,7 +447,7 @@ Picking memilih batch/locator yang layak berdasarkan FEFO/FIFO. Expired, karanti
 
 Fulfillment batch dapat dibuat beberapa kali dari satu SO. Proforma dan picking hanya memuat allocated quantity. Packing/SJ hanya memuat picking yang lolos checking. POD mencatat tanggal/jam aktual, penerima, bukti, qty diterima, selisih dan alasan.
 
-Invoice resmi mengacu qty POD yang belum ditagih. Jatuh tempo = tanggal POD + TOP. Satu invoice hanya menggabungkan POD dengan pelanggan, mata uang, tax profile, TOP dan tanggal POD yang sama; POD berbeda tanggal dibuat menjadi invoice terpisah. Invoice asli dapat dibawa saat pengiriman dengan status menunggu POD; posting tetap menunggu POD tervalidasi. Invoice tidak boleh membuat pendapatan/HPP kedua.
+Pada Release 1, Invoice hanya mengacu kuantitas Surat Jalan terbit yang belum ditagih. Jatuh tempo dihitung dari waktu serah terima pada Surat Jalan terbit ditambah TOP yang disnapshot dari SO. Satu Surat Jalan terbit menghasilkan paling banyak satu Invoice; Invoice tidak menunggu POD dan tidak boleh membuat pendapatan atau HPP kedua. Penggabungan POD, invoice yang dibawa saat pengiriman, dan status menunggu POD adalah alur later scope yang tidak mengubah kontrak Release 1.
 
 Untuk prepay, masa reservasi mengikuti OPS-FIN-06 dengan nilai awal sampai akhir satu hari kerja berikutnya. Jika dana belum terverifikasi saat expiry, sistem mengevaluasi ulang dan melepas reservasi yang belum picking. Barang yang sudah picking tidak dilepas otomatis dan wajib dikembalikan melalui movement terkontrol sebelum reservasi ditutup.
 
@@ -440,7 +474,7 @@ Sales/admin sales: create/update draft, submit, lihat availability dan follow-up
 ## 10. Kriteria penerimaan
 
 1. SO memuat seluruh item pesanan termasuk stok kosong.
-2. SO normal tidak membuat approval manusia.
+2. SO tanpa aturan persetujuan aktif tidak membuat approval manusia; dengan aturan aktif, persetujuan berjalan sebelum kredit dan alokasi.
 3. Unlock memiliki approval, batas, masa berlaku dan audit.
 4. Picking/proforma tidak memuat qty tanpa alokasi.
 5. Partial fulfillment tidak menggandakan qty.
@@ -464,3 +498,17 @@ IAM-01/04: Prospek memakai `crm_prospect`, Kontak `crm_contact`, Pelanggan CRM `
 ## Pintu masuk Peluang dan Pelanggan — 16 Oktober 2026
 
 CRM menampilkan Prospek, Peluang dan Kontak. Daftar Peluang perusahaan dapat dibuka dengan izin crm_opportunity.read tanpa izin Prospek. Pengguna berizin Prospek dapat membuka sumber untuk proses peluang yang sudah tersedia. Pelanggan tetap dikelola di Master Data; tautan dari prospek/kontak memeriksa izin Master Pelanggan. Sejak 23 Oktober 2026 data kontak yang sama juga tampil pada tab Kontak di Master Data › Pelanggan dengan izin `crm_contact`; kepemilikan aturan dan command kontak tetap di CRM. Tidak ada migrasi atau perubahan siklus bisnis peluang.
+
+## O2C Release 1 (29 Oktober 2026)
+
+### Addendum normatif Release 1
+
+Surat Jalan dibuat langsung dari SO, mendukung pengiriman parsial kumulatif, dan saat diterbitkan mencatat bukti serah terima sekaligus event stok, pendapatan dan HPP. Invoice hanya dibuat dari Surat Jalan terbit. TOP dipilih pada SO dan disnapshot. Flow Picking/Packing List/dispatch/POD lama tetap menjadi later scope dan tidak boleh mengubah alur atau izin Release 1.
+
+Sales Order menyimpan seluruh permintaan dan snapshot Termin/TOP yang dipilih. Penyerahan serta kuantitas yang dapat ditagih berasal dari Surat Jalan terbit.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

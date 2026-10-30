@@ -1,0 +1,131 @@
+/* Setting pages: layout only; colours and type come from the shared Office tokens. */
+.setting-stack {
+  display: grid;
+  gap: 16px;
+}
+.setting-section {
+  display: grid;
+  gap: 16px;
+}
+.setting-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.setting-section-head h2 {
+  font-size: var(--ev-font-size-md, 1rem);
+  font-weight: 600;
+  color: var(--ev-color-text);
+}
+.setting-hub {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.setting-hub-group h2 {
+  font-size: var(--ev-font-size-sm);
+  font-weight: 600;
+  color: var(--ev-color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+.setting-hub-link {
+  display: block;
+  padding: 12px 0;
+  border-top: 1px solid var(--ev-color-border);
+  color: var(--ev-color-text);
+}
+.setting-hub-link:first-of-type {
+  border-top: 0;
+}
+.setting-hub-link strong {
+  display: block;
+  color: var(--ev-color-primary);
+  font-weight: 600;
+}
+.setting-hub-link span {
+  font-size: var(--ev-font-size-sm);
+  color: var(--ev-color-text-muted);
+}
+.setting-hub-link:hover strong,
+.setting-hub-link:focus-visible strong {
+  text-decoration: underline;
+}
+.setting-choices {
+  display: grid;
+  gap: 8px;
+}
+.setting-choice {
+  font-size: var(--ev-font-size-sm);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--ev-color-border);
+  border-radius: var(--ev-radius-card);
+  cursor: pointer;
+}
+.setting-choice:has(input:checked) {
+  border-color: var(--ev-color-primary);
+  background: var(--ev-color-primary-soft);
+}
+.setting-choice input {
+  margin-top: 3px;
+  accent-color: var(--ev-color-primary);
+}
+.setting-choice small {
+  grid-column: 2;
+  color: var(--ev-color-text-muted);
+  font-size: var(--ev-font-size-sm);
+}
+.setting-terms {
+  display: grid;
+  gap: 8px;
+}
+.setting-term-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.setting-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+@media (max-width: 640px) {
+  .setting-section-head {
+    flex-direction: column;
+  }
+  .setting-term-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+/* Labels outside .page-frame-fields (dialogs, setting rows) follow the same form standard. */
+.setting-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--ev-font-size-sm);
+  font-weight: 500;
+  min-width: 0;
+}
+.setting-form label.setting-inline {
+  flex-direction: row;
+  align-items: center;
+}
+.setting-form {
+  text-align: left;
+}
+.setting-form label {
+  align-items: stretch;
+  text-align: left;
+}
+.setting-term-row + .setting-term-row {
+  padding-top: 8px;
+  border-top: 1px solid var(--ev-color-border);
+}

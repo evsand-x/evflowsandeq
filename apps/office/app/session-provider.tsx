@@ -12,6 +12,8 @@ import {
   type ReactNode,
 } from "react";
 import { ApiError, apiRequest, resetCsrf } from "../lib/api";
+import { setFormatterDefaults } from "../lib/format";
+import { fetchPreferences, preferencesKey } from "../lib/settings";
 
 type SessionState = "loading" | "authenticated" | "anonymous" | "error";
 type SessionContextValue = {
@@ -44,6 +46,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const result = await apiRequest<{ data: AuthPrincipal }>("/auth/me");
       client.clear();
+      // Number format from Setting; a failure keeps the Rupiah defaults and never blocks sign-in.
+      const preferences = await fetchPreferences().catch(() => null);
+      if (preferences?.number_format) setFormatterDefaults(preferences.number_format);
+      if (preferences) client.setQueryData(preferencesKey, preferences);
       setPrincipal(result.data);
       setState("authenticated");
       return true;

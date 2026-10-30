@@ -1,7 +1,7 @@
-import { ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import { Prisma } from "@evflow/database";
 import { validException } from "./exception-controls";
-import { operationalTaxSnapshot } from "../finance/operational-tax";
+import { defaultSalesTaxSnapshot } from "../finance/operational-tax";
 
 export type TaxSnapshot = {
   rule_id: string;
@@ -39,7 +39,30 @@ export async function assertPriceGrants(
   }
 }
 
-export function lineAmounts(line: PricedLine, quantity: Prisma.Decimal) {
+/**
+ * Every product carries the default sales tax: a client may not pick a tax per line or a tax rule
+ * for freight. Old clients that still send one get a clear refusal instead of a silent override.
+ */
+export function rejectTaxChoice(input: {
+  lines?: ReadonlyArray<{ tax_master_id?: unknown }> | undefined;
+  freight?: { tax_rule_id?: unknown } | null | undefined;
+}) {
+  if (input.lines?.some((line) => line.tax_master_id !== undefined))
+    throw new BadRequestException("LINE_TAX_NOT_ALLOWED");
+  if (input.freight?.tax_rule_id !== undefined)
+    throw new BadRequestException("FREIGHT_TAX_RULE_NOT_ALLOWED");
+}
+
+/**
+ * Net, DPP, PPN and total for a quantity of an SO line. `discountRate` (percent, OTC-18) is only
+ * passed by SO-level values (SO list/detail, credit and down payment checks); Release 1 Surat Jalan
+ * and Invoice still price the gross line until discounts are carried downstream.
+ */
+export function lineAmounts(
+  line: PricedLine,
+  quantity: Prisma.Decimal,
+  discountRate?: Prisma.Decimal.Value | null,
+) {
   const tax = line.taxSnapshot as TaxSnapshot | null;
   if (!tax?.rule_id) throw new ConflictException("TAX_SNAPSHOT_REQUIRED");
   const rounding = {
@@ -48,7 +71,12 @@ export function lineAmounts(line: PricedLine, quantity: Prisma.Decimal) {
     DOWN: Prisma.Decimal.ROUND_DOWN,
   }[tax.rounding];
   if (rounding === undefined) throw new ConflictException("TAX_ROUNDING_REQUIRED");
-  const net = quantity.mul(line.unitPrice).toDecimalPlaces(tax.decimal_places, rounding);
+  const gross = quantity.mul(line.unitPrice);
+  const net = (
+    discountRate && !new Prisma.Decimal(discountRate).isZero()
+      ? gross.mul(new Prisma.Decimal(100).sub(discountRate)).div(100)
+      : gross
+  ).toDecimalPlaces(tax.decimal_places, rounding);
   const dpp = net.mul(tax.dpp_factor).toDecimalPlaces(tax.decimal_places, rounding);
   const vat = dpp
     .mul(tax.rate)
@@ -100,31 +128,9 @@ export async function priceOrder(
       !priceGrants.some((g) => g.amountLimit.gte(line.unitPrice.mul(line.orderedQuantity)))
     )
       throw new ConflictException("PRICE_EXCEPTION_APPROVAL_REQUIRED");
-    const selected = line.taxSnapshot as { operational_tax_id?: string } | null;
-    const masterSnapshot = selected?.operational_tax_id
-      ? await operationalTaxSnapshot(
-          tx,
-          companyId,
-          selected.operational_tax_id,
-          new Date(),
-          "SALES",
-        )
-      : null;
-    const taxes = masterSnapshot
-      ? []
-      : await tx.salesTaxRule.findMany({
-          where: {
-            state: "ACTIVE",
-            companyId,
-            customerId,
-            productId: product.id,
-            effectiveFrom: { lte: now },
-            effectiveTo: { gt: now },
-          },
-        });
-    if (!masterSnapshot && taxes.length !== 1)
-      throw new ConflictException(taxes.length ? "TAX_POLICY_CONFLICT" : "TAX_POLICY_REQUIRED");
-    const rule = taxes[0]!;
+    // Every product carries PPN: each line uses the company default sales tax effective now.
+    // The per customer x product SalesTaxRule and per-line tax choices are no longer read.
+    const taxSnapshot = await defaultSalesTaxSnapshot(tx, companyId, now);
     await tx.salesOrderLine.update({
       where: { id: line.id },
       data: {
@@ -140,18 +146,7 @@ export async function priceOrder(
               ?.id ?? null,
           effective_from: prices[0]!.effectiveFrom.toISOString(),
         },
-        taxSnapshot: masterSnapshot
-          ? { ...masterSnapshot, operational_tax_id: selected!.operational_tax_id! }
-          : {
-              rule_id: rule.id,
-              name: rule.name,
-              legal_reference: rule.legalReference,
-              rate: rule.rate.toString(),
-              dpp_factor: rule.dppFactor.toString(),
-              decimal_places: rule.decimalPlaces,
-              rounding: rule.rounding,
-              taxable_event: rule.taxableEvent,
-            },
+        taxSnapshot,
       },
     });
   }

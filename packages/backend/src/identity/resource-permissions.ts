@@ -8,6 +8,9 @@ export const resourcePermissions = {
     picking: "outbound_picking",
     checking: "outbound_checking",
     shipping: "outbound_shipping",
+    // Release 1 Surat Jalan reuses the existing outbound shipping permission family.
+    suratJalan: "outbound_shipping",
+    suratJalanIssue: "outbound_shipping",
     pod: "delivery_receipt",
   },
   crm: {

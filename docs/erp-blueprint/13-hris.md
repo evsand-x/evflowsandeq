@@ -1,5 +1,9 @@
 # Domain HRIS
 
+## Keputusan 24 Oktober 2026 — struktur organisasi dan persetujuan
+
+Struktur Organisasi (IAM-12) dikelola di Setting dan menjadi sumber tunggal departemen, jabatan dan atasan langsung. Struktur berbasis data karyawan, termasuk karyawan tanpa akun login; akun pengguna ditautkan opsional ke satu karyawan. HRIS memakai data yang sama, bukan salinan. Cuti, perjalanan dinas, permintaan biaya, entertain dan call plan harian memakai mesin persetujuan umum (IAM-02/07). Pemberi keputusan harus mempunyai akun; atasan tanpa akun dilewati ke atasan berakun berikutnya, lalu Admin Sistem.
+
 Dokumen ini adalah sumber domain kanonis untuk modul ini. Judul ‘Bagian asal’ mempertahankan keterlacakan isi sebelum konsolidasi; prioritas keputusan tetap mengikuti Peta Dokumen.
 
 
@@ -67,7 +71,7 @@ Pengajuan insentif sales mengikuti aturan terpisah: diajukan paling lambat tangg
 | Uang makan | Rp35.000 per makan, maksimal 3 kali/hari | Aktual berbukti sesuai kegiatan | Tidak boleh diklaim dua kali dengan fasilitas makan yang ditanggung pihak lain |
 | Entertainment | Maksimal Rp250.000 per kegiatan | Maksimal Rp250.000 per kegiatan | Wajib tujuan, peserta, bukti dan approval sesuai policy |
 
-Nilai di atas menjadi nilai awal pada OPS-HR-01–05 dan dapat diubah melalui Setting → Kebijakan Operasional. Plafon bukan hak otomatis. Biaya di atas plafon aktif memerlukan alasan, bukti dan approval exception. Sistem tidak mengubah nilai plafon pada klaim historis ketika Setting diperbarui.
+Nilai di atas menjadi nilai awal pada OPS-HR-01–05 dan dapat diubah melalui Setting → Kebijakan Umum. Plafon bukan hak otomatis. Biaya di atas plafon aktif memerlukan alasan, bukti dan approval exception. Sistem tidak mengubah nilai plafon pada klaim historis ketika Setting diperbarui.
 
 ## 5. Kontrol dan larangan
 

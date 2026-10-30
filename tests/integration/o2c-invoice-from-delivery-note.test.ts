@@ -1,0 +1,36 @@
+import { OtcPtpService, receiptBelongsToInvoice } from "../../packages/backend/src/otc-ptp.service";
+import { createInvoiceFromDeliveryNoteSchema } from "@evflow/contracts";
+
+describe("Release 1 invoice source", () => {
+  it("exposes an idempotent command for an issued Surat Jalan", () => {
+    expect(typeof OtcPtpService.prototype.createInvoiceFromDeliveryNote).toBe("function");
+    expect(
+      createInvoiceFromDeliveryNoteSchema.parse({
+        surat_jalan_id: "00000000-0000-4000-8000-000000000003",
+      }),
+    ).toEqual({ surat_jalan_id: "00000000-0000-4000-8000-000000000003" });
+  });
+
+  it("rejects direct sales-order or legacy POD sources at the Release 1 contract boundary", () => {
+    expect(() => createInvoiceFromDeliveryNoteSchema.parse({ sales_order_id: "00000000-0000-4000-8000-000000000003" })).toThrow();
+    expect(() => createInvoiceFromDeliveryNoteSchema.parse({ delivery_receipt_id: "00000000-0000-4000-8000-000000000003" })).toThrow();
+  });
+
+  it("gates legacy service commands so POD and Packing List cannot issue Release 1 invoices", async () => {
+    const service = new OtcPtpService(undefined as never);
+    await expect(service.postInvoice("c", "a", "rid", "key")).rejects.toThrow("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
+    await expect(service.issueInvoice("c", "a", "batch", "key")).rejects.toThrow("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
+    await expect(service.saveInvoiceDraft("c", "a", undefined, { delivery_receipt_id: "rid", notes: "", billing_reference: "" }, "key")).rejects.toThrow("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
+  });
+
+  it("allows a batch-bound receipt only when its batch belongs to the invoice SO", () => {
+    expect(receiptBelongsToInvoice(
+      { salesOrderId: null, fulfillmentBatchId: "batch-1", fulfillmentBatch: { salesOrderId: "so-1" } },
+      { salesOrderId: "so-1", fulfillmentBatchId: null, deliveryNoteId: "sj-1" },
+    )).toBe(true);
+    expect(receiptBelongsToInvoice(
+      { salesOrderId: null, fulfillmentBatchId: "batch-2", fulfillmentBatch: { salesOrderId: "so-2" } },
+      { salesOrderId: "so-1", fulfillmentBatchId: null, deliveryNoteId: "sj-1" },
+    )).toBe(false);
+  });
+});

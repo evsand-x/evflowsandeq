@@ -1,5 +1,10 @@
 # Domain Master Data
 
+## Keputusan 24 Oktober 2026 — atribut pelanggan dan produk
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md): Pelanggan memuat termin bawaan, kode faktur bawaan, limit kredit, freeze dan toleransi jatuh tempo (izin kredit pelanggan). Produk memuat harga jual umum dan batas diskon produk. Harga khusus pelanggan dikelola di Sales & Marketing.
+
+
 Implementasi backend produk pada 9 Oktober 2026 dicatat di [catatan pembangunan Master Data Produk](../development/product-master-backend-2026-10-09.md). Catatan tersebut menjelaskan endpoint dan migration yang sudah dibangun tanpa mengubah kepemilikan aturan lintas modul.
 
 Status: sumber domain identitas dan referensi reusable yang dipakai transaksi. Master menyimpan status, masa berlaku, versioning dan audit; transaksi menyimpan snapshot agar perubahan master tidak menulis ulang histori. Kemunculan sebuah data pada layar Master Data tidak memindahkan kepemilikan aturan harga, kredit, stok, pajak atau posting dari modul domainnya.
@@ -9,7 +14,7 @@ Status: sumber domain identitas dan referensi reusable yang dipakai transaksi. M
 | Kelompok | Data reusable yang dikelola Master Data | Data terkait dan pemilik aturan | Syarat siap dipakai transaksi baru |
 |---|---|---|---|
 | Produk | Kode, nama, kategori, satuan dasar dan konversi, kebutuhan batch/expiry/serial, izin edar, profil penyimpanan, status; harga beli acuan dan harga jual standar dapat diisi dari form produk sesuai izin | Lot, tanggal expiry aktual, karantina, recall dan stok: Warehouse. Harga PO/MOU: Pengadaan. Pricelist, harga khusus dan prioritas harga: Sales & Marketing. HPP/valuasi: Finance | Kategori/UOM aktif, NIE dan bukti valid, kondisi simpan/shelf-life wajib tersedia serta lolos pemeriksaan data menurut kategori; harga yang belum tersedia tidak dianggap nol |
-| Pelanggan dan kontak | Identitas institusi, tahap hubungan, channel/rayon, alamat, legalitas, kontak reusable dan fungsi PIC; satu institusi tidak disalin saat menjadi pelanggan bertransaksi | Menu Kontak dan aktivitas CRM: Sales & Marketing. Policy default: Setting. Mode pembayaran, TOP, limit dan exposure per pelanggan: Finance melalui Kredit & TOP Pelanggan. Saldo awal/piutang dan invoice pertama posted: Finance | Prospek boleh tersimpan dengan data ringkas; kesiapan SO mengikuti data wajib per channel/jenis, verifikasi onboarding dan payment policy aktif; status bertransaksi berasal dari invoice pertama posted |
+| Pelanggan dan kontak | Identitas institusi, tahap hubungan, channel/rayon, alamat, legalitas, kontak reusable dan fungsi PIC; satu institusi tidak disalin saat menjadi pelanggan bertransaksi | Menu Kontak dan aktivitas CRM: Sales & Marketing. Policy default: Setting. Termin bawaan, limit kredit, freeze dan toleransi: atribut pelanggan di Master Data dengan izin kredit pelanggan; exposure dihitung Finance (konsolidasi 24 Oktober 2026). Saldo awal/piutang dan invoice pertama posted: Finance | Prospek boleh tersimpan dengan data ringkas; kesiapan SO mengikuti data wajib per channel/jenis, verifikasi onboarding dan payment policy aktif; status bertransaksi berasal dari invoice pertama posted |
 | Supplier | Identitas pemasok barang dagang, kategori, alamat, PIC, legalitas/izin, NPWP, PJT dan tautan MOU berversi | Isi MOU, harga/qty/ongkir dan TOP pada PO: Warehouse & Logistik → Pengadaan. Tagihan/AP/pembayaran: Finance | Identitas, izin dan perjanjian yang wajib untuk kategori/produk telah diverifikasi; TOP tidak menjadi angka tetap pada master supplier |
 | Vendor | Identitas penyedia aset, barang operasional atau jasa; jenis, kategori, PIC, legalitas, pajak, rekening terverifikasi, tautan kontrak dan status | PO/kontrak/TOP: Pengadaan. Verifikasi rekening untuk pembayaran, tagihan/AP dan utang opening: Finance. Register unit aset: Finance | Dokumen sesuai jenis/kategori lengkap; rekening hanya dipakai setelah verifikasi berizin; saldo utang opening bukan field saldo bebas |
 | Gudang dan locator | Kode, nama, alamat, penanggung jawab, zona waktu, profil penyimpanan, jenis locator, urutan picking, kapasitas bila relevan dan status | Qty, pemilik barang, transit, karantina, konsinyasi, quality hold dan movement: Warehouse & Logistik. Nilai stok: Finance | Gudang/locator aktif, jenis dan profil suhu sesuai barang; lokasi saja tidak menetapkan kepemilikan atau kelayakan stok |
@@ -131,7 +136,7 @@ Daftar atribut berikut berasal dari pengguna. Pengelompokan dan perilaku input m
 | 11 | NPWP | Teks untuk menjaga nol di depan, nama/alamat terdaftar dan berkas bila diperlukan; simpan NPWP/NIK, status PKP/Non-PKP dan alamat sesuai pajak |
 | 12 | Apoteker Penanggung Jawab/Penanggung Jawab Teknis | Nama, jenis penanggung jawab, kontak dan masa penugasan bila tersedia; berlaku sesuai jenis pelanggan |
 | 13 | Izin Penanggung Jawab | Tertaut ke penanggung jawab: jenis/nomor izin, penerbit, masa berlaku dan berkas; dukung riwayat penggantian |
-| 14 | Termin Pembayaran | Mode COD saat barang diterima atau Bayar sebelum pengiriman untuk pelanggan baru; pilihan Net 15/30/45/60/90 setelah evaluasi Finance. COD memiliki TOP 0 dan jatuh tempo dari POD |
+| 14 | Termin Pembayaran | Opsional: termin bawaan pelanggan dari daftar termin Setting (Tunai/COD, Bayar sebelum kirim, Tempo N hari) yang hanya mengisi otomatis SO. COD memiliki TOP 0 dan jatuh tempo dari waktu serah terima Surat Jalan terbit (keputusan 24 Oktober 2026) |
 | 15 | Limit Kredit | Nilai uang dan tanggal efektif; hanya pengguna berwenang. Pelanggan baru tidak otomatis mendapat limit/Tempo; limit untuk prepay/COD dapat tetap kosong sesuai policy |
 | 16 | Saldo Awal Piutang | Ringkasan hasil proses opening per invoice dan tanggal cut-over; tombol Isi/Impor Rincian Piutang Awal mengikuti hak finance. Bukan angka bebas yang langsung mengubah kartu piutang |
 | 17 | Upload Berkas NOO | Unggah berkas dengan nama, tanggal, versi dan catatan; akses privat. Istilah NOO dipertahankan sesuai pengguna; template/kewajiban mengikuti channel |
@@ -301,3 +306,13 @@ Halaman Pelanggan memiliki tab Pelanggan, Channel, Rayon dan Kontak. Kontak buka
 ## Capability submenu operasional — 16 Oktober 2026
 
 IAM-01/04: izin umum `master_data.*` diganti `master_product`, `master_customer`, `master_supplier`, `master_vendor`, `master_warehouse`, `master_locator`, `master_operational_item`, serta `master_product_category`, `master_uom`, `master_customer_channel`, `master_rayon` per tindakan yang sudah tersedia. Penamaan ini berlaku pada implementasi endpoint `/master-data` saat ini. Pengelolaan kontak tetap memakai `crm_contact`; Pelanggan CRM memakai `crm_customer` yang terpisah dari Master Pelanggan. Lookup referensi minimal pada formulir pelanggan tidak memberi akses halaman pengelolaan referensi. Tidak menambahkan hard delete atau mutasi saldo.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Atribut pelanggan dan produk yang dipakai O2C disnapshot pada SO/Surat Jalan/Invoice; perubahan master tidak mengubah dokumen terbit.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the handover, stock, revenue and HPP event. One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

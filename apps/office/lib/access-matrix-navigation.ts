@@ -38,7 +38,6 @@ const navigation: Entry[] = [
   entry("Finance › Piutang (AR) › Invoice", "sales_invoice"),
   entry("Finance › Piutang (AR) › Penerimaan Pembayaran", "customer_receipt"),
   entry("Finance › Piutang (AR) › Pengembalian Dana", "customer_refund"),
-  entry("Finance › Kredit & TOP Pelanggan"),
   entry("Finance › Utang (AP)"),
   entry("Finance › Kas & Bank › Rekening Koran", "bank_statement"),
   entry("Finance › Kas & Bank › Mutasi", "bank_transaction"),
@@ -46,8 +45,6 @@ const navigation: Entry[] = [
   entry("Finance › Akuntansi › Akun", "account"),
   entry("Finance › Akuntansi › Jurnal", "journal"),
   entry("Finance › Akuntansi › Pembalikan Jurnal", "journal.reverse"),
-  entry("Finance › Akuntansi › Pengaturan Jurnal Otomatis", "posting_profile"),
-  entry("Finance › Pajak › Daftar & Aturan Pajak", "tax_master"),
   entry("Finance › Pajak › Faktur Keluaran", "tax_output"),
   entry("Finance › Pajak › Faktur Masukan", "tax_input"),
   ...["Closing", "Aset", "Anggaran", "Biaya & Klaim", "Laporan", "Daftar Arsip"].map((label) =>
@@ -72,6 +69,7 @@ const navigation: Entry[] = [
     Gudang: "master_warehouse",
     "Item Operasional": "master_operational_item",
   }).map(([label, resource]) => entry(`Master Data › ${label}`, resource)),
+  entry("Master Data › Pelanggan › Kredit & Termin", "customer_credit"),
   entry("Master Data › Gudang › Lokator", "master_locator"),
   ...Object.entries({
     "Kategori Produk": "master_product_category",
@@ -85,12 +83,15 @@ const navigation: Entry[] = [
   entry("Setting › Peran", "role"),
   entry("Setting › Peran › Matriks Hak Akses", "role_permission"),
   entry("Setting › Peran › Katalog Izin", "permission"),
-  entry("Setting › Kebijakan Operasional", "operational_policy"),
+  entry("Setting › Kebijakan Umum", "setting_general"),
+  entry("Setting › Termin & Kredit", "terms_credit"),
   entry("Setting › Kebijakan Pelanggan Baru", "customer.payment_policy"),
   entry("Setting › Kredit & Exposure"),
-  entry("Setting › Pengaturan Persetujuan", "transaction_approval"),
   entry("Setting › Template Cetak"),
   entry("Setting › Penomoran Dokumen", "numbering_rule"),
+  entry("Setting › Pajak", "tax_setting"),
+  entry("Setting › Jenis Potongan", "deduction_type"),
+  entry("Setting › Pemetaan Akun", "account_mapping"),
   entry("Setting › Daftar Referensi & Alasan"),
   entry("Setting › Periode & Closing", "finance_period"),
   entry("Setting › Impor/Ekspor & Arsip"),
@@ -211,6 +212,15 @@ export function matrixPermissionChecked(
   );
 }
 
+// Resources whose grants no longer guard anything (kept in the database, never shown as orphan rows).
+const retiredResources = new Set([
+  "operational_policy",
+  "posting_profile",
+  "tax_master",
+  "tax_rule",
+  "sales_tax_rule",
+]);
+
 export function navigationMatrixRows(permissions: Permission[]): NavigationMatrixRow[] {
   const byResource = new Map<string, Permission[]>();
   for (const permission of permissions) {
@@ -219,13 +229,16 @@ export function navigationMatrixRows(permissions: Permission[]): NavigationMatri
     byResource.set(permission.resource, items);
   }
   const mapped = new Set(navigation.flatMap(({ resource }) => (resource ? [resource] : [])));
-  const rows = navigation.map(({ path, resource }) => ({
-    path,
-    resource: resource ?? path,
-    items: resource ? (byResource.get(resource) ?? []) : [],
-  }));
+  // CFG-10: menus without a backend capability are not built yet and get no matrix row.
+  const rows = navigation
+    .filter(({ resource }) => resource)
+    .map(({ path, resource }) => ({
+      path,
+      resource: resource ?? path,
+      items: resource ? (byResource.get(resource) ?? []) : [],
+    }));
   for (const [resource, items] of byResource)
-    if (!mapped.has(resource))
+    if (!mapped.has(resource) && !retiredResources.has(resource))
       rows.push({ path: `Fitur lain › ${resource.replaceAll("_", " ")}`, resource, items });
   return rows;
 }

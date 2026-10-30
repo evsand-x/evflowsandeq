@@ -1,5 +1,35 @@
 # Features — backlog dan tahap implementasi
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Cakupan tambahan: pemisahan penerbitan dan pencatatan penerimaan di detail SJ, tanpa menu POD terpisah. Penerimaan bertahap, reversal dan penyelesaian selisih otomatis tidak termasuk. Verifikasi dicatat pada docs/development/sj-penerimaan-terpisah-2026-10-30.md.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+Implementasi Bagian 2 mencakup backend dan Office detail SO, uang muka/verifikasi, dana PREPAY, dokumen terkait, cetak/duplikat dan tindakan. Belum dinyatakan siap rilis: full suite dan QA browser operasional masih gate terpisah. Bagian 1 frontend serta Bagian 3–5 tidak ikut diklaim selesai.
+
+## Cakupan backend SO mudah — 25 Oktober 2026
+
+Bagian 1 backend mencakup kontrak/migration kepala SO, default dan validasi wajib, create/revisi, termin dan gudang saat submit, status tunggal, daftar/filter/hitungan server, opsi form dan stock availability. Acuan OTC-01/04/12/17, CFG-08, IAM-01/04, NFR-02/09. UI bagian 1, detail/DP langsung bagian 2, matriks/harga/scope bagian 3, pindah locator bagian 4 serta penomoran/pajak tetap terpisah. Hasil tes dan batas release gate dicatat pada catatan eksekusi; keberhasilan backend bukan klaim aplikasi siap produksi.
+
+
+## Urutan kerja keputusan 24 Oktober 2026
+
+Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md), urutan berikut didahulukan:
+
+1. Revisi dokumen panduan (selesai 24 Oktober 2026).
+2. Pengaturan terpusat dan nilai bawaan (CFG-08/09/10, IAM-10) — selesai 24 Oktober 2026, [rencana](../superpowers/plans/2026-10-24-pengaturan-terpusat.md), [bukti](../development/setting-hub-2026-10-24.md).
+2b. Konsolidasi pengaturan per submenu (izin, penomoran, pajak bawaan, kredit pelanggan, jenis potongan, pemetaan akun, batas diskon) — selesai 24 Oktober 2026, [rencana](../superpowers/plans/2026-10-24-konsolidasi-pengaturan-2b.md), [catatan](../development/setting-consolidation-2026-10-24.md).
+3. Alur SO → pengiriman → invoice → pembayaran/retur yang ringan (OTC-01/02/03/17, FIN-12).
+4. Peran & Hak Akses yang lebih mudah (IAM-13), Struktur Organisasi (IAM-12) dan mesin persetujuan umum (IAM-02/07), dipasang ke SO lebih dulu.
+5. Pengajuan karyawan: permintaan biaya, perjalanan dinas, entertain, call plan harian, cuti.
+6. Rekonsiliasi dan jenis dokumen lain.
+
+Setiap tahap 2–6 memerlukan rencana implementasi sendiri dan pengujian pada route operasional dengan sesi dan izin nyata.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Tahap Akun (FIN-01/IAM-04/APP-03): daftar/buat/edit/detail, query/filter/pagination, akun Header/Detail, validasi hierarki, izin independen, audit dan impor master sekali tersedia. Saldo awal, UI impor/ekspor umum, hapus interaktif, reklasifikasi khusus, dimensi dan laporan saldo masih cakupan lanjutan; bukan klaim seluruh modul akuntansi selesai. Migrasi konfigurasi akun uji ke 156 akun impor menjaga jurnal lama.
@@ -64,7 +94,7 @@ Sumber domain: [CRM Operasional](10-sales-marketing.md) dan [Sales Order-to-Cash
 | Pengajuan sampel, approval, issue/serah terima, hasil trial per produk, follow-up dan pengembalian | P2 setelah kontrol stok/biaya siap | CRM-15; batch/serial/ownership, biaya/pajak ditetapkan, return quarantine |
 | Target penjualan sembilan skema, penagihan enam skema dan kunjungan berhasil; katalog disetujui, penerima fleksibel, A/T persen dengan satuan/basis/agregasi per skema | P1 definisi + contoh; P2 realisasi | CRM-03/08, TGT-01–11; katalog serta rincian kebijakan tersisa pada Requirements |
 | Penawaran masa berlaku/versi/revisi, harga/diskon per produk/pelanggan, tanggapan per item dan konversi parsial ke SO | P2; harga dasar P1 | CRM-04/11, FIN-05; approval terikat versi, qty tidak digandakan |
-| Referensi SP/PO pelanggan dan SO otomatis, ketentuan pembayaran/kredit sebelum alokasi, tanpa approval rutin | P1 | OTC-01–03, credit policy, AR opening |
+| Referensi SP/PO pelanggan dan SO otomatis, ketentuan pembayaran/kredit sebelum alokasi, persetujuan hanya bila aturan aktif | P1 | OTC-01–03, credit policy, AR opening |
 | Pelanggan baru dari SO: COD tiga bulan, prepay sesuai policy, lalu tempo setelah evaluasi Finance | P1 | MD-05, OTC-15; penerimaan uang muka, ikatan dana per tahap dan kontrol dispatch |
 | Informasi stok saat input Draft/credit hold dan pemeriksaan ulang saat alokasi | P1 | OTC-13/14, izin availability dan stok atomik |
 | Pengajuan unlock manual, routing pihak peninjau dan keputusan | P1 | OTC-08/09, IAM-02, rule/grant sesuai lingkup |
@@ -105,7 +135,7 @@ Tambahan disepakati: **Estimasi Penagihan** per pelanggan/invoice/penanggung jaw
 | CoA: template awal, tambah/edit/nonaktif, hierarki, akun kontrol, dimensi, impor dan audit; jurnal otomatis idempotent/atomik, posting profile, preview, exception, reversal, GL dan neraca saldo | P1 | FIN-01, dokumen domain Finance, fiscal period |
 | Proforma dari alokasi tersedia per tahap; invoice, kartu AR/AP, aging, pembayaran parsial, uang muka, settlement, credit note dan follow-up | P1 inti | OTC-05, FIN-02, dokumen domain Finance |
 | Verifikasi Tagihan Supplier/Vendor dengan PO/penerimaan, posting utang dan pembayaran | P1 inti; P2 budget/toleransi | PTP-03/04; PR/PO di Warehouse & Logistik → Pengadaan |
-| Kredit & TOP Pelanggan: daftar fasilitas per pelanggan, mode COD/Prepay/Tempo, TOP, limit, tanggal efektif, toleransi, histori, approval, freeze dan unlock | P1 inti; revisi/approval lengkap bertahap | MD-05, OTC-02/03/08/09, FIN-02; Finance menjadi pemilik keputusan dan snapshot kebijakan |
+| (Dihapus 24 Oktober 2026; diganti atribut kredit Master Data › Pelanggan dan Setting › Termin & Kredit) Kredit & TOP Pelanggan: daftar fasilitas per pelanggan, mode COD/Prepay/Tempo, TOP, limit, tanggal efektif, toleransi, histori, approval, freeze dan unlock | P1 inti; revisi/approval lengkap bertahap | MD-05, OTC-02/03/08/09, FIN-02; Finance menjadi pemilik keputusan dan snapshot kebijakan |
 | HPP rata-rata bergerak, landed cost default berdasarkan nilai pembelian net, kartu nilai stok dan rekonsiliasi persediaan | P1 simulasi; P2 validasi | FIN-04, D01/D16 final Gelombang A, spesifikasi 19-hpp-penilaian-persediaan |
 | Landed cost terlambat dan cost adjustment | P2 sebelum transaksi relevan | FIN-04, cost lineage |
 | Kalkulator margin/markup, pricelist bertanggal efektif, konflik harga, batas diskon dan approval harga khusus; publish ditahan sampai policy scope lengkap | P1 simulasi; P2 operasi | FIN-05, D02 final Gelombang A, dokumen domain Sales & Marketing |
@@ -158,7 +188,7 @@ Sumber domain: [Master Data](14-master-data.md). Butir di bawah adalah entitas/k
 
 Sumber domain: [Setting](15-setting.md). Setting mengelola policy global/default, IAM, approval dan konfigurasi; fasilitas TOP/limit per pelanggan berada di Finance.
 
-**Setting → Pengaturan Persetujuan** mencakup form aturan/tahapan/delegasi, validasi/simulasi, versi/masa berlaku, batas kewenangan, persetujuan sendiri dan pemicu revisi. Antrean Persetujuan Saya tampil pada Dashboard; keputusan berjalan pada resource modul asal. Tidak menambah approval rutin SO.
+**Setting → Pengaturan Persetujuan** mencakup form aturan/tahapan/delegasi, validasi/simulasi, versi/masa berlaku, batas kewenangan, persetujuan sendiri dan pemicu revisi. Antrean Persetujuan Saya tampil pada Dashboard; keputusan berjalan pada resource modul asal. Persetujuan SO hanya bila aturannya aktif (24 Oktober 2026).
 
 | Fitur | Fase | Requirement / dependensi |
 |---|---|---|
@@ -214,7 +244,7 @@ Requirement ID dan acceptance scenario terhubung ke kode/tes; role/scope diterap
 
 - Master pelanggan menyimpan mode COD/prepay/credit, status verifikasi onboarding, legalitas, PIC dan jadwal tukar faktur.
 - Jadwal follow-up piutang H-7, H, H+3, H+7, H+14; freeze default H+30 setelah jatuh tempo.
-- Pelanggan baru COD selama tiga bulan berturut-turut atau prepay; evaluasi Finance diperlukan sebelum fasilitas tempo.
+- Termin dipilih pada SO; kebijakan COD awal pelanggan baru opsional, default nonaktif (24 Oktober 2026).
 - Cash advance maksimal tujuh hari sebelum perjalanan, settlement maksimal lima hari setelah selesai, dan pembayaran klaim mengikuti cut-off tanggal 10/25.
 - Plafon luar kota mengikuti dokumen 17; plafon dalam kota dan parameter yang masih kosong harus diisi melalui Setting.
 
@@ -251,3 +281,21 @@ P1 IAM mencakup peran fleksibel buat/ubah/hapus, penugasan beberapa peran, matri
 IAM-01/04 mencakup pemisahan CRM, Master Data, referensi, tahapan barang keluar, Proforma dan dua menu Backorder melalui katalog, migrasi grant, enforcement API serta matriks Office. Tidak menambahkan endpoint hapus yang belum ada atau mengubah menu belum operasional menjadi fitur selesai. Gate meliputi isolasi API antar submenu, data kontak terkait, audit/scope migrasi, sesi administrator dan QA visual pada sesi nyata. Bukti dan batas validasi pada catatan hak akses fleksibel.
 
 CRM-01/05, APP-03 (16 Oktober 2026): daftar Peluang tersedia sebagai submenu CRM tersendiri, dengan pencarian dan pagination server serta crm_opportunity.read. Submenu Pelanggan CRM dihapus untuk menghindari duplikasi Master Data; URL lama dialihkan. Tidak mengklaim seluruh pipeline/stage telah dibangun.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Release 1 mencakup SO → Surat Jalan → Invoice. Picking, checking, packing, POD terpisah dan backorder otomatis ditunda.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Tahap backend Invoice & Terima Pembayaran mencakup API daftar/form/detail/draft/Submit, penerimaan atomik, bukti dan potongan, izin nilai, snapshot dan migrasi. Sumber tetap Release 1 SJ terbit. UI mockup, koreksi/reversal khusus pembayaran langsung dan release gate produksi belum dinyatakan selesai. Laporan verifikasi berada pada docs/development/invoice-payment-backend-2026-10-30.md.
+# Persediaan vertical slice — 30 Oktober 2026
+
+Backend tahap pertama mencakup daftar Persediaan, detail produk, Kartu Stok dan opname/adjustment minimum sesuai mockup. PTP, retur supplier, recall, pemusnahan dan konsinyasi tetap ditunda; UI tidak dinyatakan selesai hanya karena kontrak API tersedia.

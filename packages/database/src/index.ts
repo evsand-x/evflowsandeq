@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 
 const prismaGlobal = globalThis as unknown as { evflowPrisma?: PrismaClient };
 
-export const prisma =
+export const prisma: PrismaClient =
   prismaGlobal.evflowPrisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
@@ -19,3 +19,16 @@ export {
   activateDuePolicyVersions,
   PolicyVersionConflictError,
 } from "./policy-version";
+
+export {
+  chartOfAccounts,
+  numberingDefaults,
+  operationalPolicyCatalog,
+  taxDefaults,
+  deductionTypeDefaults,
+  type DeductionTypeDefault,
+  type NumberingDefault,
+  type TaxDefault,
+  type ChartAccountData,
+  type PolicyCatalogEntry,
+} from "./defaults";

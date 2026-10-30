@@ -36,9 +36,9 @@ Kolom **Kode teknis** hanya untuk admin, audit, API dan dokumentasi. Kolom **Lab
 
 | Kode teknis | Label pada layar | Arti singkat |
 |---|---|---|
-| OPS-COMP-01 | Zona waktu perusahaan | Zona waktu yang dipakai untuk tanggal dan batas waktu bisnis. |
-| OPS-COMP-02 | Awal tahun buku | Bulan dan tanggal dimulainya tahun pembukuan. |
-| OPS-COMP-03 | Mata uang perusahaan | Mata uang utama untuk pencatatan transaksi. |
+| OPS-COMP-01 (dihentikan 24 Okt 2026) | Zona waktu perusahaan | Zona waktu yang dipakai untuk tanggal dan batas waktu bisnis. |
+| OPS-COMP-02 (dihentikan 24 Okt 2026) | Awal tahun buku | Bulan dan tanggal dimulainya tahun pembukuan. |
+| OPS-COMP-03 (dihentikan 24 Okt 2026) | Mata uang perusahaan | Mata uang utama untuk pencatatan transaksi. |
 | OPS-FIN-01 | Dasar penentuan jatuh tempo tagihan pemasok | Tanggal yang menjadi awal perhitungan batas pembayaran. |
 | OPS-FIN-02 | Kelonggaran jumlah saat pencocokan | Selisih jumlah barang yang masih boleh diterima saat mencocokkan dokumen. |
 | OPS-FIN-03 | Kelonggaran harga saat pencocokan | Selisih harga yang masih boleh diterima saat mencocokkan dokumen. |

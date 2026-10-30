@@ -6,6 +6,8 @@ import { hashPassword } from "../../packages/backend/src/identity/password";
 import { AuditService } from "../../packages/backend/src/common/audit.service";
 import { OperationsService } from "../../packages/backend/src/sales/operations.service";
 import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
+import { setCustomerCredit } from "../../packages/backend/src/sales/customer-credit";
+import { ensureTestTermList } from "./payment-terms-fixture";
 import sharp from "../../packages/backend/node_modules/sharp";
 import { financeFixture } from "../../tests/integration/finance-fixture";
 
@@ -45,6 +47,7 @@ async function main() {
         { code: { startsWith: "tax_component." } },
         { code: { startsWith: "tax_rule." } },
         { code: { startsWith: "posting_profile." } },
+        { code: { startsWith: "account_mapping." } },
         { code: { startsWith: "journal." } },
         { code: { startsWith: "bank_statement." } },
         { code: { startsWith: "bank_reconciliation." } },
@@ -54,6 +57,7 @@ async function main() {
             in: [
               "audit_event.read",
               "customer.payment_policy.manage",
+              "customer_credit.update",
               "sales_tax_rule.manage",
               "transaction_approval.manage",
               "inventory.quality.decide",
@@ -129,20 +133,33 @@ async function main() {
       createdById: a,
     },
   });
-  await prisma.salesTaxRule.create({
+  // Sales lines use the company default sales tax (fictional 10%, DPP factor 1).
+  const taxAccount = await prisma.financeAccount.create({
+    data: { companyId: c, code: "UAT-PPN", name: "PPN uji fiktif", category: "LIABILITY" },
+  });
+  const tax = await prisma.operationalTax.create({
     data: {
       companyId: c,
-      productId: product.id,
-      customerId: customer.id,
       name: "Pajak uji fiktif",
-      legalReference: "TEST ONLY — NOT A REAL TAX RATE",
-      rate: "0.1",
+      kind: "PPN",
+      usage: "SALES",
+      effect: "ADD",
+      accountId: taxAccount.id,
+      percentage: "10",
       dppFactor: "1",
       decimalPlaces: 2,
       rounding: "HALF_UP",
       effectiveFrom: new Date("2020-01-01"),
-      effectiveTo: new Date("2099-01-01"),
-      createdById: a,
+      isDefaultSales: true,
+    },
+  });
+  await prisma.operationalTaxRevision.create({
+    data: {
+      companyId: c,
+      taxId: tax.id,
+      version: tax.version,
+      snapshot: JSON.parse(JSON.stringify(tax)),
+      actorId: a,
     },
   });
   await prisma.stockLot.create({
@@ -160,12 +177,14 @@ async function main() {
   });
   const ops = new OperationsService(new AuditService()),
     service = new OtcPtpService(new AuditService());
-  await service.setPaymentPolicy(c, a, customer.id, {
-    mode: "TEMPO",
-    top_days: 30,
-    credit_limit: "10000000",
-    past_due_grace_days: 0,
-  });
+  await ensureTestTermList(prisma, c, a);
+  await prisma.$transaction((tx) =>
+    setCustomerCredit(tx, new AuditService(), c, a, customer.id, {
+      default_term_code: "NET30",
+      credit_limit: "10000000",
+      past_due_grace_days: 0,
+    }),
+  );
   const proof = await sharp({
     text: { text: "BUKTI UJI FIKTIF\nTidak untuk transaksi nyata", width: 600, dpi: 96 },
   })

@@ -25,6 +25,7 @@ export function SelectionField({
   error,
   hideLabel = false,
   placeholder = "Pilih…",
+  disabled = false,
 }: {
   label: string;
   value: string[];
@@ -35,6 +36,7 @@ export function SelectionField({
   error?: string | undefined;
   hideLabel?: boolean;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -51,6 +53,7 @@ export function SelectionField({
             type="button"
             variant="outline"
             id={id}
+            disabled={disabled}
             aria-label={label}
             aria-invalid={!!error}
             aria-describedby={error ? `${id}-error` : undefined}

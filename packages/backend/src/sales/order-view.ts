@@ -1,5 +1,8 @@
 import { Prisma } from "@evflow/database";
 import { lineAmounts } from "./pricing-controls";
+import type { SalesOrderState } from "@evflow/database";
+import { orderDisplayStatus, estimatedDueDate } from "./order-status";
+import type { PaymentTerm } from "./customer-credit";
 
 type Line = {
   orderedQuantity: Prisma.Decimal;
@@ -7,6 +10,7 @@ type Line = {
   closedQuantity: Prisma.Decimal;
   backorderQuantity: Prisma.Decimal;
   unitPrice: Prisma.Decimal;
+  discountRate?: Prisma.Decimal;
   taxSnapshot: Prisma.JsonValue | null;
   allocations: {
     acceptedQuantity: Prisma.Decimal;
@@ -15,8 +19,9 @@ type Line = {
   }[];
 };
 /** Read projection only; never used as a command gate. No costs or exposure are exposed. */
-export function orderView(order: { state: string; lines: Line[] }) {
-  const zero = () => new Prisma.Decimal(0);
+export function orderView(order: { state: string; lines: Line[]; orderDate?: Date; pendingException?: boolean; paymentTerm?: PaymentTerm | null; downPayment?: string }) {
+  const Decimal = Prisma.Decimal.clone({ precision: 48 });
+  const zero = () => new Decimal(0);
   let subtotal = zero(),
     tax = zero(),
     shipped = zero(),
@@ -29,8 +34,16 @@ export function orderView(order: { state: string; lines: Line[] }) {
         zero(),
       ),
     );
-    const amounts = line.taxSnapshot ? lineAmounts(line, line.orderedQuantity) : null;
-    const net = amounts?.net ?? line.unitPrice.mul(line.orderedQuantity);
+    // OTC-18: the line discount lowers the SO value before PPN.
+    const amounts = line.taxSnapshot
+      ? lineAmounts(line, line.orderedQuantity, line.discountRate)
+      : null;
+    const gross = line.unitPrice.mul(line.orderedQuantity);
+    const net =
+      amounts?.net ??
+      (line.discountRate?.gt(0)
+        ? gross.mul(new Decimal(100).sub(line.discountRate)).div(100).toDecimalPlaces(2)
+        : gross);
     subtotal = subtotal.add(net);
     if (amounts) tax = tax.add(amounts.tax);
     return {
@@ -44,6 +57,12 @@ export function orderView(order: { state: string; lines: Line[] }) {
   });
   const taxKnown = order.lines.length > 0 && order.lines.every((l) => !!l.taxSnapshot);
   return {
+    displayStatus: orderDisplayStatus({ state: order.state as SalesOrderState, pendingException: order.pendingException ?? false,
+      lines: order.lines.map(l => ({ ordered: l.orderedQuantity, closed: l.closedQuantity,
+        accepted: l.allocations.reduce((s,a) => s.add(a.acceptedQuantity), zero()),
+        inTransit: l.allocations.reduce((s,a) => s.add(a.inTransitQuantity), zero()) })) }),
+    dueDateEstimate: order.orderDate ? estimatedDueDate(order.orderDate, order.paymentTerm ?? null) : null,
+    downPayment: order.downPayment ?? "0",
     subtotal: subtotal.toString(),
     taxAmount: taxKnown ? tax.toString() : null,
     total: taxKnown ? subtotal.add(tax).toString() : null,

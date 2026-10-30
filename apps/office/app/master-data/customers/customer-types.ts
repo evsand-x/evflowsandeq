@@ -1,3 +1,4 @@
+import { formatMoney } from "@/lib/format";
 export type Ref = { id: string; name: string; state?: string };
 export type Pic = {
   id?: string;
@@ -21,12 +22,10 @@ export type Legal = {
   verification_state?: string;
   evidence_id?: string;
 };
-export type Policy = {
-  mode: string;
-  top_days: number | null;
-  credit_limit: string | null;
-  effective_from: string;
-};
+/** Entry of the company term list (Setting › Termin & Kredit, OPS-FLX-03). */
+export type PaymentTerm = { code: string; label: string; days: number; kind: string };
+/** Kode transaksi Faktur Pajak bawaan pelanggan. */
+export const taxInvoiceCodes = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"];
 export type Customer = {
   id: string;
   code: string;
@@ -52,13 +51,18 @@ export type Customer = {
   collection_schedule?: string | null;
   invoice_exchange_schedule?: string | null;
   payment_method_preference?: string | null;
-  payment_tolerance_days?: number | null;
   legal_documents?: Legal[] | null;
   responsible_person?: Record<string, string> | null;
   responsible_license?: Record<string, string> | null;
   noo_document?: Record<string, string> | null;
   contacts?: Pic[];
-  payment_policies?: Policy[];
+  default_term_code?: string | null;
+  default_tax_invoice_code?: string;
+  // Present only for holders of customer_credit.update (the server removes them otherwise).
+  credit_limit?: string | null;
+  credit_frozen?: boolean;
+  freeze_reason?: string | null;
+  past_due_grace_days?: number | null;
 };
 export const relationships: Record<string, string> = {
   PROSPECT: "Prospek",
@@ -78,7 +82,9 @@ export const roles: Record<string, string> = {
   OTHER: "Lainnya",
 };
 export function money(value?: string | null) {
-  if (value == null) return "Belum tersedia";
-  const [whole, decimal] = value.split(".");
-  return `Rp ${whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}${decimal?.replace(/0+$/, " ").trim() ? "," + decimal.replace(/0+$/, "") : ""}`;
+  return formatMoney(value);
+}
+export function termLabel(code: string | null | undefined, terms: PaymentTerm[] | undefined) {
+  if (!code) return undefined;
+  return terms?.find((t) => t.code === code)?.label ?? code;
 }

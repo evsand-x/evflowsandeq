@@ -1,16 +1,13 @@
 /** Local, additive fixtures. Transactions go through domain commands; no access/password changes. */
 import "../packages/backend/node_modules/reflect-metadata";
-import { prisma, Prisma, LedgerEntryKind } from "../packages/database/src";
+import { prisma, Prisma } from "../packages/database/src";
 import { assertDevelopmentSeed } from "../packages/database/prisma/dev-seed-guard";
+import { assertFictitiousCompany } from "./dev-company";
 import { AuditService } from "../packages/backend/src/common/audit.service";
 import { OtcPtpService } from "../packages/backend/src/otc-ptp.service";
+import { setCustomerCredit } from "../packages/backend/src/sales/customer-credit";
 import { OperationsService } from "../packages/backend/src/sales/operations.service";
 import { AdministrationService } from "../packages/backend/src/administration/administration.service";
-import {
-  requestTaxRuleAction,
-  postTaxRuleAction,
-} from "../packages/backend/src/finance/tax-rule-lifecycle";
-import { decideFinancialRequest } from "../packages/backend/src/finance/remediation";
 import { CrmService } from "../packages/backend/src/crm/crm.service";
 import {
   financeConfigure,
@@ -18,20 +15,13 @@ import {
   matchStatement,
   reconcileGl,
 } from "../packages/backend/src/finance/controls.service";
-import { configureNumbering } from "../packages/backend/src/common/document-number";
 import sharp from "../packages/backend/node_modules/sharp";
 
 async function main() {
   assertDevelopmentSeed();
   const c = "00000000-0000-4000-8000-000000000001";
-  if (
-    await prisma.auditEvent.count({
-      where: { companyId: c, action: "account_migration.completed" },
-    })
-  )
-    throw new Error("TEST_FINANCE_SEED_RETIRED: perusahaan telah memakai master akun impor");
   const company = await prisma.company.findUniqueOrThrow({ where: { id: c } });
-  if (!company.name.includes("DATA UJI FIKTIF")) throw new Error("FICTITIOUS_COMPANY_REQUIRED");
+  await assertFictitiousCompany(company.id);
   const actor = await prisma.user.findUniqueOrThrow({
     where: { email: "demo.admin@evflow.local" },
   });
@@ -51,32 +41,16 @@ async function main() {
   const from = "2026-01-01",
     to = "2027-01-01",
     fixtureDate = "2026-10-07";
-  // Explicit test configuration, kept separate from existing account codes.
-  const mappings: Record<string, string> = {};
-  for (const kind of Object.values(LedgerEntryKind)) {
-    const category = ["SALES_TAX", "GRNI", "AP", "CUSTOMER_ADVANCE"].includes(kind)
-      ? "LIABILITY"
-      : kind === "OPENING_STOCK"
-        ? "EQUITY"
-        : ["SALE_REVENUE", "SALES_RETURN"].includes(kind)
-          ? "REVENUE"
-          : ["SALE_COGS", "BANK_ADJUSTMENT"].includes(kind)
-            ? "EXPENSE"
-            : "ASSET";
-    const row = await financeConfigure(
-      c,
-      a,
-      "account",
-      {
-        code: `DEV-E2E-${kind}`,
-        name: `DATA UJI - ${kind}`,
-        category,
-        control_kind: ["CASH_RECEIPT", "CASH_REFUND"].includes(kind) ? "BANK" : kind,
-      },
-      key(`account-${kind}`),
-    );
-    mappings[kind] = row.id;
-  }
+  // Accounts and posting profile come from the imported chart (db:seed:dev).
+  const activeProfile = await prisma.financePostingProfile.findFirst({
+    where: {
+      companyId: c,
+      effectiveFrom: { lte: new Date(fixtureDate) },
+      effectiveTo: { gt: new Date(fixtureDate) },
+    },
+  });
+  if (!activeProfile) throw new Error("POSTING_PROFILE_REQUIRED: run db:seed:dev first");
+  const mappings = activeProfile.mappings as Record<string, string>;
   const period = await prisma.financePeriod.findFirst({
     where: {
       companyId: c,
@@ -92,21 +66,6 @@ async function main() {
       { starts_on: from, ends_on: "2026-12-31" },
       key("period"),
     );
-  const profile = await prisma.financePostingProfile.findFirst({
-    where: {
-      companyId: c,
-      effectiveFrom: { lte: new Date(fixtureDate) },
-      effectiveTo: { gt: new Date(fixtureDate) },
-    },
-  });
-  if (!profile)
-    await financeConfigure(
-      c,
-      a,
-      "profile",
-      { effective_from: from, effective_to: to, mappings },
-      key("profile"),
-    );
   const bank = await financeConfigure(
     c,
     a,
@@ -121,39 +80,7 @@ async function main() {
     },
     key("bank"),
   );
-  for (const [kind, prefix] of Object.entries({
-    sales_order: "SO",
-    fulfillment: "FUL",
-    sales_invoice: "INV",
-    document_PROFORMA: "PRO",
-    document_PICKING: "PICK",
-    document_PACKING: "PACK",
-    document_SURAT_JALAN: "SJ",
-  })) {
-    if (
-      !(await prisma.documentNumberRule.findFirst({
-        where: {
-          companyId: c,
-          documentKind: kind,
-          effectiveFrom: { lte: new Date(fixtureDate) },
-          effectiveTo: { gt: new Date(fixtureDate) },
-        },
-      }))
-    )
-      await configureNumbering(
-        c,
-        a,
-        {
-          document_kind: kind,
-          prefix: `DEV-${prefix}-`,
-          digits: 6,
-          reset_yearly: true,
-          effective_from: from,
-          effective_to: "2099-01-01",
-        },
-        key(`number-${kind}`),
-      );
-  }
+  // Document numbering comes from the provisioned defaults (Setting › Penomoran Dokumen).
   const base = (code: string, name: string) => ({
     companyId: c,
     code,
@@ -314,13 +241,14 @@ async function main() {
     { code: "PAID", name: "RS Simulasi Sejahtera", qty: "10", stage: "paid" },
     { code: "PARTIAL", name: "Klinik Simulasi Sentosa", qty: "8", stage: "partial" },
     { code: "TRANSIT", name: "Laboratorium Simulasi Prima", qty: "6", stage: "transit" },
-    { code: "BACKORDER", name: "RS Simulasi Nusantara", qty: "150", stage: "allocated" },
+    // Before BACKORDER: the 150-unit backorder would otherwise consume the proforma lot.
     {
       code: "PROFORMA_DRAFT",
       name: "Klinik Simulasi Proforma Draft",
       qty: "10",
       stage: "allocated",
     },
+    { code: "BACKORDER", name: "RS Simulasi Nusantara", qty: "150", stage: "allocated" },
     { code: "DRAFT", name: "Klinik Simulasi Harapan", qty: "5", stage: "draft" },
   ];
   const results = [];
@@ -338,59 +266,15 @@ async function main() {
         shippingAddress: "Alamat simulasi Makassar - DATA UJI FIKTIF",
       },
     });
-    if (
-      !(await prisma.customerPaymentPolicy.findFirst({
-        where: { companyId: c, customerId: customer.id },
-      }))
-    )
-      await service.setPaymentPolicy(c, a, customer.id, {
-        mode: "TEMPO",
-        top_days: 30,
-        credit_limit: "500000000",
-        past_due_grace_days: 0,
-        effective_from: from,
-      });
-    const taxRule = await ops.tax(
-      c,
-      a,
-      {
-        customer_id: customer.id,
-        product_id: product.id,
-        name: "Pajak Simulasi 11%",
-        legal_reference: "DATA UJI FIKTIF - bukan tarif pajak resmi",
-        rate: "0.11",
-        dpp_factor: "1",
-        decimal_places: 2,
-        rounding: "HALF_UP",
-        effective_from: from,
-        effective_to: "2099-01-01",
-      },
-      key(`tax-${scenario.code}`),
-    );
-    const actualTax = await prisma.salesTaxRule.findUniqueOrThrow({ where: { id: taxRule.id } });
-    if (actualTax.state === "DRAFT") {
-      const request = await requestTaxRuleAction(
-        c,
-        a,
-        {
-          rule_id: taxRule.id,
-          rule_kind: "SALES",
-          action: "ACTIVATE",
-          reason: "Aktivasi aturan DATA UJI FIKTIF",
-          evidence_id: evidence.TAX,
-        },
-        key(`tax-request-${scenario.code}`),
+    if (!customer.defaultTermCode)
+      await prisma.$transaction((tx) =>
+        setCustomerCredit(tx, audit, c, a, customer.id, {
+          default_term_code: "NET30",
+          credit_limit: "500000000",
+          past_due_grace_days: 0,
+        }),
       );
-      await decideFinancialRequest(
-        c,
-        approver.id,
-        request.id,
-        "TAX_RULE_CHANGE",
-        { decision: "APPROVED", reason: "Persetujuan simulasi oleh aktor uji terpisah" },
-        key(`tax-approve-${scenario.code}`),
-      );
-      await postTaxRuleAction(c, a, request.id, key(`tax-post-${scenario.code}`));
-    }
+    // Sales lines use the default sales tax provisioned with the company defaults.
     const contact = await crm.createContact(
       c,
       a,
@@ -440,8 +324,10 @@ async function main() {
     if (scenario.stage !== "draft") {
       if (order.state === "DRAFT")
         await service.submitSalesOrder(c, a, order.id, key(`submit-${scenario.code}`));
+      // Re-read: submit changes the state captured before it.
+      const submitted = await prisma.salesOrder.findUniqueOrThrow({ where: { id: order.id } });
       if (
-        order.state === "OPEN" &&
+        submitted.state === "OPEN" &&
         !(await prisma.fulfillmentBatch.count({ where: { companyId: c, salesOrderId: order.id } }))
       ) {
         const currentOrder = await prisma.salesOrder.findUniqueOrThrow({ where: { id: order.id } });
@@ -453,6 +339,16 @@ async function main() {
           currentOrder.version,
         );
       }
+      const settled = await prisma.salesOrder.findUniqueOrThrow({
+        where: { id: order.id },
+        include: { lines: true },
+      });
+      if (
+        !(await prisma.fulfillmentBatch.count({ where: { companyId: c, salesOrderId: order.id } }))
+      )
+        throw new Error(
+          `ORDER_NOT_ALLOCATED:${scenario.code}:${settled.state}:${settled.lines.map((l) => `${l.allocatedQuantity}/${l.orderedQuantity}`)}`,
+        );
       const batch = await prisma.fulfillmentBatch.findFirstOrThrow({
         where: { companyId: c, salesOrderId: order.id },
         include: {
@@ -463,7 +359,12 @@ async function main() {
       });
       if (scenario.stage !== "allocated") {
         if (batch.state === "ALLOCATED") {
-          const pick = batch.pickList!;
+          if (!batch.pickList)
+            await service.createPickingSlip(c, a, batch.id, key(`pick-${scenario.code}`));
+          const pick = await prisma.pickList.findFirstOrThrow({
+            where: { fulfillmentBatchId: batch.id },
+            include: { lines: true },
+          });
           if (pick.state === "OPEN")
             await service.confirmPick(
               c,
@@ -616,7 +517,13 @@ async function main() {
 }
 main()
   .catch((error) => {
-    console.error(error instanceof Error ? error.message : "Seed failed");
+    console.error(
+      error instanceof Error
+        ? process.env.SEED_DEBUG
+          ? error.stack
+          : error.message
+        : "Seed failed",
+    );
     process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());

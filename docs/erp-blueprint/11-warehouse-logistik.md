@@ -1,5 +1,17 @@
 # Domain Warehouse & Logistik
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Warehouse mengeluarkan jumlah draft saat issue. Tombol penerimaan pelanggan berada di detail SJ; ini bukan penerimaan pembelian/GR. Selisih diterima disimpan sebagai catatan, tanpa otomatis mengembalikan stok. Guard dokumen terbit tetap immutable; receipt terpisah append-only.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+## Gudang pada SO — backend 25 Oktober 2026
+
+OTC-04: SO baru menyimpan gudang kepala dan opsional per baris. Alokasi mengunci lot dan memeriksa ulang kelayakan, hanya pada gudang baris atau kepala; tidak otomatis mengambil gudang lain. SO lama tanpa gudang mempertahankan perilaku sebelumnya sampai direvisi. Pembacaan stok pada form hanya informasi: saldo dikurangi reservasi pada STORAGE/DISPATCH dengan mutu AVAILABLE dan expiry sah. Stok locator lain ditampilkan terpisah, termasuk karantina, tanpa membuat reservasi atau memindahkan barang. Pengajuan pindah locator belum bagian backend daftar/form ini.
+
+
 Dokumen ini adalah sumber domain kanonis untuk modul ini. Judul ‘Bagian asal’ mempertahankan keterlacakan isi sebelum konsolidasi; prioritas keputusan tetap mengikuti Peta Dokumen.
 
 
@@ -74,3 +86,22 @@ Tolerance, hold, recall, retur, konsinyasi dan pemusnahan telah ditetapkan. Prof
 ## Izin tahap barang keluar — 16 Oktober 2026
 
 IAM-01/04: baca Pick Slip, Checking/Packing, Pengiriman dan POD dipisahkan menjadi `outbound_picking.read`, `outbound_checking.read`, `outbound_shipping.read`, `delivery_receipt.read`. Kode command picking/checking/dispatch yang sudah terpisah tetap berlaku dan ditempatkan pada resource submenu pemiliknya dalam katalog. Backorder & Alokasi Stok memakai `warehouse_allocation.read`. Induk Barang Keluar hanya mengelompokkan; izin baca satu tahap tidak membuka endpoint tahap lainnya. Status, bukti, stok, audit dan command domain tetap berlaku.
+
+## Keputusan 24 Oktober 2026 — retur supplier, biaya dan persetujuan P2P
+
+Mengikuti bagian 7 [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md) (tahap 5 P2P dan tahap 6 Gudang).
+
+- **Retur ke supplier (PTP-02).** Logistik mencatat retur barang: pilih GR asal, qty, batch dan locator sumber (layak atau karantina), lalu barang keluar melalui stock movement. Qty retur tidak melebihi qty diterima dikurangi yang sudah diretur. Finance menerbitkan nota debit dari retur tersebut. Klaim tanpa barang keluar (potongan harga, kurang kirim yang sudah ditagih) hanya berupa nota debit di Finance dan tidak membuat stock movement.
+- **Biaya stok (FIN-04).** Batch, expiry dan locator tetap dilacak untuk FEFO/FIFO, recall dan karantina. Nilai keluar memakai rata-rata bergerak produk, bukan biaya per batch; penerimaan ulang batch yang sama dengan harga berbeda memperbarui rata-rata.
+- **Persetujuan PO dan retur supplier (CFG-12).** Sampai mesin persetujuan umum aktif, persetujuan PO dan retur supplier memakai toggle di Setting › Persetujuan dengan nilai bawaan nonaktif. Bila aktif, PO berstatus Menunggu Approval sebelum Disetujui/Diterbitkan. Persetujuan opname/penyesuaian dan pemusnahan wajib dan tidak dapat dimatikan.
+- **Urutan pembangunan.** Tahap 5 (P2P) dan 6 (Gudang) dikerjakan sebelum mesin persetujuan umum (tahap 4).
+
+## O2C Release 1 (29 Oktober 2026)
+
+Surat Jalan terbit adalah event handover dan pemindahan stok pada Release 1. Pengiriman parsial diperbolehkan secara kumulatif dan divalidasi ulang saat terbit.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+

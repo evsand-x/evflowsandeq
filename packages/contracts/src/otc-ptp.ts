@@ -11,6 +11,7 @@ const freightTermsSchema = z
     basis: z.literal("PER_SHIPMENT"),
     estimate: nonNegativeDecimal,
     tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
+    /** Refused (FREIGHT_TAX_RULE_NOT_ALLOWED): taxable freight always uses the default sales tax. */
     tax_rule_id: z.string().uuid().optional(),
   })
   .strict();
@@ -25,12 +26,43 @@ export const openingStockSchema = z
     unit_cost: z.string().regex(/^\d{1,16}(\.\d{1,8})?$/),
   })
   .strict();
+export const salesOrderDisplayStatusSchema = z.enum([
+  "DRAFT",
+  "WAITING_APPROVAL",
+  "OPEN",
+  "PARTIALLY_SHIPPED",
+  "IN_DELIVERY",
+  "COMPLETED",
+  "CANCELLED",
+]);
+export type SalesOrderDisplayStatus = z.infer<typeof salesOrderDisplayStatusSchema>;
+
+export const salesOrderNumberSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .regex(
+    /^[A-Za-z0-9][A-Za-z0-9./_-]*$/,
+    "Nomor SO hanya huruf, angka, titik, garis miring, garis bawah dan tanda hubung.",
+  );
+/** Line discount in percent (OTC-18): 0-100 with at most four decimals, e.g. "5" or "2.5". */
+export const lineDiscountSchema = z
+  .string()
+  .regex(/^\d{1,3}(\.\d{1,4})?$/, "Diskon harus angka 0-100 dengan maksimal empat desimal.")
+  .refine((v) => Number(v) <= 100, "Diskon tidak boleh lebih dari 100%.");
 export const createSalesOrderSchema = z
   .object({
     customer_id: z.string().uuid(),
-    customer_reference: z.string().trim().min(1).max(100),
-    delivery_address: z.string().trim().min(1).max(1000),
-    evidence_id: z.string().uuid(),
+    /** Optional user-edited SO number; omitted means the next number from Setting › Penomoran Dokumen. */
+    number: salesOrderNumberSchema.optional(),
+    customer_reference: z.string().trim().max(100).optional(),
+    delivery_address: z.string().trim().max(1000).optional(),
+    evidence_id: z.string().uuid().optional(),
+    order_date: z.string().date().optional(),
+    payment_term_code: z.string().trim().min(1).max(40).optional(),
+    salesperson_id: z.string().uuid().optional(),
+    warehouse_id: z.string().uuid().optional(),
     notes: z.string().trim().max(2000).optional(),
     freight: freightTermsSchema.optional(),
     currency: z
@@ -42,8 +74,11 @@ export const createSalesOrderSchema = z
         z
           .object({
             product_id: z.string().uuid(),
+            warehouse_id: z.string().uuid().optional(),
             quantity: positiveDecimal,
             unit_price: z.string().regex(/^\d{1,16}(\.\d{1,8})?$/),
+            discount_rate: lineDiscountSchema.optional(),
+            /** Refused (LINE_TAX_NOT_ALLOWED): every line uses the default sales tax. */
             tax_master_id: z.string().uuid().optional(),
           })
           .strict(),
@@ -61,6 +96,7 @@ export const shipmentSchema = z
       .object({
         amount: nonNegativeDecimal,
         tax_mode: z.enum(["NON_TAXABLE", "TAXABLE"]),
+        /** Refused (FREIGHT_TAX_RULE_NOT_ALLOWED): taxable freight always uses the default sales tax. */
         tax_rule_id: z.string().uuid().optional(),
       })
       .strict()
@@ -89,6 +125,98 @@ export const confirmPodSchema = z
   })
   .strict();
 export const postInvoiceSchema = z.object({ delivery_receipt_id: z.string().uuid() }).strict();
+
+/** Release 1 Surat Jalan draft: quantities are validated cumulatively against the SO on the server. */
+export const createSuratJalanSchema = z
+  .object({
+    sales_order_id: z.string().uuid(),
+    number: salesOrderNumberSchema.optional(),
+    document_date: z.string().date().optional(),
+    ship_date: z.string().date().optional(),
+    warehouse_id: z.string().uuid().optional(),
+    carrier_name: z.string().trim().max(200).optional(),
+    vehicle_number: z.string().trim().max(100).optional(),
+    driver_name: z.string().trim().max(200).optional(),
+    freight_amount: nonNegativeDecimal.optional(),
+    lines: z
+      .array(
+        z
+          .object({
+            sales_order_line_id: z.string().uuid(),
+            quantity: positiveDecimal,
+            warehouse_id: z.string().uuid().optional(),
+            locator_id: z.string().uuid().optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const ids = value.lines.map((line) => line.sales_order_line_id);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lines"],
+        message: "Baris Surat Jalan tidak boleh duplikat.",
+      });
+    }
+  });
+
+/** Issue posts the saved draft quantities; customer receipt is a separate command. */
+export const issueSuratJalanSchema = z.object({}).strict();
+
+export const receiveDeliveryNoteSchema = z
+  .object({
+    handover_at: z.string().datetime(),
+    receiver_name: z.string().trim().min(1).max(200),
+    receiver_title: z.string().trim().max(200).optional(),
+    // Receipt evidence never gates issue or invoice creation.
+    evidence_id: z.string().uuid(),
+    lines: z
+      .array(
+        z
+          .object({
+            sales_order_line_id: z.string().uuid(),
+            delivered_quantity: nonNegativeDecimal,
+            discrepancy_reason: z.string().trim().max(1000).optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const ids = value.lines.map((line) => line.sales_order_line_id);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lines"],
+        message: "Baris Surat Jalan tidak boleh duplikat.",
+      });
+    }
+  });
+
+/** Invoice source contract: one posted invoice at most per issued Surat Jalan. */
+export const createInvoiceFromSuratJalanSchema = z
+  .object({ surat_jalan_id: z.string().uuid() })
+  .strict();
+
+export type CreateSuratJalanInput = z.infer<typeof createSuratJalanSchema>;
+export type IssueSuratJalanInput = z.infer<typeof issueSuratJalanSchema>;
+export type CreateInvoiceFromSuratJalanInput = z.infer<typeof createInvoiceFromSuratJalanSchema>;
+
+// Public command aliases use the English aggregate name used by the API while
+// retaining the Indonesian document name in the Office UI.
+export const createDeliveryNoteSchema = createSuratJalanSchema;
+export const issueDeliveryNoteSchema = issueSuratJalanSchema;
+export const createInvoiceFromDeliveryNoteSchema = createInvoiceFromSuratJalanSchema;
+export type CreateDeliveryNoteInput = CreateSuratJalanInput;
+export type IssueDeliveryNoteInput = IssueSuratJalanInput;
+export type CreateInvoiceFromDeliveryNoteInput = CreateInvoiceFromSuratJalanInput;
 export const invoiceDraftSchema = z
   .object({
     delivery_receipt_id: z.string().uuid(),
@@ -232,7 +360,10 @@ export const pickListCheckSchema = z
   .object({
     packing: z
       .object({
-        package_count: z.string().regex(/^\d{1,6}$/).optional(),
+        package_count: z
+          .string()
+          .regex(/^\d{1,6}$/)
+          .optional(),
         total_weight_kg: nonNegativeDecimal.optional(),
         package_type: z.string().trim().max(100).optional(),
         notes: z.string().trim().max(2000).optional(),
@@ -242,29 +373,35 @@ export const pickListCheckSchema = z
       .optional(),
     checks: z
       .array(
-        z.object({
-          pick_list_line_id: z.string().uuid(),
-          condition: z.string().trim().min(1).max(100),
-          checked_quantity: nonNegativeDecimal.optional(),
-          notes: z.string().trim().max(500).optional(),
-        }).strict(),
+        z
+          .object({
+            pick_list_line_id: z.string().uuid(),
+            condition: z.string().trim().min(1).max(100),
+            checked_quantity: nonNegativeDecimal.optional(),
+            notes: z.string().trim().max(500).optional(),
+          })
+          .strict(),
       )
       .max(100)
       .optional(),
   })
   .strict();
-export const paymentPolicySchema = z
+
+export const recordSalesOrderAdvanceSchema = z
   .object({
-    mode: z.enum(["COD", "PREPAY", "TEMPO"]),
-    top_days: z.number().int().nonnegative().nullable().optional(),
-    credit_limit: z
+    amount: z
       .string()
       .regex(/^\d{1,16}(\.\d{1,8})?$/)
-      .nullable()
-      .optional(),
-    effective_from: z.string().datetime().optional(),
-    past_due_grace_days: z.number().int().nonnegative().optional(),
-    frozen: z.boolean().optional(),
-    freeze_reason: z.string().trim().min(1).max(1000).optional(),
+      .refine((v) => !/^0+(\.0*)?$/.test(v)),
+    received_at: z.string().datetime(),
+    bank_account_id: z.string().uuid(),
+    bank_reference: z.string().trim().min(1).max(200).optional(),
+    evidence_id: z.string().uuid(),
   })
   .strict();
+export const verifySalesOrderAdvanceSchema = z
+  .object({ version: z.number().int().positive() })
+  .strict();
+export const rejectSalesOrderAdvanceSchema = verifySalesOrderAdvanceSchema.extend({
+  reason: z.string().trim().min(1).max(500),
+});

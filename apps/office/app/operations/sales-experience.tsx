@@ -18,7 +18,6 @@ export function SalesNavigation({ active }: { active: "orders" | "proformas" | "
   const { principal } = useSession();
   const items = [
     { key: "orders", name: "Sales Order", permissions: ["sales_order.read"] },
-    { key: "proformas", name: "Proforma", permissions: ["proforma.read"] },
     { key: "invoices", name: "Invoice", permissions: ["sales_invoice.read"] },
   ];
   return (

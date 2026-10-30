@@ -11,7 +11,8 @@ export async function requestTaxRuleAction(c: string, a: string, body: unknown, 
   const input = z
     .object({
       rule_id: z.string().uuid(),
-      rule_kind: z.enum(["SALES", "RECEIPT"]),
+      // Per customer x product sales tax rules are retired; only receipt (WAPU/PPh) rules remain.
+      rule_kind: z.literal("RECEIPT"),
       action: z.enum(["ACTIVATE", "RETIRE"]),
       reason: z.string().trim().min(1).max(1000),
       evidence_id: z.string().uuid(),
@@ -21,10 +22,7 @@ export async function requestTaxRuleAction(c: string, a: string, body: unknown, 
   return transactionCommand(c, a, "finance/tax-rule-actions", key, input, async (tx) => {
     await lockFinance(tx, c);
     await requireEvidence(tx, c, input.evidence_id, "TAX");
-    const rule =
-      input.rule_kind === "SALES"
-        ? await tx.salesTaxRule.findFirst({ where: { companyId: c, id: input.rule_id } })
-        : await tx.receiptTaxRule.findFirst({ where: { companyId: c, id: input.rule_id } });
+    const rule = await tx.receiptTaxRule.findFirst({ where: { companyId: c, id: input.rule_id } });
     if (!rule) throw new NotFoundException();
     if (rule.state !== (input.action === "ACTIVATE" ? "DRAFT" : "ACTIVE"))
       throw new ConflictException("TAX_RULE_STATE_INVALID");
@@ -82,16 +80,12 @@ export async function postTaxRuleAction(c: string, a: string, id: string, key: s
           rule: { state: string };
         },
         target = s.input.action === "ACTIVATE" ? "ACTIVE" : "RETIRED";
-      const updated =
-        s.input.rule_kind === "SALES"
-          ? await tx.salesTaxRule.updateMany({
-              where: { id: request.sourceId, companyId: c, state: s.rule.state },
-              data: { state: target },
-            })
-          : await tx.receiptTaxRule.updateMany({
-              where: { id: request.sourceId, companyId: c, state: s.rule.state },
-              data: { state: target },
-            });
+      // Requests recorded for a retired SALES rule can no longer change state.
+      if (s.input.rule_kind !== "RECEIPT") throw new ConflictException("TAX_RULE_RETIRED");
+      const updated = await tx.receiptTaxRule.updateMany({
+        where: { id: request.sourceId, companyId: c, state: s.rule.state },
+        data: { state: target },
+      });
       if (updated.count !== 1) throw new ConflictException("TAX_RULE_STATE_CHANGED");
       const event = await tx.o2cControlEvent.create({
         data: {

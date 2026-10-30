@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@evflow/database";
 import type { Prisma } from "@evflow/database";
 import { AuditService } from "../../packages/backend/src/common/audit.service";
+import { setCustomerCredit } from "../../packages/backend/src/sales/customer-credit";
+import { ensureTestTermList } from "../../tools/qa/payment-terms-fixture";
 import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
 import {
   previewProforma,
@@ -99,7 +101,7 @@ beforeAll(async () => {
         documentKind: documentKind!,
         prefix: prefix!,
         digits: 5,
-        resetYearly: true,
+        resetPeriod: "YEARLY",
         effectiveFrom: new Date("2020-01-01"),
         effectiveTo: new Date("2099-01-01"),
         createdById: actor,
@@ -139,29 +141,43 @@ beforeAll(async () => {
       createdById: actor,
     },
   });
-  await prisma.salesTaxRule.create({
+  // Lines and taxable freight use the company default sales tax (synthetic 11%, DPP factor 1).
+  const taxAccount = await prisma.financeAccount.create({
+    data: { companyId: c, code: "TEST-PPN", name: "Synthetic PPN", category: "LIABILITY" },
+  });
+  const tax = await prisma.operationalTax.create({
     data: {
       companyId: c,
-      customerId,
-      productId,
       name: "TEST",
-      state: "ACTIVE",
-      legalReference: "SYNTHETIC TEST",
-      rate: "0.11",
+      kind: "PPN",
+      usage: "SALES",
+      effect: "ADD",
+      accountId: taxAccount.id,
+      percentage: "11",
       dppFactor: "1",
       decimalPlaces: 2,
       rounding: "HALF_UP",
       effectiveFrom: new Date("2020-01-01"),
-      effectiveTo: new Date("2099-01-01"),
-      createdById: actor,
+      isDefaultSales: true,
     },
   });
-  await service.setPaymentPolicy(c, actor, customerId, {
-    mode: "TEMPO",
-    top_days: 30,
-    credit_limit: "100000",
-    past_due_grace_days: 0,
+  await prisma.operationalTaxRevision.create({
+    data: {
+      companyId: c,
+      taxId: tax.id,
+      version: tax.version,
+      snapshot: JSON.parse(JSON.stringify(tax)),
+      actorId: actor,
+    },
   });
+  await ensureTestTermList(prisma, c, actor);
+  await prisma.$transaction((tx) =>
+    setCustomerCredit(tx, new AuditService(), c, actor, customerId, {
+      default_term_code: "NET30",
+      credit_limit: "100000",
+      past_due_grace_days: 0,
+    }),
+  );
 });
 
 async function batch(quantity = "6") {
@@ -238,7 +254,7 @@ it("submit allocates stock and picking without creating a proforma or requiring 
       documentKind: "document_PROFORMA",
       prefix: "PRO-",
       digits: 5,
-      resetYearly: true,
+      resetPeriod: "YEARLY",
       effectiveFrom: new Date("2020-01-01"),
       effectiveTo: new Date("2099-01-01"),
       createdById: actor,
@@ -373,11 +389,12 @@ it("previews freight replacement and VAT without persisting, then issues the sam
       previewProforma(c, b.id, { freight: { ...freight, amount: "-1" } }),
     ),
   ).rejects.toThrow();
+  // Taxable freight always uses the default sales tax; a legacy freight tax rule id is refused.
   await expect(
     Promise.resolve().then(() =>
       previewProforma(c, b.id, { freight: { ...freight, tax_rule_id: randomUUID() } }),
     ),
-  ).rejects.toThrow("FREIGHT_TAX_RULE_INVALID");
+  ).rejects.toThrow("FREIGHT_TAX_RULE_NOT_ALLOWED");
   const issued = await issueProforma(
     c,
     actor,
@@ -446,8 +463,9 @@ afterAll(async () => {
   await prisma.salesOrder.deleteMany({ where: { companyId: c } });
   await prisma.stockLot.deleteMany({ where: { companyId: c } });
   await prisma.transactionEvidence.deleteMany({ where: { companyId: c } });
-  await prisma.customerPaymentPolicy.deleteMany({ where: { companyId: c } });
-  await prisma.salesTaxRule.deleteMany({ where: { companyId: c } });
+  await prisma.operationalTaxRevision.deleteMany({ where: { companyId: c } });
+  await prisma.operationalTax.deleteMany({ where: { companyId: c } });
+  await prisma.financeAccount.deleteMany({ where: { companyId: c } });
   await prisma.productReferencePrice.deleteMany({ where: { companyId: c } });
   await prisma.policyVersion.deleteMany({ where: { policy: { companyId: c } } });
   await prisma.systemPolicy.deleteMany({ where: { companyId: c } });

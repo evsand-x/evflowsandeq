@@ -1,4 +1,6 @@
 import { Module } from "@nestjs/common";
+import { InventoryController } from "../warehouse/inventory.controller";
+import { IdentityModule } from "./identity.module";
 
-@Module({})
+@Module({ imports: [IdentityModule], controllers: [InventoryController] })
 export class WarehouseModule {}

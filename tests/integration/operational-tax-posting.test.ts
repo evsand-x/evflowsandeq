@@ -3,7 +3,13 @@ import { randomUUID } from "node:crypto";
 import { prisma, type Prisma } from "@evflow/database";
 import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
 import { AuditService } from "../../packages/backend/src/common/audit.service";
-import { saveTax, recordTaxInvoice } from "../../packages/backend/src/finance/operational-tax";
+import { setCustomerCredit } from "../../packages/backend/src/sales/customer-credit";
+import { ensureTestTermList } from "../../tools/qa/payment-terms-fixture";
+import {
+  saveTax,
+  recordTaxInvoice,
+  setDefaultTax,
+} from "../../packages/backend/src/finance/operational-tax";
 import { financeFixture } from "./finance-fixture";
 // Real database and domain commands, all enclosed in a rollback-only transaction.
 const context = vi.hoisted(() => ({ tx: null as Prisma.TransactionClient | null }));
@@ -134,17 +140,15 @@ async function setup() {
 }
 
 async function policy(limit = "100000") {
-  // Each test isolates this customer's transactions below; later timestamp wins.
-  await prisma.customerPaymentPolicy.updateMany({
-    where: { companyId: c },
-    data: { active: false },
-  });
-  return service.setPaymentPolicy(c, actor, customerId, {
-    mode: "TEMPO",
-    top_days: 30,
-    credit_limit: limit,
-    past_due_grace_days: 0,
-  });
+  // Credit attributes live on the customer (stage 2b); each call resets them.
+  await ensureTestTermList(prisma, c, actor);
+  return prisma.$transaction((tx) =>
+    setCustomerCredit(tx, new AuditService(), c, actor, customerId, {
+      default_term_code: "NET30",
+      credit_limit: limit,
+      past_due_grace_days: 0,
+    }),
+  );
 }
 async function lot(qty: string, expiry = "2090-01-01", qualityState = "AVAILABLE") {
   return prisma.stockLot.create({
@@ -186,7 +190,7 @@ it("posts frozen master tax to its selected account and records metadata without
             documentKind,
             prefix: `${documentKind}-`,
             digits: 6,
-            resetYearly: true,
+            resetPeriod: "YEARLY",
             effectiveFrom: new Date("2020-01-01"),
             effectiveTo: new Date("2099-01-01"),
             createdById: actor,
@@ -213,6 +217,8 @@ it("posts frozen master tax to its selected account and records metadata without
           effective_from: "2020-01-01T00:00:00.000Z",
         };
         const tax = await saveTax(c, actor, input, randomUUID());
+        // Lines always use the company default sales tax; there is no per-line tax choice.
+        const marked = await setDefaultTax(c, actor, tax.id, "SALES", tax.version, randomUUID());
         await lot("10");
         const so = await service.createSalesOrder(
           c,
@@ -223,9 +229,7 @@ it("posts frozen master tax to its selected account and records metadata without
             delivery_address: "Test",
             evidence_id: evidence.SALES_ORDER,
             currency: "IDR",
-            lines: [
-              { product_id: productId, quantity: "2", unit_price: "10", tax_master_id: tax.id },
-            ],
+            lines: [{ product_id: productId, quantity: "2", unit_price: "10" }],
           },
           randomUUID(),
         );
@@ -281,7 +285,7 @@ it("posts frozen master tax to its selected account and records metadata without
           { ...input, percentage: "20", effective_from: new Date().toISOString() },
           randomUUID(),
           tax.id,
-          1,
+          marked.version,
         );
         const pod = await service.confirmPod(c, actor, batch.id, {
           receiver_name: "Test",

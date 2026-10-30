@@ -98,6 +98,11 @@ export const dashboardSummarySchema = z.object({
 });
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>["data"];
 
+const supportedTimeZones = new Set<string>([
+  "UTC",
+  ...(typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : []),
+]);
+
 export const companyProfileUpdateSchema = z
   .object({
     name: z.string().trim().min(2).max(200),
@@ -107,6 +112,17 @@ export const companyProfileUpdateSchema = z
     email: z.string().email().nullable().optional(),
     logo_object_key: z.string().trim().max(500).nullable().optional(),
     tax_identity: z.string().trim().max(100).nullable().optional(),
+  })
+  .strict();
+
+/** Timezone and fiscal year belong to Setting > Kebijakan Umum (setting_general), not the company profile. */
+export const generalSettingsUpdateSchema = z
+  .object({
+    timezone: z
+      .string()
+      .refine((value) => supportedTimeZones.has(value), "Zona waktu tidak dikenal."),
+    fiscal_year_start_month: z.number().int().min(1).max(12),
+    fiscal_year_start_day: z.number().int().min(1).max(28),
   })
   .strict();
 
@@ -222,6 +238,15 @@ export const createRayonSchema = createReferenceMasterSchema.extend({
   coverage_notes: z.string().trim().max(1000).nullable().optional(),
 });
 
+/** Discount limit in percent as a decimal string (0-100, up to 4 decimals); null clears the limit. */
+export const discountLimitSchema = z
+  .string()
+  .regex(/^\d{1,3}(\.\d{1,4})?$/, "Batas diskon harus berupa angka 0-100.")
+  .refine((value) => Number(value) <= 100, "Batas diskon maksimal 100%.")
+  .nullable();
+
+export const discountLimitUpdateSchema = z.object({ discount_limit: discountLimitSchema }).strict();
+
 export const createProductSchema = z
   .object({
     name: z.string().trim().min(2).max(200),
@@ -233,6 +258,7 @@ export const createProductSchema = z
     storage_notes: z.string().trim().max(1000).nullable().optional(),
     storage_profile: z.record(z.unknown()).nullable().optional(),
     shelf_life_days: z.number().int().nonnegative().nullable().optional(),
+    minimum_stock: optionalDecimalStringSchema,
     permit_type: z.enum(["AKL", "AKD"]).optional(),
     permit_number: z.string().trim().max(100).optional(),
     permit_holder: z.string().trim().max(200).optional(),
@@ -245,6 +271,7 @@ export const createProductSchema = z
       .default("IDR"),
     permit_issued_on: z.string().date().nullable().optional(),
     permit_expires_on: z.string().date().nullable().optional(),
+    discount_limit: discountLimitSchema.optional(),
   })
   .strict();
 
@@ -310,16 +337,44 @@ export const createCustomerSchema = z
     collection_schedule: z.string().trim().max(200).nullable().optional(),
     invoice_exchange_schedule: z.string().trim().max(200).nullable().optional(),
     payment_method_preference: z.string().trim().max(100).nullable().optional(),
-    payment_tolerance_days: z.number().int().nonnegative().nullable().optional(),
+    // Retired: past_due_grace_days is the only tolerance field. The column is kept as an archive.
+    payment_tolerance_days: z
+      .null({ message: "Toleransi hari sudah digabung ke toleransi lewat jatuh tempo." })
+      .optional(),
     legal_documents: z.array(z.record(z.unknown())).max(100).nullable().optional(),
     responsible_person: optionalObjectSchema,
     responsible_license: optionalObjectSchema,
     noo_document: optionalObjectSchema,
+    // Kode transaksi Faktur Pajak bawaan (01-10).
+    default_tax_invoice_code: z
+      .enum(["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"])
+      .optional(),
   })
   .strict();
 
+/** Customer credit attributes; the server accepts them only with customer_credit.update. */
+export const customerCreditFields = [
+  "default_term_code",
+  "credit_limit",
+  "credit_frozen",
+  "freeze_reason",
+  "past_due_grace_days",
+] as const;
+
 export const updateCustomerSchema = createCustomerSchema
-  .extend({ version: z.number().int().positive() })
+  .extend({
+    version: z.number().int().positive(),
+    // A code of the company's active OPS-FLX-03 term list; checked on the server.
+    default_term_code: z.string().trim().min(1).max(40).nullable().optional(),
+    credit_limit: z
+      .string()
+      .regex(/^\d{1,16}(\.\d{1,8})?$/)
+      .nullable()
+      .optional(),
+    credit_frozen: z.boolean().optional(),
+    freeze_reason: z.string().trim().max(1000).nullable().optional(),
+    past_due_grace_days: z.number().int().nonnegative().max(3650).nullable().optional(),
+  })
   .strict();
 
 const contactSchema = z.record(z.string(), z.string().trim().max(300)).nullable().optional();
@@ -660,3 +715,21 @@ export * from "./crm-workspace";
 export * from "./otc-ptp";
 export * from "./bank-statement-csv";
 export * from "./proforma";
+export * from "./invoice";
+export * from "./invoice-payment";
+export * from "./inventory";
+
+/** Display number format from Setting (OPS-FLX-06); Rupiah only for now (CFG-09). */
+export type NumberFormat = {
+  currency: "IDR";
+  thousand_separator: string;
+  decimal_separator: string;
+  money_decimals: number;
+  quantity_decimals: number;
+};
+
+export type CompanyPreferences = {
+  company_name: string;
+  logo_object_key: string | null;
+  number_format: NumberFormat | null;
+};

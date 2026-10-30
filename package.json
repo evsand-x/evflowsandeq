@@ -28,7 +28,8 @@
     "db:seed:dev": "node tools/run-development-seed.cjs",
     "dev:field": "pnpm --filter @evflow/field dev",
     "db:seed:full": "node tools/run-full-development-seed.mjs",
-    "db:seed:crm": "node tools/run-crm-development-seed.mjs"
+    "db:seed:crm": "node tools/run-crm-development-seed.mjs",
+    "db:seed:o2c-demo": "node tools/run-o2c-demo-seed.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.36.0",

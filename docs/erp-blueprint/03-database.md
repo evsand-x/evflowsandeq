@@ -1,5 +1,36 @@
 # Database — model relasional
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Migration 20261030160000_delivery_note_receipt mengganti CHECK handover wajib saat ISSUED dengan CHECK metadata issue; guard immutable SJ/line tetap. delivery_note_receipts unik per delivery_note_id, append-only, company-scoped dan FK ke SJ/bukti/aktor, menyimpan waktu, identitas, snapshot jumlah dan alasan. Trigger menolak draft, bukti lintas perusahaan/purpose salah, penerimaan historis ganda, perubahan/penghapusan receipt. delivered_quantity pada line tetap jumlah terbit untuk kompatibilitas; jumlah diterima ada di snapshot receipt. Snapshot field form issue disimpan pada snapshot SJ, bukan handover_snapshot. Tidak memigrasi/mengubah saldo atau bukti lama.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+> **Prioritas kontrak Release 1 O2C:** Model dan event baru untuk Release 1 memakai Surat Jalan sebagai bukti serah terima, stock movement, pendapatan dan HPP; Invoice mereferensikan Surat Jalan terbit. Model delivery receipt, Packing List dan fulfillment lama tetap untuk scope lanjutan dan tidak menjadi sumber event Release 1.
+
+
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+SalesOrderAdvance menyimpan companyId, salesOrderId, amount numeric(24,8), currency, receivedAt, bankAccountId, bankReference, evidenceId, state PENDING_VERIFICATION/VERIFIED/REJECTED, pencatat/waktu, verifier/waktu, rejectionReason, customerReceiptId unik, version dan idempotencyKey unik per perusahaan. CustomerReceipt.salesOrderId nullable mempertahankan asal uang muka; fulfillmentBatchId diisi saat dana PREPAY diikat. Tidak mengubah nominal posted receipt. Dua migration mencatat pemberian izin baru kepada pemegang kemampuan sumber.
+
+## Model kepala SO — 25 Oktober 2026
+
+Migration 20261025100000_sales_order_header_fields menambah sales_orders.order_date (date), payment_term_code, salesperson_id, warehouse_id serta sales_order_lines.warehouse_id. Tanggal lama diisi dari created_at pada zona perusahaan dan salesperson dari created_by_id; gudang/termin lama tetap NULL. FK gudang memakai company_id + warehouse_id; pilihan salesperson memerlukan membership aktif pada command. Indeks company_id/order_date mendukung daftar. Command selalu menentukan tanggal perusahaan; default SQL CURRENT_DATE hanya kompatibilitas insert lama.
+
+Migration 20261025110000_sales_order_policy_defaults menyediakan OPS-FLX-10..13 secara idempoten dengan audit sistem tanpa mengganti policy yang ada. Status tampilan tidak disimpan: SQL per baris dan helper Decimal menghitung fakta POD/pengiriman/penutupan. Tidak ada saldo atau posted ledger yang dimigrasikan; pemulihan memakai forward-fix.
+
+
+## Dampak keputusan 24 Oktober 2026 — rancangan
+
+Mengikuti [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Bentuk final tabel ditetapkan pada rencana implementasi dan mengikuti pola policy bertanggal efektif, audit dan outbox:
+
+- **Struktur organisasi:** departemen, jabatan dan karyawan dengan `manager_employee_id`; `user_id` pada karyawan opsional dan unik. Siklus atasan ditolak constraint/validasi.
+- **Mesin persetujuan umum:** registri jenis dokumen, aturan berversi per jenis (kondisi, tahap berurutan, sumber pemberi persetujuan: atasan langsung/atasan N tingkat/kepala departemen/orang/peran, cukup satu/semua), instance pengajuan yang menautkan dokumen sumber dan versinya, serta keputusan per tahap dengan pelaksana sebenarnya. Data unlock/exception SO lama dimigrasikan ke struktur ini.
+- **Penjualan:** daftar termin; termin snapshot pada SO dan invoice; mode kredit perusahaan; pilihan ongkir pada SO/proforma/invoice (ditanggung perusahaan atau dibebankan ke pelanggan, posisi sebelum/sesudah PPN) beserta akun konfigurasi. TOP/limit pada kebijakan pelanggan menjadi nullable.
+- **Nilai bawaan:** baris konfigurasi bawaan (penomoran per jenis, termin, mode kredit, ongkir, format angka) dibuat idempotent saat perusahaan disiapkan. Implementasi tahap 2 memakai `system_policies`/`policy_versions` (`OPS-FLX-01..08`) dan `document_number_rules`; data sumber di `packages/database/src/data/`.
+- **Riwayat migration:** `verify_win_lost` dipindah ke `20260930115000` agar berjalan setelah tabel yang diubahnya; `20261024100000_restore_line_relation_columns` menambah kolom `uomId`/`prospectNeedId` yang sudah ada di schema. Database baru kini dapat dibangun dari migration.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Migrasi 20261017030000_account_workspace menambah finance_accounts.category_label, description, parent_id (FK), account_type (HEADER/DETAIL), normal_balance (DEBIT/CREDIT), psak118_category dan version. Kelompok tetap ASSET/LIABILITY/EQUITY/REVENUE/EXPENSE; kategori sumber disimpan terpisah. Nama tidak unik, kode unik per perusahaan. Induk opsional (akun akar); parent harus Header sekelompok dan bebas siklus. Tidak ada kolom nominal saldo. Migrasi data lokal membuat versi posting profile/revisi pajak dan audit; jurnal/snapshot lama utuh.
@@ -159,7 +190,7 @@ Boundary Sales/Warehouse serta quantity lifecycle mengikuti [Sales Order-to-Cash
 
 | Tabel | Kolom penting / relasi |
 |---|---|
-| sales_orders / sales_order_lines | customer_id, payment_policy_id/version, payment_mode_snapshot, term_snapshot, lifecycle_state, business_revision, validation_status, credit_status, allocation_status, fulfillment_status; product, ordered_qty, ordered_base_qty, unit_price, discount, tax_snapshot, factor_snapshot; semua item termasuk stok kosong, tanpa status approval manual rutin |
+| sales_orders / sales_order_lines | customer_id, payment_policy_id/version, payment_mode_snapshot, term_snapshot, lifecycle_state, business_revision, validation_status, credit_status, allocation_status, fulfillment_status; product, ordered_qty, ordered_base_qty, unit_price, discount, tax_snapshot, factor_snapshot; semua item termasuk stok kosong, dengan status persetujuan hanya bila aturan persetujuan SO aktif (24 Oktober 2026) |
 | sales_order_revisions / sales_order_line_revisions | sales_order_id, business_revision, reason, actor, recorded_at; order_line_id, ordered_qty/base_qty dan snapshot bisnis per revisi; permintaan asli serta perubahan sah dapat ditelusuri, penutupan tidak menulis ulang qty pesanan |
 | fulfillment_batches / fulfillment_lines | sales_order_id, sequence, business_revision, state, revision; fulfillment_batch_id, order_line_id, allocated_base_qty; satu SO memiliki banyak tahap, baris menghubungkan alokasi dengan dokumen pemenuhan |
 | customer_order_confirmations | sales_order_id, customer_contact_id nullable, contact_name_snapshot, confirmed_at, channel, content_or_reference, evidence_attachment_id nullable, recorded_by; catatan konfirmasi pembatalan pelanggan |
@@ -188,7 +219,7 @@ Boundary Sales/Warehouse serta quantity lifecycle mengikuti [Sales Order-to-Cash
 | shipments / shipment_lines | fulfillment_batch_id, packing_list_id, recipient, courier, state, dispatched_at, package_count, weight; packing_list_line_id, so_line_id, reservation_id, batch_id, base_qty, cost_layer_id |
 | delivery_receipts / delivery_receipt_lines | shipment_id, received_at, recipient, evidence; shipment_line_id, accepted_qty, rejected_qty, missing_qty |
 | proformas / proforma_lines / sales_document_charges | sales_order_id, fulfillment_batch_id, fulfillment_revision, state, supersedes_id nullable, currency, subtotal/discount/freight/tax/grand total snapshots; fulfillment_line_id, source_order_line_id, quantity, factor/price/discount/tax snapshots; source document, charge_type freight/other, payer/basis included-or-added, amount/tax/rule snapshot; hanya alokasi tahap terkait, tidak masuk open_items |
-| sales_invoices / sales_invoice_lines | customer_id, invoice_date, issue_mode after_pod/carried_with_delivery, issue/posting/tax/payment states, POD/due basis/term snapshots, due_date nullable until POD, currency, subtotal/discount/freight/tax/gross, original_document_handoff state, posted_at/by; delivery_receipt_line_id, SO/fulfillment/product/batch references, qty/uom/factor, unit price/discount/net/tax/gross, tax transaction line; invoice hanya mengambil qty POD belum ditagih dan semua baris wajib mempunyai pelanggan, currency, tax profile, TOP, tanggal POD serta due date yang sama |
+| sales_invoices / sales_invoice_lines | customer_id, invoice_date, issue_mode after_pod/carried_with_delivery, issue/posting/tax/payment states, POD/due basis/term snapshots, due_date dihitung dari snapshot TOP dan waktu serah terima Surat Jalan, currency, subtotal/discount/freight/tax/gross, original_document_handoff state, posted_at/by; delivery_receipt_line_id, SO/fulfillment/product/batch references, qty/uom/factor, unit price/discount/net/tax/gross, tax transaction line; invoice hanya mengambil qty Surat Jalan terbit yang belum ditagih dan semua baris wajib mempunyai pelanggan, currency, tax profile, TOP, tanggal POD serta due date yang sama |
 | invoice_handoffs | invoice_id, collector_id, sent_at, accepted_at, evidence, followup_date |
 | quality_inspections / quality_findings | receipt/return/batch link, inspection type, started/completed_at, status, inspector, measurements, document/packaging/temperature/expiry findings, decision, disposition location and approver |
 | temperature_logs / temperature_excursions | location_id, measured_at, temperature, source manual, user; from/to, affected_batches, hold decision |
@@ -216,7 +247,7 @@ Setiap tahap pemenuhan mengikat jumlah yang belum dipakai tahap lain; proforma/p
 
 `order_remainder_actions` mencatat alasan, konfirmasi pelanggan untuk pembatalan, dan jumlah per baris. Pending membekukan jumlah sasaran; completed memindahkan jumlah ke closed/cancelled, melepas reservasi/komitmen yang belum terpakai, serta menonaktifkan dokumen pemenuhan terkait secara atomik. Barang sudah picking dikembalikan melalui warehouse movement yang sesuai sebelum finalisasi; tidak menambah stok gudang total karena sekadar membatalkan SO. Histori pengiriman/invoice/settlement tidak dihapus. Uang muka yang sudah diterima tetap kewajiban sampai dialokasikan atau direfund. Backorder belum dialokasikan tidak memakai limit; alokasi dan pelepasan komitmen mengikuti keputusan D05 dan dokumen 25.
 
-`unlock_requests` menggunakan registri `documents` dengan kind `sales_order_unlock` dan approval engine yang sudah ada. SO normal tidak memiliki approval instance. `business_revision` berubah ketika input bisnis relevan berubah, terpisah dari optimistic concurrency `version` yang juga berubah saat hasil pemeriksaan/status diperbarui. Grant mengacu revisi bisnis dan lingkup alasan, sehingga bukan otomatis stale hanya karena penambahan riwayat evaluasi. Konsumsi grant/alokasi/release memakai lock dan transaksi yang sama; retry tidak menggandakan konsumsi atau release. Keputusan penolakan/approval tersimpan di approval_actions dan audit tetap menyimpan pemohon serta pengambil keputusan sebenarnya.
+`unlock_requests` menggunakan registri `documents` dengan kind `sales_order_unlock` dan approval engine yang sudah ada. SO tanpa aturan persetujuan aktif tidak memiliki approval instance; sejak 24 Oktober 2026 unlock dan persetujuan SO memakai mesin persetujuan umum. `business_revision` berubah ketika input bisnis relevan berubah, terpisah dari optimistic concurrency `version` yang juga berubah saat hasil pemeriksaan/status diperbarui. Grant mengacu revisi bisnis dan lingkup alasan, sehingga bukan otomatis stale hanya karena penambahan riwayat evaluasi. Konsumsi grant/alokasi/release memakai lock dan transaksi yang sama; retry tidak menggandakan konsumsi atau release. Keputusan penolakan/approval tersimpan di approval_actions dan audit tetap menyimpan pemohon serta pengambil keputusan sebenarnya.
 
 ## 5. Pengadaan, akuntansi dan administrasi
 
@@ -373,7 +404,7 @@ Diagram menyederhanakan relasi; approval, tax, return, quality, owning location 
 - FK komposit menghalangi referensi beda company. Polymorphic counterparty harus memakai entity registry tervalidasi atau FK eksplisit dengan XOR, bukan UUID bebas.
 - Event dispatch mengunci SO, customer credit, reservations, stock balance, valuation pool dan period dalam urutan tetap; membuat movement, cost layer, journal, commitment transition dan outbox satu transaksi.
 - Untuk prepay, dispatch juga mengunci sumber uang muka dan funding links; cek dana cukup yang belum dipakai tahap lain. Ikatan/settlement/refund/reversal memakai urutan lock konsisten dan idempotency agar dana tidak terpakai ganda. Tidak ada endpoint edit boolean paid yang dapat melewati ledger.
-- Invoice/POD mengunci baris sumber agar retry/permintaan paralel tidak menggandakan qty atau revenue. Posted journal/source doc immutable lewat DB role dan trigger.
+- Invoice/Surat Jalan mengunci baris sumber agar retry/permintaan paralel tidak menggandakan qty atau revenue. Posted journal/source doc immutable lewat DB role dan trigger.
 - Closing mengambil exclusive lock period setelah posting aktif selesai; semua posting mengunci period yang sama dan mengecek state kembali. Costing backdate ke sebelum valuation event terakhir memerlukan workflow recost terkontrol; P1 menolak backdate tersebut.
 
 Indeks awal: document(company_id,kind,state,business_date); journal(company_id,period_id,posting_state); journal_line(account_id,journal_entry_id); open_item(company_id,counterparty,due_date); batch(product_id,expiry_date); balances(product,batch,location,owner,quality); visits(assigned_user,planned_at); audit(resource_type,resource_id,occurred_at). Tambah berdasarkan query plan, bukan indeks semua kolom.
@@ -436,3 +467,36 @@ Rujukan implementasi dan batas verifikasi: [laporan remediasi backend O2C](../de
 ## Migrasi izin submenu — 16 Oktober 2026
 
 IAM-01/04: migration `20261016210000_independent_submenu_permissions` memetakan grant `crm.*`, `master_data.*`, dan `fulfillment.read` ke capability anak dengan aksi/scope identik, mencatat `role.permissions.migrated` oleh sistem, lalu menghapus capability induk tersebut. Grant kosong tetap kosong. `sales_order.read` tetap milik SO; hak baca Proforma serta Backorder yang sebelumnya ikut terbuka disalin ke capability terpisah. Pemegang `proforma.issue` memperoleh baca Proforma yang sebelumnya sudah tersedia. Sesi anggota terdampak dicabut kecuali tetap memegang `ADMIN_SYSTEM` aktif. Tidak mengubah schema atau saldo; pemulihan menggunakan forward migration berbasis audit, bukan menghidupkan fallback induk.
+
+## Migrasi tahap 2b — 24 Oktober 2026
+
+- `20261024110000_setting_permissions`: izin per submenu Setting; grant lama dipetakan tanpa memperluas hak.
+- `20261024120000_numbering_format`: `document_number_rules.year_format`, `reset_period` menggantikan `reset_yearly`; counter tanpa reset dilanjutkan pada kunci tahunan.
+- `20261024130000_default_tax`: `operational_taxes.dpp_factor`, `is_default_sales`, `is_default_purchase` (indeks unik parsial satu bawaan per arah).
+- `20261024140000_customer_credit` dan `20261024150000_customer_credit_unmapped`: `customers.credit_limit`, `credit_frozen`, `freeze_reason`, `past_due_grace_days`, `default_term_code`, `default_tax_invoice_code`; `customer_payment_policies` menjadi arsip baca saja.
+- `20261024160000_deduction_types`: tabel `deduction_types`.
+- `20261024170000_account_mapping` dan `20261024171000_bank_account_manage`: izin Pemetaan Akun dan `bank_account.manage`.
+- `20261024180000_discount_limits`: `roles.discount_limit`, `company_memberships.discount_limit`, `products.discount_limit` (DECIMAL(7,4), CHECK 0–100).
+- `20261030090000_sales_order_line_discount`: `sales_order_lines.discount_rate` DECIMAL(7,4) NOT NULL DEFAULT 0, CHECK 0–100 (OTC-18; diskon persen per baris SO, dipakai untuk nilai SO; belum diwariskan ke Surat Jalan/Invoice).
+
+## O2C Release 1 (29 Oktober 2026)
+
+Kontrak O2C Release 1: Surat Jalan draft tidak memutasi saldo; penerbitan immutable dan menyimpan bukti serah terima serta snapshot konfigurasi. Kunci kumulatif per SO-line mencegah kuantitas melebihi pesanan.
+
+Migration `20261030120000_delivery_note_receiver_title` menambah `delivery_notes.receiver_title` (opsional) untuk jabatan/unit penerima pada serah terima.
+
+Migration `20261029123000_delivery_note_form` menambah kolom terstruktur nullable pada `delivery_notes`: `document_date`, `ship_date`, `warehouse_id`, `carrier_name`, `vehicle_number`, `driver_name`, dan `freight_amount` (`numeric(24,8)` dengan CHECK non-negatif). `warehouse_id` memiliki foreign key company-scoped ke `warehouses` dan index status. Nilai form yang sudah terbit juga disimpan di `handover_snapshot`; kolom dan snapshot tunduk pada guard immutable yang sudah ada.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Migrasi 20261030140000_invoice_form menambah invoice_date nullable, version positif, notes dan indeks tanggal pada sales_invoices. 20261030141000_invoice_payment menambah nomor receipt unik per perusahaan, penanda invoice_payment, indeks parsial referensi bank dan invoice_payment_deductions (sumber/master, persen/nominal, basis, amount numeric, akun/snapshot, state PENDING_PROOF/SETTLED, bukti/nomor/tanggal). 20261030142000_invoice_payment_ledger_kind menambah RECEIPT_DEDUCTION. 20261030143000_invoice_payment_numbering menyediakan rule RC editable yang belum ada dan audit. 20261030144000_invoice_price_permission menambah capability nilai dan migrasi grant teraudit dengan scope identik. Migrasi aditif, tanpa perubahan saldo/tanggal historis; pemulihan melalui forward fix, jangan menghapus tabel/enum berisi transaksi.
+# Persediaan vertical slice — 30 Oktober 2026
+
+Produk memiliki `minimum_stock` numeric nullable untuk indikator stok rendah. `stock_counts` dan `stock_count_lines` menyimpan scope gudang/locator, snapshot saldo harapan, hitungan fisik, approval, versi, idempotency dan metadata posting. Selisih hanya diposting sebagai `inventory_movements.kind=ADJUSTMENT` dengan sumber opname.

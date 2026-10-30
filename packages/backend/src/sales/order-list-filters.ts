@@ -1,14 +1,18 @@
 import { Prisma, prisma } from "@evflow/database";
 import { z } from "zod";
+import { salesOrderDisplayStatusSchema } from "@evflow/contracts";
 
 // Filter daftar Sales Order. Status pemenuhan dan sisa memakai aturan yang sama dengan orderView.
 export const orderListFilterSchema = z
   .object({
     customer_id: z.string().uuid().optional(),
+    status: salesOrderDisplayStatusSchema.optional(),
     from: z.string().date().optional(),
     to: z.string().date().optional(),
     fulfillment: z.enum(["NOT_SHIPPED", "PARTIAL", "SHIPPED"]).optional(),
     remainder: z.enum(["BACKORDER", "IN_PROGRESS", "NOT_EVALUATED", "CLOSED"]).optional(),
+    /** Daftar kerja: SO diajukan yang masih punya sisa kirim, atau punya Surat Jalan terbit belum diinvoice. */
+    queue: z.enum(["TO_SHIP", "UNINVOICED"]).optional(),
   })
   .refine((v) => !v.from || !v.to || v.from <= v.to, {
     message: "Tanggal awal tidak boleh setelah tanggal akhir.",
@@ -63,15 +67,15 @@ const withoutBackorder: Prisma.SalesOrderWhereInput = {
 /** Bagian filter yang dapat dinyatakan langsung dengan Prisma (tanpa agregasi alokasi). */
 export function orderFilterWhere(
   filters: OrderListFilters,
-  timeZone: string,
+  _timeZone: string,
 ): Prisma.SalesOrderWhereInput[] {
   const and: Prisma.SalesOrderWhereInput[] = [];
   if (filters.customer_id) and.push({ customerId: filters.customer_id });
   if (filters.from || filters.to)
     and.push({
-      createdAt: {
-        ...(filters.from ? { gte: localDayStart(filters.from, timeZone) } : {}),
-        ...(filters.to ? { lt: localDayStart(nextDay(filters.to), timeZone) } : {}),
+      orderDate: {
+        ...(filters.from ? { gte: new Date(filters.from) } : {}),
+        ...(filters.to ? { lt: new Date(nextDay(filters.to)) } : {}),
       },
     });
   if (filters.remainder === "CLOSED") and.push({ state: { in: [...closedStates] } });

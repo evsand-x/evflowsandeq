@@ -145,8 +145,13 @@ const stages: { key: Stage; label: string; description: string }[] = [
     description: "Penerimaan barang retur dan tindak lanjut pemeriksaan mutu",
   },
 ];
+const releaseOneStages = stages.filter(
+  (stage) => stage.key === "shipping" || stage.key === "returns",
+);
 const href = (stage: Stage, id = "", form = false) =>
-  `${stage === "picking" ? "/operations/pick-slips" : stage === "returns" ? "/operations/returns" : "/operations/warehouse"}${id ? `/${id}` : ""}?stage=${stage}${form ? "&view=form" : ""}`;
+  stage === "shipping" && !id
+    ? "/operations/delivery-notes"
+    : `${stage === "picking" ? "/operations/pick-slips" : stage === "returns" ? "/operations/returns" : "/operations/warehouse"}${id ? `/${id}` : ""}?stage=${stage}${form ? "&view=form" : ""}`;
 const date = (s?: string | null) =>
   s ? new Date(s).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "—";
 const qty = (s?: string) => new Decimal(s || "0").toString();
@@ -338,9 +343,6 @@ export function OutboundWorkspace({
       setPending(false);
     }
   };
-  const run = (fn: () => Promise<unknown>) => {
-    void fn().catch(() => undefined);
-  };
   if (!principal)
     return (
       <main className="ob-auth">
@@ -485,20 +487,9 @@ export function OutboundWorkspace({
     {
       id: "actions",
       header: "Tindakan",
-      cell: ({ row: r }) =>
-        stage === "picking" && !r.original.pickList && can(actionPermission) ? (
-          <Button
-            disabled={pending}
-            onClick={() =>
-              run(async () => {
-                await command(`/fulfillment-batches/${r.original.id}/create-picking`);
-                router.push(href(stage, r.original.id, true));
-              })
-            }
-          >
-            Buat Pick Slip
-          </Button>
-        ) : (
+      cell: ({ row: r }) => {
+        if (stage !== "shipping" && stage !== "returns") return null;
+        return (
           <Button
             variant={canEdit(r.original) && can(actionPermission) ? "default" : "outline"}
             asChild
@@ -507,7 +498,8 @@ export function OutboundWorkspace({
               {can(actionPermission) ? action(r.original) : "Lihat detail"}
             </Link>
           </Button>
-        ),
+        );
+      },
     },
   ];
   const labels =
@@ -555,7 +547,7 @@ export function OutboundWorkspace({
               </p>
             </div>
             <nav className="ob-tabs" aria-label="Barang Keluar">
-              {stages.map((s) => (
+              {releaseOneStages.map((s) => (
                 <Link
                   key={s.key}
                   href={href(s.key)}
@@ -1056,63 +1048,11 @@ function BatchDetail({
                   : "POD"}
           </Button>
         )}
-        {stage === "picking" &&
-          row.state === "ALLOCATED" &&
-          !row.pickList &&
-          can("fulfillment.pick") && (
-            <Button
-              disabled={pending}
-              onClick={() =>
-                void command(`/fulfillment-batches/${row.id}/create-picking`).catch(() => undefined)
-              }
-            >
-              Buat Pick Slip
-            </Button>
-          )}
-        {stage === "picking" &&
-          row.state === "ALLOCATED" &&
-          row.pickList?.state === "OPEN" &&
-          can("fulfillment.pick") && (
-            <Button asChild>
-              <Link href={href(stage, row.id, true)}>Mulai picking</Link>
-            </Button>
-          )}
-        {stage === "picking" &&
-          row.state === "ALLOCATED" &&
-          row.pickList?.state === "PICKED" &&
-          !shortage &&
-          can("fulfillment.check") && (
-            <Button asChild>
-              <Link href={href("checking", row.id, true)}>Lanjut ke Checking</Link>
-            </Button>
-          )}
-        {stage === "checking" &&
-          row.state === "ALLOCATED" &&
-          row.pickList?.state === "PICKED" &&
-          can("fulfillment.check") && (
-            <Button asChild>
-              <Link href={href(stage, row.id, true)}>Mulai checking</Link>
-            </Button>
-          )}
-        {stage === "checking" &&
-          row.pickList?.state === "CHECKED" &&
-          can("fulfillment.dispatch") && (
-            <Button asChild>
-              <Link href={href("shipping", row.id, true)}>Atur pengiriman</Link>
-            </Button>
-          )}
         {stage === "shipping" && row.state === "ALLOCATED" && can("fulfillment.dispatch") && (
           <Button asChild>
             <Link href={href(stage, row.id, true)}>Atur pengiriman</Link>
           </Button>
         )}
-        {["shipping", "pod"].includes(stage) &&
-          ["DISPATCHED", "PARTIALLY_DELIVERED"].includes(row.state) &&
-          can("delivery_receipt.confirm") && (
-            <Button asChild>
-              <Link href={href("pod", row.id, true)}>Konfirmasi POD</Link>
-            </Button>
-          )}
       </Actions>
     </>
   );

@@ -1,5 +1,42 @@
 # Design — web kantor dan aplikasi mobile sales/gudang
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Tombol Terbitkan Surat Jalan menjalankan penerbitan langsung. Tidak ada modal bukti/checkbox penerimaan pada aksi itu. Detail ISSUED menampilkan tombol Penerimaan Barang bagi fulfillment.dispatch selama belum ada receipt/histori handover, serta ringkasan penerimaan. Dialog Penerimaan Barang memuat waktu, nama, jabatan opsional, jumlah diterima, alasan selisih dan bukti; tombol Simpan penerimaan. Tampilkan error/pending, fokus dan Escape sesuai komponen global; sesudah berhasil perbarui detail/list. Selisih tidak diklaim otomatis kembali ke stok.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+Detail SO satu halaman: kepala nomor/status/navigasi/Cetak/tindakan utama/Aksi/menu lainnya; atribut faktur; tabel barang bersisa di atas; kuantitas, subtotal, PPN, total dan sisa tagihan; panel uang muka; Transaksi; jejak perubahan/cetak. Tidak ada tab detail lama atau Bagikan/WhatsApp. Tindakan tanpa izin tidak dikirim, hambatan alur beralasan. Cetak menggunakan Profil Perusahaan dan audit sebelum dialog cetak. QA visual operasional belum lulus; lihat laporan eksekusi.
+
+## Kesiapan backend SO mudah — 25 Oktober 2026
+
+Arah layar mengikuti desain SO mudah 25 Oktober. Backend telah menyediakan kolom daftar dan status tunggal, opsi kepala form dan informasi stok per gudang. Tahap backend ini mempertahankan field lama agar Office berjalan; tidak menyatakan form faktur baru, tab status, tombol atau kartu Setting khusus sudah diterapkan/diverifikasi visual. UI harus memakai data/status/hitungan dari backend, bukan menyimpulkan ulang status dari invoice atau pembayaran.
+
+
+## Keputusan 24 Oktober 2026 — konsolidasi
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Navigasi: setiap menu di satu modul; Setting berisi Profil Perusahaan, Pengguna, Peran, Kebijakan Umum, Penomoran Dokumen, Pajak, Termin & Kredit, Jenis Potongan, Pemetaan Akun. Form SO menampilkan "Diskon maks. untuk Anda" per baris. Form Terima Pembayaran memuat tabel Potongan. Dialog penomoran memuat prefix, format tahun, format bulan, panjang urut dan toggle reset bulanan/tahunan dengan pratinjau. Tombol persetujuan tampil di halaman dokumen.
+
+
+## Keputusan 24 Oktober 2026 — kemudahan pakai
+
+Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Prinsip layar Office:
+
+- isian wajib minimal dan bertanda jelas; isian lain terisi nilai bawaan;
+- label bahasa bisnis, bukan kode atau istilah teknis;
+- buat cepat pelanggan/produk dari dropdown bagi pengguna berizin;
+- bantuan singkat pada isian yang jarang dipahami;
+- draft tidak hilang saat berpindah halaman;
+- pesan error menjelaskan cara memperbaiki dan menautkan ke halaman Setting terkait;
+- menu dan submenu yang belum berfungsi tidak tampil.
+
+Form SO: pelanggan, tanggal, barang, jumlah dan harga wajib; termin terisi dari pelanggan bila ada dan dapat diganti. Bagian total memuat Subtotal, Diskon, Ongkos kirim (Ditanggung perusahaan atau Dibebankan ke pelanggan dengan Sebelum PPN/Sesudah PPN), PPN dan Total. Mode kredit Peringatan tampil sebagai banner tanpa menahan simpan/ajukan; mode Blokir menampilkan tombol Ajukan Pengecualian.
+
+Setting dibuka sebagai satu halaman Pengaturan terpusat dengan kelompok Perusahaan, Pengguna & Akses, Struktur Organisasi, Penjualan (termin, ongkir, kredit), Dokumen (penomoran, template) dan Persetujuan. Halaman Peran memakai matriks menu × tindakan dengan cakupan data, Pilih Semua per modul/kolom dan Salin dari peran lain.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Label submenu operasional adalah **Akun**, route /operations/accounts, /new, /:id dan /:id/edit. Sidebar membuka Akuntansi pada seluruh route tersebut. Tabel: Kode Akun, Nama Akun, Kategori, Tipe, Saldo Normal, Status, Tindakan; pencarian, kelompok dan status, pagination 25. Form Identitas serta Klasifikasi dan struktur memakai standar desain global web. Field terkunci menampilkan alasan pemakaian. Detail memuat atribut, referensi dan audit; tidak ada saldo nominal pada master.
@@ -144,7 +181,7 @@ Dashboard Finance web pada implementasi historis: empat KPI, Antrean finance dan
    - Kartu Piutang, Aging, Tagihan
    - A/T Tagihan, Estimasi Penagihan
    - Saldo dan alokasi uang muka pelanggan pada detail pelanggan/invoice; tidak ada menu uang muka tersendiri
-2. **Kredit & TOP Pelanggan**
+2. **Kredit & TOP Pelanggan** — dihapus 24 Oktober 2026 (konsolidasi); limit/freeze/toleransi pindah ke Master Data › Pelanggan, termin dan mode kredit ke Setting › Termin & Kredit
    - Daftar fasilitas per pelanggan
    - Penetapan atau perubahan mode COD/Prepay/Tempo, TOP, limit kredit, tanggal efektif dan toleransi
    - Evaluasi Finance, histori versi, bukti, approval, freeze dan unlock
@@ -306,7 +343,7 @@ UOM, NIE, dan Harga Beli/Jual Acuan adalah bagian detail **Produk**, bukan menu 
 3. **Peran**
    - Kelompok hak akses dan penugasan beberapa peran pada satu pengguna
    - Detail peran: **Matriks Hak Akses** untuk resource, tindakan, scope, field sensitif dan tindakan khusus
-4. **Kebijakan Operasional**
+4. **Kebijakan Umum**
    - Perusahaan & Lokalisasi
    - Finance & Penagihan
    - Gudang & Pengadaan
@@ -319,7 +356,7 @@ UOM, NIE, dan Harga Beli/Jual Acuan adalah bagian detail **Produk**, bukan menu 
    - Durasi evaluasi dan syarat perpindahan fasilitas
 6. **Kredit & Exposure**
    - Kebijakan global, exposure, past due, freeze dan unlock
-   - Fasilitas per pelanggan dikelola melalui **Finance → Kredit & TOP Pelanggan**
+   - Fasilitas per pelanggan dikelola sebagai atribut **Master Data › Pelanggan** (keputusan konsolidasi 24 Oktober 2026)
 7. **Pengaturan Persetujuan**
    - Aturan, Tahapan, Delegasi dan Riwayat
 8. **Template Cetak**
@@ -403,7 +440,7 @@ Satu akun menampilkan gabungan izin per tindakan/cakupan dari peran yang diberik
 | Stock detail | Produk, NIE, batch, expiry, lokasi, pemilik, on hand/reserved/available, quality | Lihat pergerakan / inspeksi |
 | Penerimaan | PO, qty, batch/expiry, kondisi, lokasi dan hasil pemeriksaan | Simpan pemeriksaan / posting |
 | AR/AP aging | Pihak, invoice, jatuh tempo, umur, outstanding, collector | Catat follow-up / alokasikan pembayaran |
-| Detail Invoice | Nomor, pelanggan, jumlah/nilai, tanggal penerimaan POD, termin, jatuh tempo, dibayar dan sisa; riwayat penerimaan | Terima Pembayaran sesuai izin; form memisahkan uang masuk, PPN Dipungut WAPU, PPh Dipotong dan komponen lain; pilih penerimaan yang sudah ada bila dana telah dicatat |
+| Detail Invoice | Nomor, pelanggan, jumlah/nilai, waktu serah terima Surat Jalan, termin, jatuh tempo, dibayar dan sisa; riwayat penerimaan | Terima Pembayaran sesuai izin; form memisahkan uang masuk, PPN Dipungut WAPU, PPh Dipotong dan komponen lain; pilih penerimaan yang sudah ada bila dana telah dicatat |
 | Kartu Piutang Pelanggan | Periode, saldo awal, mutasi bertanggal/nomor dokumen, tambah/kurang, saldo berjalan/akhir; invoice terbuka, jatuh tempo, aging dan riwayat penagihan | Telusuri sumber / catat follow-up dan janji bayar / cetak-ekspor sesuai izin |
 | Closing | Langkah, selisih, bukti, pemilik, status validasi/review | Selesaikan langkah / review / tutup periode |
 | Harga & HPP | Basis biaya, target margin, diskon, rekomendasi neto, margin efektif | Simulasi / ajukan pricelist |
@@ -430,7 +467,7 @@ Daftar atribut berikut berasal dari pengguna. Pengelompokan dan perilaku input m
 | 11 | NPWP | Teks untuk menjaga nol di depan, nama/alamat terdaftar dan berkas bila diperlukan; simpan NPWP/NIK, status PKP/Non-PKP dan alamat sesuai pajak |
 | 12 | Apoteker Penanggung Jawab/Penanggung Jawab Teknis | Nama, jenis penanggung jawab, kontak dan masa penugasan bila tersedia; berlaku sesuai jenis pelanggan |
 | 13 | Izin Penanggung Jawab | Tertaut ke penanggung jawab: jenis/nomor izin, penerbit, masa berlaku dan berkas; dukung riwayat penggantian |
-| 14 | Termin Pembayaran | Mode COD saat barang diterima atau Bayar sebelum pengiriman untuk pelanggan baru; pilihan Net 15/30/45/60/90 setelah evaluasi Finance. COD memiliki TOP 0 dan jatuh tempo dari POD |
+| 14 | Termin Pembayaran | Opsional: termin bawaan pelanggan dari daftar termin Setting (Tunai/COD, Bayar sebelum kirim, Tempo N hari) yang hanya mengisi otomatis SO. COD memiliki TOP 0 dan jatuh tempo dari waktu serah terima Surat Jalan |
 | 15 | Limit Kredit | Nilai uang dan tanggal efektif; hanya pengguna berwenang. Pelanggan baru tidak otomatis mendapat limit/Tempo; limit untuk prepay/COD dapat tetap kosong sesuai policy |
 | 16 | Saldo Awal Piutang | Ringkasan hasil proses opening per invoice dan tanggal cut-over; tombol Isi/Impor Rincian Piutang Awal mengikuti hak finance. Bukan angka bebas yang langsung mengubah kartu piutang |
 | 17 | Upload Berkas NOO | Unggah berkas dengan nama, tanggal, versi dan catatan; akses privat. Istilah NOO dipertahankan sesuai pengguna; template/kewajiban mengikuti channel |
@@ -689,7 +726,7 @@ Grid SO selalu menampilkan semua item pesanan, termasuk stok kosong. Kolom utama
 
 Saat memilih produk pada Draft, sales berizin melihat stok tersedia untuk pesanan baru, jumlah dipesan dan perkiraan kekurangan, disertai waktu pembaruan. Angka ini informatif dan belum dicadangkan. Credit hold membatasi alokasi, bukan menyembunyikan informasi stok yang berhak dibaca. Bedakan indikator pemeriksaan stok SO belum dilakukan dari informasi availability umum; stok kosong tetap bisa dimasukkan ke SO.
 
-Pelanggan baru menampilkan pilihan **COD saat barang diterima** dan **Bayar sebelum pengiriman**. COD berlaku sebagai mode awal selama tiga bulan berturut-turut dengan TOP 0. Pengguna berhak mengatur kredit dapat menetapkan Tempo, TOP dan limit setelah evaluasi Finance; pengguna lain tidak mendapat field kredit yang dapat disimpan. Form pelanggan juga memuat status PKP/Non-PKP, metode pembayaran, jadwal tukar faktur, PIC penagihan/gudang, toleransi hari pembayaran dan status verifikasi onboarding. Pada tahap prepay, tampilkan nilai Proforma, dana diterima/terverifikasi yang ditautkan, dan kekurangan pembayaran; tombol Kirim tertahan sampai dana cukup dan syarat gudang selesai. Pada COD, invoice diposting setelah POD dengan due date tanggal POD. Unggah bukti tidak menghasilkan label pembayaran terverifikasi. Status Pesanan tetap memakai lima label pilihan pengguna; menunggu pembayaran adalah informasi pada dimensi pembayaran.
+Form pelanggan menyediakan termin bawaan dan limit kredit sebagai isian opsional; pengguna tanpa izin kredit tidak mendapat field limit yang dapat disimpan. Kebijakan COD awal pelanggan baru hanya berlaku bila dinyalakan di Setting. Form pelanggan juga memuat status PKP/Non-PKP, metode pembayaran, jadwal tukar faktur, PIC penagihan/gudang, toleransi hari pembayaran dan status verifikasi onboarding. Pada tahap prepay, tampilkan nilai Proforma, dana diterima/terverifikasi yang ditautkan, dan kekurangan pembayaran; tombol Kirim tertahan sampai dana cukup dan syarat gudang selesai. Pada COD, invoice diposting setelah POD dengan due date tanggal POD. Unggah bukti tidak menghasilkan label pembayaran terverifikasi. Status Pesanan tetap memakai lima label pilihan pengguna; menunggu pembayaran adalah informasi pada dimensi pembayaran.
 
 Tab **Pemenuhan** mengelompokkan dokumen per tahap. Pratinjau Proforma/Picking Slip hanya berisi alokasi tahap tersebut; Packing List memuat aktual lolos checking. Item backorder tetap terlihat pada tab SO/Sisa Pesanan, tidak masuk baris cetak dokumen pemenuhan. Jika tidak ada alokasi, tombol penerbitan menjelaskan “Belum ada stok yang dapat dipenuhi”. Selisih aktual menampilkan tindakan revisi dengan tautan versi dokumen sebelumnya.
 
@@ -842,3 +879,18 @@ Baris mengikuti hierarki navigasi. Induk murni memiliki checkbox agregat per tin
 ## Keputusan navigasi CRM — 16 Oktober 2026
 
 CRM-01/05, MD-01, APP-03, IAM-04: Pelanggan dikelola melalui Master Data > Pelanggan. Submenu Pelanggan CRM dihapus; URL web lama /crm/customers dan turunannya dialihkan ke Master Pelanggan, dengan pemeriksaan izin tujuan. CRM menampilkan Prospek, Peluang, Kontak. Peluang memiliki daftar tersendiri dengan izin crm_opportunity.read; proses buat/hasil yang tersedia tetap melalui detail prospek. Matriks menempatkan Peluang sejajar Prospek; capability crm_customer tetap untuk proyeksi/registrasi institusi pendukung proses Prospek, pada baris Prospek > Institusi terkait, bukan submenu pelanggan kedua. Tidak menyalin grant menjadi master_customer maupun mengubah data. Bukti: docs/development/crm-navigation-2026-10-16.md.
+
+## O2C Release 1 (29 Oktober 2026)
+
+Label dan tindakan Release 1 memakai Surat Jalan. Tombol Invoice hanya tersedia dari Surat Jalan terbit sesuai izin efektif; status dan sisa kuantitas menampilkan akumulasi seluruh Surat Jalan.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Kontrak backend mengikuti daftar, form, detail Invoice dan Terima Pembayaran pada evflow-office-design.pen. Teks jatuh tempo pada mockup yang menyebut tanggal Invoice digantikan keputusan pengguna: tanggal SJ diterbitkan + termin. Nomor editable saat draft; Simpan draft belum memposting, Submit membentuk AR. Tab hitungan dan pencarian diproses server. Menunggu bukti potong mengungguli contoh Lunas pada mockup bila bukti wajib belum ada. Label Lihat harga tersedia pada capability Invoice. Belum ada klaim implementasi ulang frontend/visual QA tahap ini.

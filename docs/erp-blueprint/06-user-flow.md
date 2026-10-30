@@ -1,5 +1,35 @@
 # User Flow — lintas peran dan pengecualian
 
+## Keputusan 30 Oktober 2026 - penerimaan SJ terpisah
+
+Simpan draft atau langsung Terbitkan Surat Jalan (simpan perubahan dahulu) -> SJ Terbit tanpa modal penerimaan -> Buat Invoice tersedia. Setelah pelanggan menerima, buka detail -> Penerimaan Barang -> isi waktu, penerima, jumlah dan bukti -> Simpan penerimaan. Sesudah tersimpan tampil ringkasan/bukti/qty dan tombol tidak ditampilkan lagi. Penerimaan belum dicatat bukan status gagal issue.
+
+SJ terbit memposting seluruh jumlah draft, stok, pendapatan dan HPP serta langsung menjadi sumber Invoice. Penerimaan pelanggan dicatat terpisah setelah terbit dan tidak menjadi prasyarat posting atau Invoice. Catatan penerimaan tidak mengubah saldo, jumlah terbit, progres SO maupun jatuh tempo. Selisih ditindaklanjuti melalui koreksi/retur tersendiri. Bukti serah terima historis tetap dipertahankan.
+
+
+> **Alur Release 1 O2C:** SO → Surat Jalan draft → isi bukti serah terima dan jumlah kirim → terbitkan Surat Jalan (stok, pendapatan, HPP) → Invoice dari Surat Jalan. Alur picking, checking, Packing List, POD dan dispatch lama di dokumen ini adalah scope lanjutan.
+
+
+## Detail SO dan uang muka — Bagian 2, 26 Oktober 2026
+
+SO → Catat Uang Muka → Menunggu verifikasi → Finance pengguna berbeda memverifikasi atau menolak. Hanya verifikasi membuat penerimaan/jurnal dan menambah DP. Dispatch PREPAY mengikat dana SO yang dipakai ke satu batch sehingga batch lain tidak menghitung ulang. Detail menautkan dokumen asal; Buat Surat Jalan tetap melalui pengambilan dan pemeriksaan. Invoice dari Packing List menunggu POD tetap tampak di Transaksi bila izin invoice ada.
+
+## Form SO — kontrak backend 25 Oktober 2026
+
+Pilih pelanggan → alamat/termin bawaan → tentukan tanggal/sales/gudang → semua baris pesanan → simpan draft (No. SP/bukti hanya wajib bila Setting aktif) → submit memeriksa harga, termin, kredit dan stok → hanya gudang pilihan yang dialokasikan. Stock availability memberi informasi sisa dan locator lain tanpa perpindahan stok. Daftar menampilkan status turunan dari POD dan sisa ditutup; tanggal perkiraan jatuh tempo SO tidak mengganti tanggal resmi invoice. Implementasi layar baru, approval umum dan pengajuan pindah locator tetap bagian berikutnya.
+
+
+## Keputusan 24 Oktober 2026 — konsolidasi
+
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Alur SO: pilih produk → harga otomatis (harga khusus pelanggan atau harga umum) → ubah harga/diskon dalam batas → pajak bawaan terisi → ajukan. Alur pembayaran: catat uang diterima → tambah baris potongan → potongan wajib bukti berstatus Menunggu bukti potong → unggah bukti → lunas. Harga khusus diajukan dan disetujui di Sales & Marketing pada halaman pengajuannya.
+
+
+## Keputusan 24 Oktober 2026 — alur fleksibel
+
+Mengikuti register README dan [desain arah fleksibel](../superpowers/specs/2026-10-24-erp-fleksibel-design.md). Alur SO: Draft dengan isian minimal → Ajukan → validasi data/harga → persetujuan SO bila aturan aktif cocok (stok belum direservasi; antrean alokasi dihitung sejak disetujui) → kredit sesuai mode Nonaktif/Peringatan/Blokir → alokasi stok → dokumen pemenuhan → invoice → pembayaran atau retur. Mode Peringatan menampilkan peringatan tanpa menahan; mode Blokir menahan SO dan pengguna mengajukan pengecualian melalui mesin persetujuan umum. Termin dipilih di SO.
+
+Alur persetujuan untuk semua jenis dokumen: pengajuan → tahap berurutan (atasan langsung, atasan N tingkat, kepala departemen, orang atau peran tertentu) → Setujui, Tolak atau Minta Revisi dengan catatan → riwayat. Dokumen terkunci selama menunggu. Atasan tanpa akun dilewati ke atasan berakun berikutnya, lalu Admin Sistem. Menu yang belum berfungsi tidak tampil.
+
 ## Submenu Akun dan migrasi master — 16 Oktober 2026
 
 Finance → Akuntansi → Akun → cari/filter (awal Aktif) → Detail atau Edit; Buat Akun membuka form tanpa saldo. Simpan memvalidasi kode, hierarki dan izin; edit akun terpakai perlu alasan dan hanya field aman/status sesuai referensi. Riwayat muncul pada detail. Impor 156 master sudah disetujui tanpa saldo awal. Konfigurasi operasional dialihkan ke akun impor, akun uji bersejarah tetap dapat ditemukan lewat filter Nonaktif. Impor/ekspor massal UI dan reklasifikasi khusus tetap di luar tahap ini.
@@ -13,7 +43,7 @@ Buat/edit master: isi nama, jenis, penggunaan, perlakuan, akun dan tarif; piliha
 Finance → Pajak → Daftar & Aturan Pajak → Buat/Edit → pilih jenis, tambah/potong, akun aktif, nilai persen dan pembulatan → Simpan → versi langsung berlaku tanpa antrean approval. Transaksi memilih master; submit menyimpan snapshot untuk perhitungan/posting. Faktur Keluaran/Masukan → pilih invoice sumber → isi nomor/tanggal dan lampiran resmi → Simpan metadata. Invoice belum posted tidak dapat menerima metadata. Perubahan tarif tidak menghitung ulang transaksi posted.
 
 
-Alur izin Dashboard terbaru: Admin Sistem membuka Peran → Matriks Hak Akses, mencentang Lihat pada tiap tampilan Dashboard yang diinginkan untuk peran biasa, meninjau lalu menyimpan. Sesi anggota terdampak dicabut. Saat masuk kembali, navigasi memuat tampilan yang diizinkan; API menolak tampilan tanpa izin dan tetap menyaring data menurut izin/scope sumber. Menu belum operasional tetap terlihat sebagai informasi tanpa checkbox.
+Alur izin Dashboard terbaru: Admin Sistem membuka Peran → Matriks Hak Akses, mencentang Lihat pada tiap tampilan Dashboard yang diinginkan untuk peran biasa, meninjau lalu menyimpan. Sesi anggota terdampak dicabut. Saat masuk kembali, navigasi memuat tampilan yang diizinkan; API menolak tampilan tanpa izin dan tetap menyaring data menurut izin/scope sumber. Menu yang belum berfungsi disembunyikan dari navigasi dan matriks (keputusan 24 Oktober 2026).
 
 ## Koreksi 7 Oktober 2026 — proforma manual
 
@@ -47,7 +77,7 @@ Admin Sistem dapat memilih **Hapus** pada baris Pengguna atau Peran dan meninjau
 
 Profil Perusahaan: pengguna berizin membuka **Setting → Profil Perusahaan** → mengubah nama/alamat/kontak/logo sesuai kebutuhan → Simpan. Tidak ada tanggal berlaku, alasan perubahan atau approval. Nilai baru langsung dipakai pada layar dan dokumen baru; dokumen yang sudah diterbitkan tetap memakai snapshot identitas saat penerbitan.
 
-Kebijakan Operasional: pengguna berizin membuka **Setting → Kebijakan Operasional** → memilih kelompok dan parameter → Edit → sistem menampilkan nilai awal/saat ini, unit dan validasi → Simpan → versi baru langsung aktif secara default. Form tidak meminta alasan, approval atau tanggal berlaku kecuali definition parameter mengaktifkannya. Transaksi baru membaca nilai aktif; transaksi issued/posted tetap memakai snapshot. Upaya mengubah invariant menampilkan bahwa aturan tersebut merupakan kontrol sistem dan tidak tersedia sebagai field.
+Kebijakan Umum: pengguna berizin membuka **Setting → Kebijakan Umum** → memilih kelompok dan parameter → Edit → sistem menampilkan nilai awal/saat ini, unit dan validasi → Simpan → versi baru langsung aktif secara default. Form tidak meminta alasan, approval atau tanggal berlaku kecuali definition parameter mengaktifkannya. Transaksi baru membaca nilai aktif; transaksi issued/posted tetap memakai snapshot. Upaya mengubah invariant menampilkan bahwa aturan tersebut merupakan kontrol sistem dan tidak tersedia sebagai field.
 
 Saat pengguna login, menu, tombol dan antrean tugas mengikuti hak efektif serta penugasan. Pengguna dapat membuat SO lalu melanjutkan penerbitan proforma atau tugas gudang dengan akun yang sama apabila masing-masing tindakannya diizinkan dan prasyarat dokumen terpenuhi. Tidak diperlukan pergantian akun untuk menjalankan peran tambahan. Pemberian akses tidak melewati urutan cek kredit, stok atau status dokumen.
 
@@ -70,7 +100,7 @@ Refresh sesi tidak mengulang login manual bila token masih sah; koneksi stream y
 
 Tugas approval unlock dikirim kepada pengguna/peran yang ditunjuk dan memenuhi izin, cakupan serta limit; tidak semua pengguna yang dapat melihat SO otomatis menjadi approver unlock. Jika tidak ada approver yang memenuhi syarat, permintaan tetap tertahan dengan alasan konfigurasi yang perlu diperbaiki. SO yang lolos aturan tidak perlu menunggu approver. Audit menunjukkan siapa melakukan tiap tahap, termasuk bila beberapa tahap dilakukan orang yang sama.
 
-SO tidak memerlukan persetujuan manual rutin. Persetujuan hanya ada ketika pengguna mengajukan unlock atas SO yang terkunci. Pihak pemberi keputusan ditetapkan pada sistem. Ketentuan boleh/tidaknya pemohon memutuskan permintaan unlock sendiri masih diatur terpisah dari kepemilikan beberapa peran; kebijakan ini tidak membuat approval rutin untuk setiap SO.
+SO berjalan otomatis bila tidak ada aturan persetujuan aktif. Bila aturan persetujuan SO aktif dan kondisinya cocok (misalnya nilai, diskon atau pelanggan menunggak), SO menunggu persetujuan setelah validasi data dan sebelum pemeriksaan kredit serta alokasi. Pengecualian kredit pada mode Blokir diajukan melalui mesin persetujuan yang sama. Pemberi keputusan mengikuti aturan dan Struktur Organisasi; persetujuan dokumen sendiri hanya bila diizinkan eksplisit per jenis dokumen.
 
 ### 0.1 Pengaturan dan pelaksanaan persetujuan
 
@@ -150,9 +180,9 @@ Pendaftaran untuk kunjungan sebelum ada pesanan memakai **Prospek** pada alur ba
 
 Form pelanggan lengkap mengikuti [17 atribut yang ditetapkan pengguna](07-design.md): identitas/alamat/channel/rayon, tiga fungsi PIC, legalitas/NPWP/penanggung jawab dan izin, termin/limit/saldo awal, serta NOO. Channel dan rayon dapat ditambah sesuai izin. Prospek yang dikonversi mempertahankan kontak dan riwayat kunjungan. Untuk pelanggan lama saat migrasi, tombol rincian piutang awal membuka prosedur opening per invoice; angka saldo pada form hanya ringkasan hasilnya. Riwayat invoice opening menandai pelanggan lama pernah bertransaksi, tidak menghasilkan penjualan baru pada tanggal impor.
 
-Pelanggan baru memakai **COD saat barang diterima** selama tiga bulan berturut-turut sebagai mode awal. Finance dapat menetapkan **Bayar sebelum pengiriman** bila diperlukan. Pada COD, SO → pemeriksaan aturan/mode pembayaran → stok dan alokasi → Proforma/Surat Jalan → POD → Invoice posted dengan TOP 0 dan jatuh tempo tanggal POD → follow-up pembayaran. Pada bayar sebelum pengiriman, pengiriman menunggu dana terverifikasi; pembayaran sebelum invoice dicatat sebagai uang muka lalu dialokasikan ke invoice tanpa penerimaan kedua. Bukti transfer yang belum diverifikasi tidak memenuhi syarat kirim. Setelah tiga bulan COD, Tempo hanya diberikan melalui evaluasi Finance dan penetapan TOP/limit.
+Termin dipilih pada SO: **Tunai/COD saat barang diterima**, **Bayar sebelum pengiriman** atau **Tempo N hari**. Kebijakan COD awal untuk pelanggan baru bersifat opsional (default nonaktif). Pada COD, SO → pemeriksaan aturan/mode pembayaran → stok dan alokasi → Proforma/Surat Jalan → POD → Invoice posted dengan TOP 0 dan jatuh tempo tanggal POD → follow-up pembayaran. Pada bayar sebelum pengiriman, pengiriman menunggu dana terverifikasi; pembayaran sebelum invoice dicatat sebagai uang muka lalu dialokasikan ke invoice tanpa penerimaan kedua. Bukti transfer yang belum diverifikasi tidak memenuhi syarat kirim. Bila kebijakan COD awal dinyalakan, Tempo untuk pelanggan baru tersedia setelah periode yang diatur.
 
-Fasilitas **Tempo** dapat diberikan setelah pengguna berwenang menetapkan TOP dan limit kredit. Tidak ada limit otomatis karena pelanggan baru berhasil dibuat. Nilai belum ditetapkan berbeda dari limit nol atau tanpa batas. Jika ketentuan pembayaran belum lengkap, SO dapat disimpan sebagai Draft dan belum diajukan. Penetapan fasilitas pelanggan adalah pengaturan master, bukan approval rutin SO. Perubahan ketentuan pada SO yang sedang berjalan dicatat sebagai revisi dan dievaluasi ulang; perubahan master tidak diam-diam mengganti histori transaksi.
+**Tempo** tidak memerlukan TOP/limit di master pelanggan. Termin bawaan pelanggan, bila diisi, hanya mengisi otomatis SO dan dapat diganti. Limit kredit opsional; pelanggan tanpa limit tidak diperiksa limitnya, sedangkan pelanggan dengan limit diperiksa sesuai mode kredit perusahaan. Limit belum ditetapkan berbeda dari limit nol. Perubahan ketentuan pada SO yang sedang berjalan dicatat sebagai revisi dan dievaluasi ulang; perubahan master tidak diam-diam mengganti histori transaksi.
 
 Sales dengan izin melihat stok dapat melihat **tersedia untuk pesanan baru**, jumlah dipesan dan perkiraan kekurangan sejak memilih produk pada Draft, termasuk jika SO kemudian terkena credit hold. Informasi ini tidak mencadangkan barang. Setelah SO diajukan dan ketentuan transaksi lolos, sistem memeriksa ulang lalu melakukan alokasi atomik. Status “stok belum dievaluasi” pada SO berarti pemeriksaan/alokasi resmi SO belum dilakukan; informasi stok umum tetap dapat dibaca sesuai izin. Seluruh item/jumlah pelanggan tetap dicatat meskipun stok nol.
 
@@ -534,7 +564,7 @@ Keputusan terbaru: rencana harus disetujui atasan, foto wajib dan pelacakan loka
 
 Peluang dibuka pada awal periode bulanan → perbarui stage/confidence per produk → PO/SP pelanggan diterima dan diverifikasi → Win dengan alasan serta strategi maintain → sisa belum Win ditutup Lost beralasan tenggat akhir bulan. Master pelanggan/kontak tetap sama. Stage sumber: Lead 10%, Qualified 25%, Penawaran 40%, Negosiasi 60%, PO Expected 80%, Closed Won 100%, Closed Lost 0%. Alasan Lost komersial dibedakan dari tenggat. Penutupan tidak otomatis membatalkan SO/invoice atau menghapus tugas maintain.
 
-Penawaran: draft beberapa produk → pengajuan harga/diskon per produk/pelanggan jika diperlukan → keputusan terikat versi/syarat → penerbitan → tanggapan pelanggan per versi/item/qty → revisi atau penerusan item sesuai pesanan ke SO. Penawaran dapat diterima sebagian; qty sumber/terkonversi/sisa tetap tertelusur. SO tetap lolos aturan harga/kredit/stok, tidak ada persetujuan manual rutin baru.
+Penawaran: draft beberapa produk → pengajuan harga/diskon per produk/pelanggan jika diperlukan → keputusan terikat versi/syarat → penerbitan → tanggapan pelanggan per versi/item/qty → revisi atau penerusan item sesuai pesanan ke SO. Penawaran dapat diterima sebagian; qty sumber/terkonversi/sisa tetap tertelusur. SO tetap lolos aturan harga/kredit/stok; persetujuan SO hanya bila aturannya aktif.
 
 Sampel: pengajuan → keputusan → issue aktual dari gudang → serah terima → trial per produk/kriteria → hasil dan follow-up → pengembalian/penyelesaian bila relevan. Barang kembali dari pelanggan masuk karantina. Pengajuan bukan pengurangan stok; trial sukses bukan Win/penjualan otomatis. Hasil trial, action plan, penawaran dan strategi maintain membuat tugas/pengingat berizin.
 
@@ -640,3 +670,22 @@ Admin Sistem membuat/mengubah/menghapus peran, memilih izin fitur dan tindakan t
 Admin Sistem → Peran → pilih peran → Matriks Hak Akses. Buka kelompok menu, pilih tindakan pada submenu, atau pilih semua anak melalui checkbox kelompok. Status sebagian menunjukkan sebagian grant anak dipilih. Tinjau perubahan → simpan → backend memeriksa snapshot grant, mengaudit diff dan mengelola sesi terdampak. Induk pengelompokan tidak menyimpan grant. Prospek, Kontak, Pelanggan CRM, Master Pelanggan dan tahapan barang keluar dapat diatur terpisah.
 
 Navigasi CRM 16 Oktober 2026: pengguna membuka CRM > Peluang untuk daftar/pencarian peluang; akses sumber Prospek dan Master Pelanggan mengikuti izin terpisah. URL Pelanggan CRM lama menuju Master Data > Pelanggan. Proses create/win/lost yang sudah tersedia tetap melalui Prospek. Lihat catatan navigasi pada Design dan kontrak daftar pada API.
+
+## O2C Release 1 (29 Oktober 2026)
+
+### Addendum normatif Release 1
+
+Alur aktif adalah SO → Surat Jalan → Invoice. Surat Jalan terbit sekaligus menjadi bukti penyerahan dan event stok/pendapatan/HPP; Invoice hanya berasal dari Surat Jalan terbit; TOP dipilih pada SO dan diwariskan melalui snapshot. Picking, Checking, Packing List, dispatch terpisah dan POD adalah alur later/out of Release 1 bila masih dirujuk di bagian historis dokumen.
+
+Pada Release 1, pengguna membuat Surat Jalan langsung dari SO, dapat mengirim parsial kumulatif, mengisi waktu/penerima/bukti serah, menerbitkan Surat Jalan sebagai event stok/pendapatan/HPP, lalu membuat Invoice dari Surat Jalan terbit.
+
+
+## O2C Release 1 (29 October 2026)
+
+Issued Surat Jalan is the stock, revenue and HPP event; customer receipt is recorded separately (decision 30 October 2026). One SO supports cumulative Surat Jalan quantities up to ordered quantity; Invoice is created only from an issued Surat Jalan. Termin/TOP is selected on SO and snapshotted. Surat Jalan uses existing outbound permission grants; no delivery_note grants are introduced.
+
+
+
+## Backend Invoice dan Pembayaran — 30 Oktober 2026
+
+Pilih SJ terbit → tinjau nomor/tanggal/termin/barang → Simpan draft atau Submit → AR posted → Terima Pembayaran dengan bank/referensi/bukti → kas+alokasi atomik → status parsial/lunas. Potongan wajib bukti yang belum lengkap menyisakan AR; lengkapi bukti untuk settlement. Jatuh tempo selalu issuedAt SJ + TOP snapshot SO. Pembayaran tidak mengubah nilai/nomor/tanggal Invoice posted.

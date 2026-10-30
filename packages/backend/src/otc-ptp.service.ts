@@ -1,3 +1,7 @@
+import { createAndPostInvoice } from "./finance/invoice";
+import { invoiceCandidates as invoiceSourceCandidates } from "./finance/invoice-read";
+import { postCustomerReceiptTx } from "./finance/customer-receipt";
+import { recordSalesOrderAdvance, verifySalesOrderAdvance, rejectSalesOrderAdvance } from "./sales/order-advance";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Prisma, prisma } from "@evflow/database";
 import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
@@ -5,69 +9,60 @@ import { AuditService } from "./common/audit.service";
 import {
   assertDispatchLots,
   checkCredit,
-  eligibleLots,
+  currentPaymentPolicy,
   lockCustomer,
 } from "./sales/transaction-controls";
-import { assertPriceGrants, lineAmounts, priceOrder } from "./sales/pricing-controls";
+import { customerCreditOmit } from "./sales/customer-credit";
+import { createSalesOrderSchema } from "@evflow/contracts";
+import { resolveOrderHeader, resolveOrderNumber, validateOrderEvidence } from "./sales/order-header";
+import {
+  assertPriceGrants,
+  lineAmounts,
+  priceOrder,
+  rejectTaxChoice,
+} from "./sales/pricing-controls";
 import { approvePr } from "./procurement/approval-controls";
 import { transactionCommand } from "./common/transaction-command";
-import { lockFinance, postLedger } from "./finance/posting";
-import { postAdvanceTax, consumeAdvanceTax } from "./finance/advance-tax";
+import { financeDate, lockFinance, postLedger } from "./finance/posting";
+import { consumeAdvanceTax } from "./finance/advance-tax";
 import { issueDocument, requireEvidence } from "./sales/document-controls";
-import { reservationExpiry } from "./sales/reservation-controls";
 import { nextDocumentNumber } from "./common/document-number";
-import { operationalTaxSnapshot, calculateOperationalTax } from "./finance/operational-tax";
+import {
+  operationalTaxSnapshot,
+  calculateOperationalTax,
+  defaultSalesTaxOn,
+} from "./finance/operational-tax";
+import { availablePrepayFunds, bindOrderAdvancesToBatch } from "./sales/prepay-funds";
+import { assertLineDiscounts } from "./sales/discount-limit";
 type Tx = Prisma.TransactionClient;
 const d = (v: string | Prisma.Decimal) => new Prisma.Decimal(v);
 type FreightTaxMode = "NON_TAXABLE" | "TAXABLE";
+
+export function receiptBelongsToInvoice(
+  receipt: {
+    salesOrderId: string | null;
+    fulfillmentBatchId: string | null;
+    fulfillmentBatch?: { salesOrderId: string } | null;
+  },
+  invoice: { salesOrderId: string; fulfillmentBatchId: string | null; deliveryNoteId: string | null },
+) {
+  if (receipt.salesOrderId && receipt.salesOrderId !== invoice.salesOrderId) return false;
+  if (!receipt.fulfillmentBatchId) return true;
+  if (invoice.deliveryNoteId)
+    return receipt.fulfillmentBatch?.salesOrderId === invoice.salesOrderId;
+  return receipt.fulfillmentBatchId === invoice.fulfillmentBatchId;
+}
 @Injectable()
 export class OtcPtpService {
   constructor(@Inject(AuditService) private readonly audit: AuditService) {}
-  private async freightTax(
-    tx: Tx,
-    companyId: string,
-    customerId: string,
-    amount: Prisma.Decimal,
-    mode: FreightTaxMode,
-    ruleId?: string,
-  ) {
+  recordSalesOrderAdvance(c: string, a: string, id: string, input: unknown, key: string) { return recordSalesOrderAdvance(c,a,id,input,key); }
+  verifySalesOrderAdvance(c: string, a: string, id: string, input: unknown) { return verifySalesOrderAdvance(c,a,id,input); }
+  rejectSalesOrderAdvance(c: string, a: string, id: string, input: unknown) { return rejectSalesOrderAdvance(c,a,id,input); }
+  /** Taxable freight carries the default sales tax (PPN); its snapshot is kept on the document. */
+  private async freightTax(tx: Tx, companyId: string, amount: Prisma.Decimal, mode: FreightTaxMode) {
     if (mode === "NON_TAXABLE") return { amount: d("0"), snapshot: null };
-    const now = new Date();
-    const rule = await tx.salesTaxRule.findFirst({
-      where: {
-        ...(ruleId ? { id: ruleId } : {}),
-        companyId,
-        customerId,
-        state: "ACTIVE",
-        effectiveFrom: { lte: now },
-        effectiveTo: { gt: now },
-      },
-      orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
-    });
-    if (!rule) throw new ConflictException("FREIGHT_TAX_RULE_INVALID");
-    const rounding = (
-      {
-        HALF_UP: Prisma.Decimal.ROUND_HALF_UP,
-        HALF_EVEN: Prisma.Decimal.ROUND_HALF_EVEN,
-        DOWN: Prisma.Decimal.ROUND_DOWN,
-      } as Record<string, Prisma.Decimal.Rounding>
-    )[rule.rounding];
-    if (rounding === undefined) throw new ConflictException("FREIGHT_TAX_ROUNDING_REQUIRED");
-    const dpp = amount.mul(rule.dppFactor).toDecimalPlaces(rule.decimalPlaces, rounding);
-    const tax = dpp.mul(rule.rate).toDecimalPlaces(rule.decimalPlaces, rounding);
-    return {
-      amount: tax,
-      snapshot: {
-        rule_id: rule.id,
-        name: rule.name,
-        legal_reference: rule.legalReference,
-        rate: rule.rate.toString(),
-        dpp_factor: rule.dppFactor.toString(),
-        decimal_places: rule.decimalPlaces,
-        rounding: rule.rounding,
-        taxable_event: rule.taxableEvent,
-      },
-    };
+    const { tax, snapshot } = await defaultSalesTaxOn(tx, companyId, amount);
+    return { amount: tax, snapshot };
   }
   private async lockPickBatch(tx: Tx, c: string, id: string) {
     const ref = await tx.pickList.findFirst({
@@ -181,17 +176,17 @@ export class OtcPtpService {
     });
   }
   async createSalesOrder(c: string, a: string, i: any, key?: string) {
-    const cust = await prisma.customer.findFirst({
-      where: { id: i.customer_id, companyId: c, state: "ACTIVE" },
-    });
-    if (!cust) throw new NotFoundException("Pelanggan tidak ditemukan.");
-    return transactionCommand(c, a, "sales-orders/create", key, i, async (tx) => {
+    i = createSalesOrderSchema.parse(i);
+    rejectTaxChoice(i);
+    return transactionCommand(c, a, "sales-orders/create", key, i, (tx) => this.createSalesOrderTx(tx,c,a,i));
+  }
+  private async createSalesOrderTx(tx: Prisma.TransactionClient,c:string,a:string,i:any,duplicate=false) {
+      const cust = await lockCustomer(tx, c, i.customer_id);
+      if (cust.state !== "ACTIVE") throw new NotFoundException("Pelanggan tidak ditemukan.");
       const company = await tx.company.findUniqueOrThrow({ where: { id: c } });
       if (i.currency !== company.baseCurrency)
         throw new ConflictException("FOREIGN_CURRENCY_SALES_NOT_ENABLED");
-      await requireEvidence(tx, c, i.evidence_id, "SALES_ORDER");
-      if (!i.customer_reference?.trim() || !i.delivery_address?.trim())
-        throw new ConflictException("ORDER_REFERENCE_ADDRESS_REQUIRED");
+      const { lineWarehouseIds, ...header } = await resolveOrderHeader(tx, c, a, i, cust, {deferEvidence:duplicate});
       const products = await tx.product.count({
         where: {
           companyId: c,
@@ -202,34 +197,16 @@ export class OtcPtpService {
       if (products !== new Set(i.lines.map((x: any) => x.product_id)).size)
         throw new ConflictException("ORDER_PRODUCT_INVALID");
       if (i.freight?.tax_mode === "TAXABLE")
-        await this.freightTax(
-          tx,
-          c,
-          cust.id,
-          d(i.freight.estimate),
-          "TAXABLE",
-          i.freight.tax_rule_id,
-        );
-      const masterSnapshots = await Promise.all(
-        i.lines.map(async (line: any) =>
-          line.tax_master_id
-            ? {
-                ...(await operationalTaxSnapshot(tx, c, line.tax_master_id, new Date(), "SALES")),
-                operational_tax_id: line.tax_master_id,
-              }
-            : null,
-        ),
-      );
+        await this.freightTax(tx, c, d(i.freight.estimate), "TAXABLE");
+      await assertLineDiscounts(tx, c, a, i.lines.map((x: any) => ({ productId: x.product_id, discountRate: x.discount_rate })));
       const o = await tx.salesOrder.create({
         data: {
           companyId: c,
           customerId: cust.id,
-          number: await this.num(tx, c, "sales_order", "SO"),
+          number: await resolveOrderNumber(tx, c, duplicate ? null : i.number),
           currency: i.currency,
           createdById: a,
-          customerReference: i.customer_reference,
-          deliveryAddress: i.delivery_address,
-          evidenceId: i.evidence_id,
+          ...header,
           notes: i.notes,
           freightEstimate: i.freight ? d(i.freight.estimate) : null,
           freightTermsSnapshot: i.freight
@@ -238,7 +215,6 @@ export class OtcPtpService {
                 basis: i.freight.basis,
                 estimate: i.freight.estimate,
                 tax_mode: i.freight.tax_mode,
-                tax_rule_id: i.freight.tax_rule_id ?? null,
               }
             : Prisma.DbNull,
           lines: {
@@ -247,7 +223,9 @@ export class OtcPtpService {
               productId: x.product_id,
               orderedQuantity: d(x.quantity),
               unitPrice: d(x.unit_price),
-              ...(masterSnapshots[index] ? { taxSnapshot: masterSnapshots[index] } : {}),
+              discountRate: d(x.discount_rate ?? "0"),
+              warehouseId: lineWarehouseIds[index],
+              ...(duplicate ? {uomId:x.duplicateUomId} : {}),
             })),
           },
         },
@@ -262,48 +240,17 @@ export class OtcPtpService {
         after: o,
       });
       return o;
-    });
   }
-  async setPaymentPolicy(c: string, a: string, customerId: string, i: any) {
-    return prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM customers WHERE id = ${customerId}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
-      const customer = await tx.customer.findFirst({
-        where: { id: customerId, companyId: c, state: "ACTIVE" },
-      });
-      if (!customer) throw new NotFoundException("Pelanggan tidak ditemukan.");
-      if (
-        i.mode === "TEMPO" &&
-        (i.top_days === null || i.top_days === undefined || !i.credit_limit)
-      )
-        throw new ConflictException("TOP_AND_CREDIT_LIMIT_REQUIRED");
-      if (i.mode === "TEMPO" && i.past_due_grace_days == null)
-        throw new ConflictException("PAST_DUE_POLICY_REQUIRED");
-      if (i.frozen && !i.freeze_reason?.trim())
-        throw new ConflictException("FREEZE_REASON_REQUIRED");
-      const policy = await tx.customerPaymentPolicy.create({
-        data: {
-          companyId: c,
-          customerId,
-          mode: i.mode,
-          topDays: i.top_days ?? null,
-          creditLimit: i.credit_limit ? d(i.credit_limit) : null,
-          pastDueGraceDays: i.past_due_grace_days ?? null,
-          frozen: i.frozen ?? false,
-          freezeReason: i.freeze_reason ?? null,
-          effectiveFrom: i.effective_from ? new Date(i.effective_from) : new Date(),
-          createdById: a,
-        },
-      });
-      await this.audit.recordWith(tx, {
-        companyId: c,
-        actorId: a,
-        action: "customer.payment_policy.created",
-        resourceType: "customer_payment_policy",
-        resourceId: policy.id,
-        after: policy,
-      });
-      return policy;
-    });
+  async duplicateSalesOrder(c:string,a:string,id:string,key:string) {
+    return transactionCommand(c,a,`sales-orders/${id}/duplicate`,key,{id},tx=>this.duplicateSalesOrderTx(tx,c,a,id));
+  }
+  async duplicateSalesOrderTx(tx:Prisma.TransactionClient,c:string,a:string,id:string) {
+    const source=await tx.salesOrder.findFirst({where:{companyId:c,id},include:{lines:{orderBy:{id:"asc"}}}});
+    if(!source) throw new NotFoundException("SO tidak ditemukan.");
+    const input=createSalesOrderSchema.parse({customer_id:source.customerId,currency:source.currency,lines:source.lines.map(l=>({product_id:l.productId,quantity:l.orderedQuantity.toString(),unit_price:"0",...(l.warehouseId?{warehouse_id:l.warehouseId}:{})}))});
+    const copy=await this.createSalesOrderTx(tx,c,a,{...input,lines:input.lines.map((line,index)=>({...line,duplicateUomId:source.lines[index]!.uomId}))},true);
+    await this.audit.recordWith(tx,{companyId:c,actorId:a,action:"sales_order.duplicated",resourceType:"sales_order",resourceId:copy.id,metadata:{source_id:id}});
+    return copy;
   }
   async submitSalesOrder(c: string, a: string, id: string, key: string, version?: number) {
     return transactionCommand(
@@ -328,100 +275,31 @@ export class OtcPtpService {
         if (version !== undefined && o.version !== version)
           throw new ConflictException("ORDER_VERSION_CHANGED");
         if (!["DRAFT", "OPEN"].includes(o.state)) throw new ConflictException("ORDER_NOT_OPEN");
-        if (o.state === "OPEN" && !o.lines.some((l) => l.backorderQuantity.gt(0))) {
+        if (o.state === "OPEN") {
           if (version !== undefined) {
             await assertPriceGrants(tx, c, o.lines);
-            await checkCredit(tx, c, o.customerId, o.currency, o.id);
           }
           return o;
         }
-        if (o.state === "OPEN" && version === undefined)
-          throw new ConflictException("REALLOCATION_COMMAND_REQUIRED");
-        await requireEvidence(tx, c, o.evidenceId ?? undefined, "SALES_ORDER");
-        if (o.state === "DRAFT") await priceOrder(tx, c, o.customerId, o.currency, o.lines);
-        else await assertPriceGrants(tx, c, o.lines);
-        const policy = await checkCredit(tx, c, o.customerId, o.currency, o.id);
-        const lockedLots = await eligibleLots(
-          tx,
-          c,
-          o.lines.map((x) => x.productId),
-        );
-        const alloc: any[] = [];
-        const shortage: any[] = [];
-        for (const line of o.lines) {
-          const pending =
-            o.state === "DRAFT"
-              ? line.orderedQuantity.sub(line.closedQuantity)
-              : line.backorderQuantity;
-          let rem = d(pending);
-          for (const lot of lockedLots.filter((x) => x.productId === line.productId)) {
-            const av = d(lot.quantityOnHand).sub(lot.quantityReserved);
-            if (av.lte(0) || rem.lte(0)) continue;
-            const q = av.lt(rem) ? av : rem;
-            alloc.push({ lineId: line.id, lotId: lot.id, q });
-            rem = rem.sub(q);
-            await tx.stockLot.update({
-              where: { id: lot.id },
-              data: { quantityReserved: { increment: q } },
-            });
-            lot.quantityReserved = lot.quantityReserved.add(q);
-            await tx.inventoryMovement.create({
-              data: {
-                companyId: c,
-                stockLotId: lot.id,
-                kind: "RESERVATION",
-                quantity: q,
-                unitCost: lot.unitCost,
-                sourceType: "SALES_ORDER",
-                sourceId: o.id,
-                idempotencyKey: `${key}:${line.id}:${lot.id}`,
-              },
-            });
-          }
-          await tx.salesOrderLine.update({
-            where: { id: line.id },
-            data: { allocatedQuantity: { increment: pending.sub(rem) }, backorderQuantity: rem },
-          });
-          if (rem.gt(0)) shortage.push({ productId: line.productId, quantity: rem });
-        }
-        if (alloc.length) {
-          const reservation =
-            (o.paymentSnapshot as { mode?: string } | null)?.mode === "PREPAY" ||
-            (!o.paymentSnapshot && policy.mode === "PREPAY")
-              ? await reservationExpiry(tx, c)
-              : null;
-          await tx.fulfillmentBatch.create({
-            data: {
-              reservationExpiresAt: reservation?.expiresAt ?? null,
-              reservationSnapshot: reservation?.snapshot ?? Prisma.DbNull,
-              companyId: c,
-              salesOrderId: o.id,
-              number: await this.num(tx, c, "fulfillment", "FUL"),
-              allocations: {
-                create: alloc.map((x) => ({
-                  salesOrderLineId: x.lineId,
-                  stockLotId: x.lotId,
-                  quantity: x.q,
-                })),
-              },
-            },
-            include: { allocations: true },
-          });
-        }
-        // Backorder is a requirement for logistics review, not an automatic purchase request.
-        await checkCredit(tx, c, o.customerId, o.currency, o.id);
+
+        await validateOrderEvidence(tx, c, o.customerReference, o.evidenceId);
+        await priceOrder(tx, c, o.customerId, o.currency, o.lines);
+        const policy = await currentPaymentPolicy(tx, c, o.customerId, o.paymentTermCode);
+        // Release 1: SO records demand only. Stock is checked and consumed at SJ issue.
         const u = await tx.salesOrder.update({
           where: { id: o.id },
           data: {
             state: "OPEN",
             version: { increment: 1 },
             submittedAt: o.submittedAt ?? new Date(),
+            // Terms of the customer at submission (stage 2b: customer default term + credit).
             paymentSnapshot: o.paymentSnapshot ?? {
-              policy_id: policy.id,
+              term_code: policy.termCode,
+              term_label: policy.termLabel,
               mode: policy.mode,
-              top_days: policy.mode === "COD" ? 0 : policy.topDays,
+              top_days: policy.topDays,
               credit_limit: policy.creditLimit?.toString() ?? null,
-              effective_from: policy.effectiveFrom.toISOString(),
+              evaluated_at: new Date().toISOString(),
             },
           },
           include: {
@@ -563,17 +441,9 @@ export class OtcPtpService {
             sum.add(lineAmounts(allocation.salesOrderLine, allocation.quantity).total),
           d("0"),
         );
-        const receipts = await tx.customerReceipt.aggregate({
-          where: {
-            companyId: c,
-            fulfillmentBatchId: b.id,
-            state: "POSTED",
-            currency: b.salesOrder.currency,
-          },
-          _sum: { unallocatedAmount: true },
-        });
-        if ((receipts._sum.unallocatedAmount ?? d("0")).lt(required))
-          throw new ConflictException("PREPAYMENT_REQUIRED");
+        const funds = await availablePrepayFunds(tx, c, { id: b.id, salesOrderId: b.salesOrderId, currency: b.salesOrder.currency });
+        if (funds.lt(required)) throw new ConflictException("PREPAYMENT_REQUIRED");
+        await bindOrderAdvancesToBatch(tx, c, { id: b.id, salesOrderId: b.salesOrderId, currency: b.salesOrder.currency }, required);
       }
       for (const x of b.allocations) {
         if (x.quantity.lte(0)) continue;
@@ -1077,6 +947,7 @@ export class OtcPtpService {
     });
   }
   async issueInvoice(c: string, a: string, id: string, key: string) {
+    throw new ConflictException("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
     return transactionCommand(c, a, `fulfillments/${id}/issue-invoice`, key, { id }, async (tx) => {
       const batch = await tx.fulfillmentBatch.findFirst({
         where: { id, companyId: c },
@@ -1116,6 +987,11 @@ export class OtcPtpService {
       return invoice;
     });
   }
+
+  /** Release 1 invoice source: an issued Surat Jalan, exactly once. */
+  async createInvoiceFromDeliveryNote(c: string, a: string, input: unknown, key: string) {
+    return createAndPostInvoice(c, a, input, key);
+  }
   async saveInvoiceDraft(
     c: string,
     a: string,
@@ -1128,6 +1004,7 @@ export class OtcPtpService {
     },
     key: string,
   ) {
+    throw new ConflictException("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
     return transactionCommand(c, a, `invoice-drafts/${id ?? "new"}`, key, input, async (tx) => {
       const ref = await tx.deliveryReceipt.findFirst({
         where: { companyId: c, id: input.delivery_receipt_id },
@@ -1253,6 +1130,7 @@ export class OtcPtpService {
     });
   }
   async postInvoice(c: string, a: string, rid: string, key?: string) {
+    throw new ConflictException("RELEASE_1_INVOICE_SOURCE_DELIVERY_NOTE_REQUIRED");
     return transactionCommand(
       c,
       a,
@@ -1940,98 +1818,15 @@ export class OtcPtpService {
   }
 
   async invoiceCandidates(c: string) {
-    const batches = await prisma.fulfillmentBatch.findMany({
-      where: { companyId: c, state: "ALLOCATED", pickList: { state: "CHECKED" } },
-      include: { salesOrder: { include: { customer: true } }, pickList: { include: { lines: { include: { allocation: { include: { salesOrderLine: { include: { product: { include: { baseUom: true } }, Uom: true } } } } } } } } },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100,
-    });
-    const ids = batches.map((b) => b.id);
-    const invoices = await prisma.salesInvoice.findMany({ where: { companyId: c, fulfillmentBatchId: { in: ids }, state: { in: ["POSTED", "ISSUED_WAITING_POD"] } }, select: { id: true, number: true, state: true, fulfillmentBatchId: true } });
-    const used = new Set(invoices.map((i) => i.fulfillmentBatchId));
-    const company = await prisma.company.findUniqueOrThrow({ where: { id: c } });
-    return batches.filter((b) => !used.has(b.id)).map((b) => {
-      const lines = b.pickList!.lines.filter((l) => l.checkedQuantity.gt(0));
-      const allocations = lines.map((l) => ({ product_code: l.allocation.salesOrderLine.product.code, product: l.allocation.salesOrderLine.product.name, unit: l.allocation.salesOrderLine.Uom?.name ?? l.allocation.salesOrderLine.product.baseUom.name, quantity: l.checkedQuantity, unit_price: l.allocation.salesOrderLine.unitPrice, tax_snapshot: l.allocation.salesOrderLine.taxSnapshot, amounts: lineAmounts(l.allocation.salesOrderLine, l.checkedQuantity) }));
-      const subtotal = allocations.reduce((s, l) => s.add(l.amounts.net), d("0"));
-      const tax = allocations.reduce((s, l) => s.add(l.amounts.tax), d("0")).add(b.freightTaxAmount);
-      return { id: b.id, sourceType: "PACKING_LIST", packingListId: b.pickList!.id, checkedAt: b.pickList!.checkedAt, fulfillmentBatch: { id: b.id, number: b.number, freightAmount: b.freightAmount, freightTaxAmount: b.freightTaxAmount }, salesOrder: b.salesOrder, snapshot: { company: company.name, customer: b.salesOrder.customer.name, currency: b.salesOrder.currency, address: b.salesOrder.deliveryAddress, reference: b.salesOrder.customerReference, payment: b.salesOrder.paymentSnapshot, allocations, subtotal, tax, total: subtotal.add(tax).add(b.freightAmount), freight: { amount: b.freightAmount, tax: b.freightTaxAmount } } };
-    });
+    return (await invoiceSourceCandidates(c, {})).rows;
   }
 
   async createCustomerReceipt(c: string, a: string, customerId: string, i: any, key: string) {
     return transactionCommand(c, a, `customers/${customerId}/receipt`, key, i, async (tx) => {
-      await lockCustomer(tx, c, customerId);
-      await requireEvidence(tx, c, i.evidence_id, "PAYMENT");
       if (!i.bank_reference?.trim()) throw new ConflictException("BANK_REFERENCE_REQUIRED");
-      const existing = await tx.customerReceipt.findUnique({
-        where: { companyId_idempotencyKey: { companyId: c, idempotencyKey: key } },
-        include: { allocations: true },
-      });
-      if (existing) return existing;
-      const customer = await tx.customer.findFirst({
-        where: { id: customerId, companyId: c, state: "ACTIVE" },
-      });
-      if (!customer) throw new NotFoundException("Pelanggan tidak ditemukan.");
-      if (i.fulfillment_batch_id) {
-        const batch = await tx.fulfillmentBatch.findFirst({
-          where: { id: i.fulfillment_batch_id, companyId: c, salesOrder: { customerId } },
-          include: { salesOrder: true },
-        });
-        if (!batch) throw new ConflictException("FULFILLMENT_CUSTOMER_MISMATCH");
-        if (batch.salesOrder.currency !== i.currency)
-          throw new ConflictException("FULFILLMENT_CURRENCY_MISMATCH");
-        if (["CANCELLED", "CLOSED"].includes(batch.salesOrder.state) || batch.state === "CANCELLED")
-          throw new ConflictException("FULFILLMENT_NOT_OPEN");
-      }
-      const receipt = await tx.customerReceipt.create({
-        data: {
-          companyId: c,
-          customerId,
-          fulfillmentBatchId: i.fulfillment_batch_id,
-          externalReference: i.external_reference,
-          bankReference: i.bank_reference,
-          bankAccountId: i.bank_account_id,
-          evidenceId: i.evidence_id,
-          receivedAt: i.received_at ? new Date(i.received_at) : new Date(),
-          amount: d(i.amount),
-          unallocatedAmount: d(i.amount),
-          currency: i.currency,
-          idempotencyKey: key,
-          createdById: a,
-        },
-      });
-      await postLedger(tx, a, {
-        data: [
-          {
-            companyId: c,
-            kind: "CASH_RECEIPT",
-            sourceType: "CUSTOMER_RECEIPT",
-            sourceId: receipt.id,
-            currency: receipt.currency,
-            debit: receipt.amount,
-            credit: d("0"),
-          },
-          {
-            companyId: c,
-            kind: "CUSTOMER_ADVANCE",
-            sourceType: "CUSTOMER_RECEIPT",
-            sourceId: receipt.id,
-            currency: receipt.currency,
-            debit: d("0"),
-            credit: receipt.amount,
-          },
-        ],
-      });
-      await this.audit.recordWith(tx, {
-        companyId: c,
-        actorId: a,
-        action: "customer_receipt.posted",
-        resourceType: "customer_receipt",
-        resourceId: receipt.id,
-        after: receipt,
-      });
-      await postAdvanceTax(tx, c, a, receipt.id);
-      return receipt;
+      return postCustomerReceiptTx(tx,c,a,{customerId,fulfillmentBatchId:i.fulfillment_batch_id,amount:i.amount,
+        receivedAt:i.received_at ? new Date(i.received_at) : new Date(), bankAccountId:i.bank_account_id,
+        bankReference:i.bank_reference,evidenceId:i.evidence_id,idempotencyKey:key,currency:i.currency,externalReference:i.external_reference});
     });
   }
 
@@ -2045,6 +1840,7 @@ export class OtcPtpService {
       await tx.$queryRaw`SELECT id FROM customer_receipts WHERE id = ${receiptId}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
       const receipt = await tx.customerReceipt.findFirst({
         where: { id: receiptId, companyId: c },
+        include: { allocations: true, fulfillmentBatch: { select: { salesOrderId: true } } },
       });
       if (!receipt) throw new NotFoundException("Penerimaan pelanggan tidak ditemukan.");
       await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${i.invoice_id}::uuid AND company_id = ${c}::uuid FOR UPDATE`;
@@ -2053,7 +1849,9 @@ export class OtcPtpService {
       });
       if (!invoice || invoice.customerId !== receipt.customerId)
         throw new ConflictException("RECEIPT_INVOICE_MISMATCH");
-      if (receipt.fulfillmentBatchId && invoice.fulfillmentBatchId !== receipt.fulfillmentBatchId)
+      if (receipt.salesOrderId && invoice.salesOrderId !== receipt.salesOrderId)
+        throw new ConflictException("RECEIPT_FUNDS_BOUND_TO_ANOTHER_ORDER");
+      if (!receiptBelongsToInvoice(receipt, invoice))
         throw new ConflictException("RECEIPT_FUNDS_BOUND_TO_ANOTHER_FULFILLMENT");
       if (
         receipt.state !== "POSTED" ||
@@ -2061,6 +1859,10 @@ export class OtcPtpService {
         receipt.currency !== invoice.currency
       )
         throw new ConflictException("RECEIPT_INVOICE_STATE_OR_CURRENCY_MISMATCH");
+      const priorAllocation = receipt.allocations.find((row) => row.invoiceId === invoice.id);
+      if (priorAllocation) return tx.salesInvoice.findUniqueOrThrow({ where: { id: invoice.id } });
+      if (receipt.allocations.length > 0)
+        throw new ConflictException("RECEIPT_ALREADY_ALLOCATED");
       const amount = d(i.amount);
       if (
         amount.lte(0) ||
@@ -2513,3 +2315,7 @@ export class OtcPtpService {
     });
   }
 }
+
+
+
+

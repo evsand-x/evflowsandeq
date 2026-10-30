@@ -3,7 +3,6 @@ import {
   confirmPodSchema,
   createSalesOrderSchema,
   openingStockSchema,
-  paymentPolicySchema,
   pickListConfirmSchema,
   createPurchaseOrderSchema,
   createSupplierInvoiceSchema,
@@ -67,9 +66,6 @@ describe("OTC/P2P contracts", () => {
     );
   });
   it("validates hardening policy and pick/check payloads", () => {
-    expect(
-      paymentPolicySchema.parse({ mode: "TEMPO", top_days: 30, credit_limit: "100000" }).mode,
-    ).toBe("TEMPO");
     expect(
       pickListConfirmSchema.safeParse({
         lines: [

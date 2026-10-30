@@ -17,6 +17,8 @@ export type Role = {
   name: string;
   description: string | null;
   active: boolean;
+  discount_limit?: string | null;
+  version?: number;
   member_count: number;
   permissions: Grant[];
 };
@@ -26,6 +28,8 @@ export type User = {
   email: string;
   display_name: string;
   active: boolean;
+  discount_limit?: string | null;
+  version?: number;
   last_active_at: string | null;
   roles: Pick<Role, "id" | "code" | "name">[];
   effective_permissions: Omit<Grant, "permission_id">[];
@@ -43,6 +47,7 @@ export const actionColumns = [
 ] as const;
 
 export const actionLabels: Record<string, string> = {
+  view_price: "Lihat harga",
   read: "Lihat",
   create: "Buat",
   update: "Ubah",
@@ -87,13 +92,17 @@ const resourceLabels: Record<string, [string, string, boolean?]> = {
   "role.permission": ["Setting", "Matriks Hak Akses"],
   customer_return: ["Warehouse & Logistik", "Retur Pelanggan"],
   permission: ["Setting", "Daftar Hak Akses"],
-  operational_policy: ["Setting", "Kebijakan Operasional"],
+  setting_general: ["Setting", "Kebijakan Umum"],
+  terms_credit: ["Setting", "Termin & Kredit"],
+  customer_credit: ["Master Data", "Kredit & Termin Pelanggan"],
+  tax_setting: ["Setting", "Pajak"],
+  deduction_type: ["Setting", "Jenis Potongan"],
+  account_mapping: ["Setting", "Pemetaan Akun"],
   audit_event: ["Setting", "Audit"],
   crm_prospect: ["Sales & Marketing", "Prospek"],
   crm_contact: ["Sales & Marketing", "Kontak"],
   crm_customer: ["Sales & Marketing", "Institusi terkait prospek"],
   account: ["Finance", "Akun"],
-  tax_master: ["Finance", "Daftar & Aturan Pajak"],
   tax_output: ["Finance", "Faktur Keluaran"],
   tax_input: ["Finance", "Faktur Masukan"],
   crm_opportunity: ["Sales & Marketing", "Peluang"],
@@ -140,9 +149,9 @@ const resourceLabels: Record<string, [string, string, boolean?]> = {
   journal: ["Finance", "Jurnal"],
   "journal.reverse": ["Finance", "Persetujuan Pembalikan Jurnal"],
   bank_statement: ["Finance", "Rekening Koran"],
+  bank_account: ["Finance", "Rekening Bank"],
   bank_transaction: ["Finance", "Transaksi Bank"],
   bank_reconciliation: ["Finance", "Rekonsiliasi Bank"],
-  posting_profile: ["Finance", "Profil Posting"],
   finance_period: ["Setting", "Periode & Closing"],
   numbering_rule: ["Setting", "Penomoran Dokumen"],
   transaction_approval: ["Setting", "Pengaturan Persetujuan"],

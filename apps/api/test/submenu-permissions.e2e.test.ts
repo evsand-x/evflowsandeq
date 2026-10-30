@@ -1,3 +1,4 @@
+import { DeliveryNoteController } from "../../../packages/backend/src/sales/delivery-note.controller";
 import { AccountsController } from "../../../packages/backend/src/finance/accounts.controller";
 import { FinanceControlsController } from "../../../packages/backend/src/finance/controls.controller";
 import { OperationalTaxController } from "../../../packages/backend/src/finance/operational-tax.controller";
@@ -23,6 +24,7 @@ describe("independent submenu HTTP permissions", () => {
   beforeAll(async () => {
     const module = await Test.createTestingModule({
       controllers: [
+        DeliveryNoteController,
         AccountsController,
         FinanceControlsController,
         CrmController,
@@ -38,6 +40,7 @@ describe("independent submenu HTTP permissions", () => {
           useValue: {
             batch: vi.fn(async () => ({ id: "batch" })),
             proforma: vi.fn(async () => ({ id: "proforma" })),
+          list: vi.fn(async () => ({ rows: [], total: 0 })),
           },
         },
         { provide: OtcPtpService, useValue: {} },
@@ -73,10 +76,67 @@ describe("independent submenu HTTP permissions", () => {
     await app.init();
   });
   afterAll(async () => app.close());
+  it("rejects SO-only principals on every Surat Jalan endpoint", async () => {
+    for (const grants of [
+      "sales_order.read,sales_order.create,sales_order.submit",
+      "sales_invoice.read,sales_invoice.post",
+    ]) {
+      await request(app.getHttpServer())
+        .get("/delivery-notes")
+        .set("x-permissions", grants)
+        .expect(403);
+      await request(app.getHttpServer())
+        .get("/delivery-notes/00000000-0000-4000-8000-000000000001")
+        .set("x-permissions", grants)
+        .expect(403);
+      await request(app.getHttpServer())
+        .get("/delivery-notes/orders/00000000-0000-4000-8000-000000000001/delivered")
+        .set("x-permissions", grants)
+        .expect(403);
+      await request(app.getHttpServer())
+        .get("/delivery-notes/form?sales_order_id=00000000-0000-4000-8000-000000000001")
+        .set("x-permissions", grants)
+        .expect(403);
+      await request(app.getHttpServer())
+        .post("/delivery-notes")
+        .set("x-permissions", grants)
+        .send({})
+        .expect(403);
+      await request(app.getHttpServer())
+        .patch("/delivery-notes/00000000-0000-4000-8000-000000000001")
+        .set("x-permissions", grants)
+        .send({})
+        .expect(403);
+      await request(app.getHttpServer())
+        .post("/delivery-notes/00000000-0000-4000-8000-000000000001/issue")
+        .set("x-permissions", grants)
+        .send({})
+        .expect(403);
+      await request(app.getHttpServer())
+        .post("/delivery-notes/00000000-0000-4000-8000-000000000001/receipt")
+        .set("x-permissions", grants)
+        .send({})
+        .expect(403);
+    }
+  });
+  it("keeps receipt writes within the Surat Jalan command grant and company scope", async () => {
+    for (const grants of ["outbound_shipping.read", "delivery_receipt.read,fulfillment.pod"]) {
+      await request(app.getHttpServer())
+        .post("/delivery-notes/00000000-0000-4000-8000-000000000001/receipt")
+        .set("x-permissions", grants).send({}).expect(403);
+    }
+    await request(app.getHttpServer())
+      .post("/delivery-notes/00000000-0000-4000-8000-000000000001/receipt")
+      .set("x-permissions", "fulfillment.dispatch").set("x-foreign", "1").send({}).expect(403);
+    // An authorized dispatcher reaches command validation, not an unrelated submenu guard.
+    await request(app.getHttpServer())
+      .post("/delivery-notes/00000000-0000-4000-8000-000000000001/receipt")
+      .set("x-permissions", "fulfillment.dispatch").send({}).expect(400);
+  });
   it("requires independent account permissions and scopes list queries", async () => {
     await request(app.getHttpServer())
       .post("/finance-controls/configuration/account")
-      .set("x-permissions", "posting_profile.manage")
+      .set("x-permissions", "account_mapping.manage")
       .send({})
       .expect(403);
     await request(app.getHttpServer())
@@ -118,9 +178,108 @@ describe("independent submenu HTTP permissions", () => {
       transaction.mockRestore();
     }
   });
+  it("guards the account mapping endpoints with account_mapping.read/manage only", async () => {
+    // The retired posting_profile.* grants no longer open Setting > Pemetaan Akun.
+    await request(app.getHttpServer())
+      .get("/finance-controls/configuration")
+      .set("x-permissions", "posting_profile.read")
+      .expect(403);
+    await request(app.getHttpServer())
+      .post("/finance-controls/configuration/profile")
+      .set("x-permissions", "posting_profile.manage")
+      .send({})
+      .expect(403);
+    // account_mapping.read alone never writes: account_mapping.manage required.
+    await request(app.getHttpServer())
+      .post("/finance-controls/configuration/profile")
+      .set("x-permissions", "account_mapping.read")
+      .send({})
+      .expect(403);
+    const accounts = vi.spyOn(prisma.financeAccount, "findMany").mockResolvedValue([]);
+    const periods = vi.spyOn(prisma.financePeriod, "findMany").mockResolvedValue([]);
+    const profiles = vi.spyOn(prisma.financePostingProfile, "findMany").mockResolvedValue([]);
+    try {
+      await request(app.getHttpServer())
+        .get("/finance-controls/configuration")
+        .set("x-permissions", "account_mapping.read")
+        .expect(200);
+    } finally {
+      accounts.mockRestore();
+      periods.mockRestore();
+      profiles.mockRestore();
+    }
+  });
+  it("keeps period and bank setup independent of account_mapping.manage", async () => {
+    for (const kind of ["period", "bank"])
+      await request(app.getHttpServer())
+        .post(`/finance-controls/configuration/${kind}`)
+        .set("x-permissions", "account_mapping.manage")
+        .send({})
+        .expect(403);
+    // period kind requires the period permission: passes the guard (body then fails validation, not 403).
+    const res = await request(app.getHttpServer())
+      .post("/finance-controls/configuration/period")
+      .set("x-permissions", "finance_period.close")
+      .send({});
+    expect(res.status).not.toBe(403);
+    await request(app.getHttpServer())
+      .post("/finance-controls/configuration/bank")
+      .set("x-permissions", "finance_period.close,account_mapping.manage")
+      .send({})
+      .expect(403);
+  });
+  it("mapping reader gets account options without account.read; other sections stay hidden", async () => {
+    const accounts = vi
+      .spyOn(prisma.financeAccount, "findMany")
+      .mockResolvedValue([{ id: "a" }] as never);
+    const periods = vi
+      .spyOn(prisma.financePeriod, "findMany")
+      .mockResolvedValue([{ id: "p" }] as never);
+    const profiles = vi
+      .spyOn(prisma.financePostingProfile, "findMany")
+      .mockResolvedValue([{ id: "f" }] as never);
+    try {
+      const mapping = await request(app.getHttpServer())
+        .get("/finance-controls/configuration")
+        .set("x-permissions", "account_mapping.read")
+        .expect(200);
+      expect(mapping.body.data).toEqual({
+        accounts: [],
+        account_options: [{ id: "a" }],
+        periods: [],
+        profiles: [{ id: "f" }],
+      });
+      expect(accounts).toHaveBeenCalledTimes(1);
+      expect(accounts).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ active: true, accountType: "DETAIL" }),
+          select: { id: true, code: true, name: true },
+        }),
+      );
+      const chart = await request(app.getHttpServer())
+        .get("/finance-controls/configuration")
+        .set("x-permissions", "account.read")
+        .expect(200);
+      expect(chart.body.data).toEqual({
+        accounts: [{ id: "a" }],
+        account_options: [],
+        periods: [],
+        profiles: [],
+      });
+      await request(app.getHttpServer())
+        .get("/finance-controls/configuration")
+        .set("x-permissions", "journal.read")
+        .expect(403);
+    } finally {
+      accounts.mockRestore();
+      periods.mockRestore();
+      profiles.mockRestore();
+    }
+  });
   it("isolates all three tax menus and scopes their source reads", async () => {
     for (const [route, permission] of [
-      ["master", "tax_master.read"],
+      // The tax master lives in Setting > Pajak (tax_setting.*); faktur menus keep their own grants.
+      ["master", "tax_setting.read"],
       ["invoices/output", "tax_output.read"],
       ["invoices/input", "tax_input.read"],
     ]) {
@@ -142,11 +301,29 @@ describe("independent submenu HTTP permissions", () => {
       .get("/tax/invoices/input")
       .set("x-permissions", "tax_output.read")
       .expect(403);
-    await request(app.getHttpServer())
-      .post("/tax/master")
-      .set("x-permissions", "tax_master.read")
-      .send({})
-      .expect(403);
+    // Retired Finance tax master grants and faktur grants open nothing on the tax master.
+    for (const retired of [
+      "tax_master.read",
+      "tax_master.create",
+      "tax_master.update",
+      "tax_output.read",
+    ])
+      await request(app.getHttpServer())
+        .get("/tax/master")
+        .set("x-permissions", retired)
+        .expect(403);
+    for (const path of ["/tax/master", "/tax/master/00000000-0000-4000-8000-000000000001/default"])
+      for (const grant of ["tax_setting.read", "tax_master.create", "tax_master.update"])
+        await request(app.getHttpServer())
+          .post(path)
+          .set("x-permissions", grant)
+          .send({})
+          .expect(403);
+    for (const route of ["invoices/output", "invoices/input"])
+      await request(app.getHttpServer())
+        .get(`/tax/${route}`)
+        .set("x-permissions", "tax_setting.read")
+        .expect(403);
     await request(app.getHttpServer())
       .post("/tax/invoices/output/00000000-0000-4000-8000-000000000001")
       .set("x-permissions", "tax_input.update")
@@ -322,6 +499,72 @@ describe("independent submenu HTTP permissions", () => {
         .get(`/operations/outbound/${other}/${id}`)
         .set("x-permissions", permission!)
         .expect(403);
+    }
+  });
+  it("does not invent a delivery_note grant and keeps Surat Jalan on outbound shipping", async () => {
+    await request(app.getHttpServer())
+      .get("/operations/outbound/shipping/00000000-0000-4000-8000-000000000001")
+      .set("x-permissions", "delivery_note.read")
+      .expect(403);
+    await request(app.getHttpServer())
+      .get("/operations/outbound/shipping/00000000-0000-4000-8000-000000000001")
+      .set("x-permissions", "outbound_shipping.read")
+      .expect(200);
+  });
+  it("keeps SO, Surat Jalan and Invoice HTTP grants independent", async () => {
+    const find = vi.spyOn(prisma.deliveryNote, "findMany").mockResolvedValue([]);
+    const count = vi.spyOn(prisma.deliveryNote, "count").mockResolvedValue(0);
+    const warehouses = vi.spyOn(prisma.warehouse, "findMany").mockResolvedValue([]);
+    const company = vi.spyOn(prisma.company, "findUnique").mockResolvedValue(null);
+    const matrix = [
+      {
+        name: "SO",
+        path: "/operations/lists/orders?page=1",
+        grant: "sales_order.read",
+        denied: ["outbound_shipping.read", "sales_invoice.read"],
+      },
+      {
+        name: "Surat Jalan",
+        path: "/delivery-notes?page=1",
+        grant: "outbound_shipping.read",
+        denied: ["sales_order.read", "sales_invoice.read"],
+      },
+      {
+        name: "Invoice",
+        path: "/operations/lists/invoices?page=1",
+        grant: "sales_invoice.read,sales_invoice.view_price",
+        denied: ["sales_order.read", "outbound_shipping.read", "sales_invoice.read", "sales_invoice.view_price"],
+      },
+    ];
+    try {
+      for (const entry of matrix) {
+        await request(app.getHttpServer())
+          .get(entry.path)
+          .set("x-permissions", entry.grant)
+          .expect(200);
+        for (const denied of entry.denied) {
+          await request(app.getHttpServer())
+            .get(entry.path)
+            .set("x-permissions", denied)
+            .expect(403);
+        }
+      }
+      // Invoice tabs of the Surat Jalan list are invoice data.
+      for (const tab of ["UNINVOICED", "INVOICED"]) {
+        await request(app.getHttpServer())
+          .get(`/delivery-notes?tab=${tab}`)
+          .set("x-permissions", "outbound_shipping.read")
+          .expect(403);
+        await request(app.getHttpServer())
+          .get(`/delivery-notes?tab=${tab}`)
+          .set("x-permissions", "outbound_shipping.read,sales_invoice.read")
+          .expect(200);
+      }
+    } finally {
+      find.mockRestore();
+      count.mockRestore();
+      warehouses.mockRestore();
+      company.mockRestore();
     }
   });
   it("requires independent Proforma and Backorder read capabilities", async () => {

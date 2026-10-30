@@ -73,16 +73,101 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const problem = (await response.json().catch(() => undefined)) as
       | { detail?: string; message?: string }
       | undefined;
+    const translated = translateProblem(problem);
     throw new ApiError(
       response.status,
-      problem?.detail ?? problem?.message ?? `Request gagal (${response.status}).`,
-      problem,
+      translated.message || `Request gagal (${response.status}).`,
+      translated.settings_href ? { ...problem, settings_href: translated.settings_href } : problem,
     );
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
+/** The Setting page that fixes this error, when the API problem carries one. */
+export function settingsHrefOf(error: unknown): string | undefined {
+  if (!(error instanceof ApiError)) return undefined;
+  const href = (error.problem as { settings_href?: unknown } | undefined)?.settings_href;
+  return typeof href === "string" && href.startsWith("/setting/") ? href : undefined;
+}
+
 export function resetCsrf() {
   csrfToken = undefined;
+}
+
+/** Turns configuration error codes into guidance that points at the Setting page to fix them. */
+export function translateProblem(problem: { detail?: string; message?: string } | undefined): {
+  message: string;
+  settings_href?: string;
+} {
+  const detail = problem?.detail ?? problem?.message ?? "";
+  if (/^NUMBERING_RULE_REQUIRED_OR_CONFLICTING:\w+$/.test(detail))
+    return {
+      message:
+        "Penomoran dokumen belum diatur. Buka Setting › Penomoran Dokumen untuk mengaktifkannya.",
+      settings_href: "/setting/numbering",
+    };
+  if (detail === "NUMBERING_DIGITS_TOO_SHORT")
+    return {
+      message:
+        "Jumlah digit urutan lebih pendek dari nomor yang sedang berjalan. Tambah jumlah digit di Setting › Penomoran Dokumen.",
+      settings_href: "/setting/numbering",
+    };
+  if (detail === "DOCUMENT_NUMBER_EXHAUSTED")
+    return {
+      message:
+        "Nomor dokumen sudah melewati jumlah digit yang diatur. Tambah jumlah digit di Setting › Penomoran Dokumen.",
+      settings_href: "/setting/numbering",
+    };
+  if (detail === "DEFAULT_SALES_TAX_REQUIRED")
+    return {
+      message:
+        "Pajak penjualan bawaan belum diatur. Tandai satu pajak sebagai bawaan penjualan di Setting › Pajak.",
+      settings_href: "/setting/tax",
+    };
+  if (detail === "POSTING_PROFILE_REQUIRED_OR_CONFLICTING")
+    return {
+      message:
+        "Pemetaan akun belum lengkap atau bentrok. Periksa Setting › Pemetaan Akun, pastikan setiap jenis jurnal memiliki satu pemetaan aktif.",
+      settings_href: "/setting/account-mapping",
+    };
+  if (detail === "IDEMPOTENCY_PAYLOAD_MISMATCH")
+    return {
+      message:
+        "Isi percobaan ulang berbeda dari transaksi sebelumnya. Muat ulang data dan periksa status transaksi.",
+    };
+  if (detail === "PAYMENT_POLICY_REQUIRED")
+    return {
+      message:
+        "Pelanggan belum punya termin bawaan dan daftar termin tidak memiliki termin COD. Tambahkan termin COD di Setting › Termin & Kredit.",
+      settings_href: "/setting/terms",
+    };
+  if (detail === "PAYMENT_TERM_INVALID")
+    return {
+      message:
+        "Termin bawaan pelanggan tidak ada lagi di daftar termin. Pilih termin lain pada data pelanggan atau periksa Setting › Termin & Kredit.",
+      settings_href: "/setting/terms",
+    };
+  const inUse = /^PAYMENT_TERM_IN_USE:(\d+)$/.exec(detail);
+  if (inUse)
+    return {
+      message: `Termin tidak dapat dihapus atau diganti kodenya karena masih menjadi termin bawaan ${inUse[1]} pelanggan. Pindahkan pelanggan tersebut ke termin lain di Master Data › Pelanggan, lalu ulangi.`,
+      settings_href: "/master-data/customers",
+    };
+  const taxMessages: Record<string, string> = {
+    TAX_DEFAULT_INVALID:
+      "Pajak bawaan harus PPN yang aktif, ditambahkan ke transaksi, dan berlaku untuk penggunaan tersebut.",
+    LINE_TAX_NOT_ALLOWED:
+      "Pajak tidak dapat dipilih per baris. Setiap baris memakai pajak penjualan bawaan dari Setting › Pajak.",
+    FREIGHT_TAX_RULE_NOT_ALLOWED:
+      "Aturan pajak ongkir tidak dapat dipilih. Ongkir kena pajak memakai pajak penjualan bawaan.",
+    TAX_DEFAULT_REQUIRED_ACTIVE:
+      "Pajak bawaan tidak dapat dinonaktifkan. Jadikan pajak lain sebagai bawaan terlebih dahulu.",
+    TAX_VERSION_CONFLICT:
+      "Pajak ini baru saja diubah orang lain. Muat ulang lalu ulangi perubahan.",
+    TAX_NAME_EXISTS: "Nama pajak sudah dipakai. Gunakan nama lain.",
+    TAX_ACCOUNT_INVALID: "Akun pajak harus akun rincian yang aktif.",
+  };
+  if (taxMessages[detail]) return { message: taxMessages[detail] };
+  return { message: detail };
 }

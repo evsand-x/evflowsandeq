@@ -484,10 +484,6 @@ export function FinanceWorkspace({
   }>("/finance-controls/reconciliation", can("journal.read") && can("inventory.cost.read"));
   const [selected, setSelected] = useState<Record<string, string>>({});
   const matchAmounts = useRef<Record<string, string>>({});
-  if (kind === "accounting")
-    return <FinanceConfiguration can={can} command={command} pending={pending} />;
-  if (kind === "tax-rules")
-    return <WithholdingRules can={can} command={command} pending={pending} />;
   if (kind === "tax-documents")
     return <OfficialTaxDocuments can={can} command={command} pending={pending} />;
   if (kind === "bank-statements")
@@ -856,9 +852,10 @@ function StatementImport({ command, pending, can }: Props) {
     </form>
   );
 }
-function FinanceConfiguration({ command, pending, can }: Props) {
+export function FinanceConfiguration({ command, pending, can }: Props) {
   const q = useData<{
     accounts: { id: string; code: string; name: string }[];
+    account_options: { id: string; code: string; name: string }[];
     periods: { id: string; startsOn: string; endsOn: string; state: string }[];
     profiles: { id: string; effectiveFrom: string; effectiveTo: string }[];
   }>("/finance-controls/configuration");
@@ -948,7 +945,7 @@ function FinanceConfiguration({ command, pending, can }: Props) {
                 {text("currency", "Mata uang")}
                 <SelectionField
                   label="Akun GL bank"
-                  options={(q.data?.data.accounts ?? []).map((a) => ({
+                  options={(q.data?.data.account_options ?? []).map((a) => ({
                     id: a.id,
                     name: `${a.code} · ${a.name}`,
                   }))}
@@ -971,7 +968,7 @@ function FinanceConfiguration({ command, pending, can }: Props) {
                   <SelectionField
                     key={k}
                     label={k}
-                    options={(q.data?.data.accounts ?? []).map((a) => ({
+                    options={(q.data?.data.account_options ?? []).map((a) => ({
                       id: a.id,
                       name: `${a.code} · ${a.name}`,
                     }))}
@@ -982,7 +979,19 @@ function FinanceConfiguration({ command, pending, can }: Props) {
               </>
             )}
           </FieldGroup>
-          <Button disabled={pending || !can("posting_profile.manage")}>Simpan Konfigurasi</Button>
+          <Button
+            disabled={
+              pending ||
+              !can(
+                {
+                  profile: "account_mapping.manage",
+                  account: "account.create",
+                  period: "finance_period.close",
+                  bank: "bank_account.manage",
+                }[kind] ?? "account_mapping.manage",
+              )
+            }
+          >Simpan Konfigurasi</Button>
         </form>
       </Panel>
       {q.error && <Notice>{String(q.error)}</Notice>}
@@ -1003,105 +1012,6 @@ function FinanceConfiguration({ command, pending, can }: Props) {
           { accessorKey: "state", header: "Status periode" },
         ]}
       />
-    </>
-  );
-}
-
-function WithholdingRules({ command, pending, can }: Props) {
-  const q = useData<
-    (TaxRule & {
-      effectiveFrom: string;
-      effectiveTo: string;
-      dppFactor: string;
-      legalReference: string;
-    })[]
-  >("/finance-controls/tax-rules", can("tax_rule.read"));
-  const customers = useData<{ customers: { id: string; name: string }[] }>(
-    "/operations/control-options/tax",
-    can("sales_tax_rule.manage"),
-  );
-  const [v, setV] = useState<Record<string, string>>({});
-  const field = (key: string, label: string, type = "text") => (
-    <TextField
-      key={key}
-      label={label}
-      type={type}
-      value={v[key] ?? ""}
-      onChange={(value) => setV((s) => ({ ...s, [key]: value }))}
-    />
-  );
-  const select = (key: string, label: string, options: { id: string; name: string }[]) => (
-    <SelectionField
-      label={label}
-      options={options}
-      value={v[key] ? [v[key]!] : []}
-      onChange={(values) => setV((s) => ({ ...s, [key]: values[0] ?? "" }))}
-    />
-  );
-  return (
-    <>
-      {(q.error || customers.error) && <Notice>{String(q.error || customers.error)}</Notice>}
-      <Panel title="Aturan Bertanggal Efektif">
-        <DataTable
-          data={q.data?.data ?? []}
-          total={q.data?.data.length ?? 0}
-          columns={[
-            { accessorKey: "taxType", header: "Kode / Jenis" },
-            {
-              id: "kind",
-              header: "Komponen",
-              cell: ({ row }) =>
-                row.original.kind === "vat_collected_by_customer"
-                  ? "PPN dipungut WAPU"
-                  : "PPh dipotong",
-            },
-            { accessorKey: "rate", header: "Tarif" },
-            { accessorKey: "dppFactor", header: "Faktor DPP" },
-            {
-              id: "effective",
-              header: "Berlaku",
-              cell: ({ row }) =>
-                `${row.original.effectiveFrom.slice(0, 10)} – ${row.original.effectiveTo.slice(0, 10)}`,
-            },
-            { accessorKey: "legalReference", header: "Sumber resmi" },
-          ]}
-        />
-      </Panel>
-      {can("sales_tax_rule.manage") && (
-        <Panel title="Form Aturan WAPU / PPh">
-          <form
-            className="web-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void command("/finance-controls/tax-rules", {
-                ...v,
-                decimal_places: Number(v.decimal_places),
-              }).catch(() => undefined);
-            }}
-          >
-            <FieldGroup className="otc-form-grid">
-              {select("customer_id", "Pelanggan", customers.data?.data.customers ?? [])}
-              {select("kind", "Komponen pajak", [
-                { id: "vat_collected_by_customer", name: "PPN dipungut WAPU" },
-                { id: "income_tax_withheld", name: "PPh dipotong" },
-              ])}
-              {field("tax_type", "Kode / jenis pajak")}
-              {field("rate", "Tarif desimal dari sumber resmi")}
-              {field("dpp_factor", "Faktor DPP")}
-              {field("decimal_places", "Jumlah desimal", "number")}
-              {select(
-                "rounding",
-                "Pembulatan",
-                ["HALF_UP", "HALF_EVEN", "DOWN"].map((id) => ({ id, name: id })),
-              )}
-              {field("effective_from", "Mulai berlaku", "date")}
-              {field("effective_to", "Berakhir (eksklusif)", "date")}
-              {field("legal_reference", "Referensi aturan resmi")}
-            </FieldGroup>
-            <Button disabled={pending}>Simpan Aturan</Button>
-          </form>
-        </Panel>
-      )}
     </>
   );
 }

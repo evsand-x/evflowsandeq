@@ -6,6 +6,8 @@ import { OtcPtpService } from "../../packages/backend/src/otc-ptp.service";
 import { AuditService } from "../../packages/backend/src/common/audit.service";
 import { processExceptionEvaluations } from "../../packages/backend/src/sales/exception-evaluation";
 import { creditExposure } from "../../packages/backend/src/sales/transaction-controls";
+import { setCustomerCredit } from "../../packages/backend/src/sales/customer-credit";
+import { ensureTestTermList } from "../../tools/qa/payment-terms-fixture";
 import { OperationsService } from "../../packages/backend/src/sales/operations.service";
 import {
   requestException,
@@ -141,36 +143,48 @@ beforeAll(async () => {
       createdById: actor,
     },
   });
-  await prisma.salesTaxRule.create({
+  // Every line uses the company default sales tax (synthetic 10%, DPP factor 1).
+  const taxAccount = await prisma.financeAccount.create({
+    data: { companyId: c, code: "TEST-PPN", name: "Synthetic PPN", category: "LIABILITY" },
+  });
+  const tax = await prisma.operationalTax.create({
     data: {
       companyId: c,
-      customerId,
-      productId,
       name: "Synthetic test only",
-      legalReference: "TEST-NOT-A-TAX-SETTING",
-      rate: "0.1",
+      kind: "PPN",
+      usage: "SALES",
+      effect: "ADD",
+      accountId: taxAccount.id,
+      percentage: "10",
       dppFactor: "1",
       decimalPlaces: 2,
       rounding: "HALF_UP",
       effectiveFrom: new Date("2020-01-01"),
-      effectiveTo: new Date("2099-01-01"),
-      createdById: actor,
+      isDefaultSales: true,
+    },
+  });
+  await prisma.operationalTaxRevision.create({
+    data: {
+      companyId: c,
+      taxId: tax.id,
+      version: tax.version,
+      snapshot: JSON.parse(JSON.stringify(tax)),
+      actorId: actor,
     },
   });
 });
 
 async function policy(limit = "100000") {
-  // Each test isolates this customer's transactions below; later timestamp wins.
-  await prisma.customerPaymentPolicy.updateMany({
-    where: { companyId: c },
-    data: { active: false },
-  });
-  return service.setPaymentPolicy(c, actor, customerId, {
-    mode: "TEMPO",
-    top_days: 30,
-    credit_limit: limit,
-    past_due_grace_days: 0,
-  });
+  // Credit attributes live on the customer (stage 2b); each call resets them.
+  await ensureTestTermList(prisma, c, actor);
+  return prisma.$transaction((tx) =>
+    setCustomerCredit(tx, new AuditService(), c, actor, customerId, {
+      default_term_code: "NET30",
+      credit_limit: limit,
+      past_due_grace_days: 0,
+      credit_frozen: false,
+    }),
+  );
 }
 async function lot(qty: string, expiry = "2090-01-01", qualityState = "AVAILABLE") {
   return prisma.stockLot.create({
@@ -196,6 +210,16 @@ async function order(qtys = ["8"], price = "10") {
     currency: "IDR",
     lines: qtys.map((quantity) => ({ product_id: productId, quantity, unit_price: price })),
   });
+}
+/**
+ * KNOWN PRODUCT GAP: taxing on advance payment (taxable_event ADVANCE) is NOT configurable in the
+ * product. Only the retired per customer x product SalesTaxRule could set it; the default sales
+ * tax always taxes on POD. Whether advance timing returns is a pending user decision (spec
+ * docs/superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). This helper rewrites the
+ * stored line snapshot only so the legacy advance-tax posting path stays covered meanwhile.
+ */
+async function forceAdvanceTaxableEventForLegacyScenario(salesOrderId: string) {
+  await prisma.$executeRaw`UPDATE sales_order_lines SET tax_snapshot = jsonb_set(tax_snapshot, '{taxable_event}', '"ADVANCE"') WHERE sales_order_id=${salesOrderId}::uuid`;
 }
 async function cleanTransactions() {
   await cleanFinanceTransactions(c);
@@ -227,11 +251,11 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await cleanTransactions();
+  await prisma.operationalTaxRevision.deleteMany({ where: { companyId: c } });
+  await prisma.operationalTax.deleteMany({ where: { companyId: c } });
   await cleanFinanceConfiguration(c);
   await prisma.transactionEvidence.deleteMany({ where: { companyId: c } });
-  await prisma.salesTaxRule.deleteMany({ where: { companyId: c } });
   await prisma.productReferencePrice.deleteMany({ where: { companyId: c } });
-  await prisma.customerPaymentPolicy.deleteMany({ where: { companyId: c } });
   await prisma.auditEvent.deleteMany({ where: { companyId: c } });
   await prisma.masterCodeSequence.deleteMany({ where: { companyId: c } });
   await prisma.documentNumberRule.deleteMany({ where: { companyId: c } });
@@ -263,14 +287,11 @@ it("reserves repeated product lines cumulatively and excludes expired/hold lots"
 });
 
 it("recognizes configured advance tax once and keeps official evidence separate from commercial invoices", async () => {
-  await prisma.salesTaxRule.updateMany({
-    where: { companyId: c },
-    data: { taxableEvent: "ADVANCE" },
-  });
-  try {
+  {
     await lot("2");
     const so = await order(["2"]);
     await service.submitSalesOrder(c, actor, so.id, randomUUID());
+    await forceAdvanceTaxableEventForLegacyScenario(so.id);
     const batch = await prisma.fulfillmentBatch.findFirstOrThrow({
       where: { salesOrderId: so.id },
       include: { pickList: { include: { lines: true } }, allocations: true },
@@ -342,11 +363,6 @@ it("recognizes configured advance tax once and keeps official evidence separate 
     });
     expect(tax._sum.credit?.toString()).toBe("2");
     expect((await reconcileGl(c)).balanced).toBe(true);
-  } finally {
-    await prisma.salesTaxRule.updateMany({
-      where: { companyId: c },
-      data: { taxableEvent: "POD" },
-    });
   }
 });
 
@@ -930,14 +946,15 @@ it("applies unlock only to approved reasons without changing master limit or sto
   expect(line.backorderQuantity.toString()).toBe("3");
   expect(
     (
-      await prisma.customerPaymentPolicy.findFirstOrThrow({ where: { companyId: c, active: true } })
+      await prisma.customer.findUniqueOrThrow({ where: { id: customerId } })
     ).creditLimit?.toString(),
   ).toBe("1");
   const next = await order(["1"]);
   await expect(service.submitSalesOrder(c, actor, next.id, randomUUID())).rejects.toThrow(
     "CREDIT_HOLD",
   );
-  await policy("1");
+  // Any change of the customer's credit attributes invalidates the unlock grant.
+  await policy("2");
   const staleVersion = (await prisma.salesOrder.findUniqueOrThrow({ where: { id: so.id } }))
     .version;
   await expect(
@@ -994,22 +1011,24 @@ it("blocks price mismatch, missing tax and frozen customer with no reservation s
   await expect(service.submitSalesOrder(c, actor, wrong.id, randomUUID())).rejects.toThrow(
     "PRICE_EXCEPTION_APPROVAL_REQUIRED",
   );
-  const rule = await prisma.salesTaxRule.findFirstOrThrow({ where: { companyId: c } });
-  await prisma.salesTaxRule.update({
-    where: { id: rule.id },
-    data: { effectiveTo: new Date("2021-01-01") },
+  await prisma.operationalTax.updateMany({
+    where: { companyId: c },
+    data: { isDefaultSales: false },
   });
   const so = await order(["1"]);
-  await expect(service.submitSalesOrder(c, actor, so.id, randomUUID())).rejects.toThrow(
-    "TAX_POLICY_REQUIRED",
-  );
-  await prisma.salesTaxRule.update({
-    where: { id: rule.id },
-    data: { effectiveTo: new Date("2099-01-01") },
-  });
-  await prisma.customerPaymentPolicy.updateMany({
-    where: { companyId: c },
-    data: { frozen: true },
+  try {
+    await expect(service.submitSalesOrder(c, actor, so.id, randomUUID())).rejects.toThrow(
+      "DEFAULT_SALES_TAX_REQUIRED",
+    );
+  } finally {
+    await prisma.operationalTax.updateMany({
+      where: { companyId: c },
+      data: { isDefaultSales: true },
+    });
+  }
+  await prisma.customer.update({
+    where: { id: customerId },
+    data: { creditFrozen: true, freezeReason: "Test freeze" },
   });
   await expect(service.submitSalesOrder(c, actor, so.id, randomUUID())).rejects.toThrow(
     "CUSTOMER_CREDIT_FROZEN",
@@ -1049,7 +1068,8 @@ it("runs SO through POD, taxed invoice and payment without double recognition an
     accepted_at: "2026-10-05T01:00:00.000Z",
     lines: [{ fulfillment_allocation_id: batch.allocations[0]!.id, accepted_quantity: "2" }],
   });
-  await prisma.customerPaymentPolicy.updateMany({ where: { companyId: c }, data: { topDays: 90 } });
+  // A later term change does not alter the TOP snapshot of the submitted SO.
+  await prisma.customer.update({ where: { id: customerId }, data: { defaultTermCode: "NET60" } });
   const inv = await service.postInvoice(c, actor, pod.id);
   expect(inv.subtotal.toString()).toBe("20");
   expect(inv.taxAmount.toString()).toBe("2");
@@ -1336,8 +1356,7 @@ it("quarantines POD returns, balances transit, blocks overdue until invoice is p
   expect(journal.reduce((sum, l) => sum + Number(l.debit) - Number(l.credit), 0)).toBe(0);
 });
 it("outbound UI draft persists with revision and rejects invalid checking", async () => {
-  await prisma.salesTaxRule.updateMany({ where: { companyId: c }, data: { state: "ACTIVE" } });
-  await prisma.documentNumberRule.createMany({ data: ["sales_order", "fulfillment", "document_PICKING", "document_PACKING", "document_PROFORMA"].map(documentKind => ({ companyId: c, documentKind, prefix: `${documentKind}-`, digits: 6, resetYearly: true, effectiveFrom: new Date("2020-01-01"), effectiveTo: new Date("2099-01-01"), createdById: actor })) });
+  await prisma.documentNumberRule.createMany({ data: ["sales_order", "fulfillment", "document_PICKING", "document_PACKING", "document_PROFORMA"].map(documentKind => ({ companyId: c, documentKind, prefix: `${documentKind}-`, digits: 6, resetPeriod: "YEARLY", effectiveFrom: new Date("2020-01-01"), effectiveTo: new Date("2099-01-01"), createdById: actor })) });
   await lot("2");
   const so = await order(["2"]);
   await service.submitSalesOrder(c, actor, so.id, randomUUID());

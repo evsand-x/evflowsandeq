@@ -1,8 +1,8 @@
 import { assertDevelopmentSeed } from "./dev-seed-guard";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { randomBytes, scrypt as scryptCallback } from "node:crypto";
 import { promisify } from "node:util";
-import policyCatalog from "./data/operational-policies.json";
+import policyCatalog from "../src/data/operational-policies.json";
 
 const prisma = new PrismaClient();
 const scrypt = promisify(scryptCallback);
@@ -20,7 +20,7 @@ async function main() {
     update: {},
     create: {
       id: "00000000-0000-4000-8000-000000000001",
-      name: "PT Sandeq Sarana Medika â€” DATA UJI FIKTIF",
+      name: "PT LIVIANA DWI BERKAT",
     },
   });
 
@@ -44,6 +44,23 @@ async function main() {
     },
   });
 
+  // Fictitious marker: dev tools refuse companies without it, independent of the editable name.
+  if (
+    !(await prisma.auditEvent.count({
+      where: { companyId: company.id, action: "development_seed.company_created" },
+    }))
+  )
+    await prisma.auditEvent.create({
+      data: {
+        companyId: company.id,
+        actorId: user.id,
+        action: "development_seed.company_created",
+        resourceType: "company",
+        resourceId: company.id,
+        reason: "DATA UJI FIKTIF — perusahaan dummy database development lokal",
+      },
+    });
+
   const membership = await prisma.companyMembership.upsert({
     where: { companyId_userId: { companyId: company.id, userId: user.id } },
     update: { active: true },
@@ -55,6 +72,14 @@ async function main() {
   });
 
   const permissions = [
+    ["inventory.read", "inventory", "read"],
+    ["inventory.cost.read", "inventory", "cost_read"],
+    ["inventory.stock_count.create", "inventory.stock_count", "create"],
+    ["inventory.stock_count.edit", "inventory.stock_count", "edit"],
+    ["inventory.stock_count.submit", "inventory.stock_count", "submit"],
+    ["inventory.stock_count.approve", "inventory.stock_count", "approve"],
+    ["inventory.stock_count.post", "inventory.stock_count", "post"],
+    ["sales_invoice.view_price", "sales_invoice", "view_price"],
     ["account.read", "account", "read"],
     ["account.create", "account", "create"],
     ["account.update", "account", "update"],
@@ -157,6 +182,20 @@ async function main() {
     ["operational_policy.read", "operational_policy", "read"],
     ["operational_policy.update", "operational_policy", "update"],
     ["audit_event.read", "audit_event", "read"],
+    ["setting_general.read", "setting_general", "read"],
+    ["setting_general.update", "setting_general", "update"],
+    ["tax_setting.read", "tax_setting", "read"],
+    ["tax_setting.update", "tax_setting", "update"],
+    ["terms_credit.read", "terms_credit", "read"],
+    ["terms_credit.update", "terms_credit", "update"],
+    ["deduction_type.read", "deduction_type", "read"],
+    ["deduction_type.manage", "deduction_type", "manage"],
+    ["account_mapping.read", "account_mapping", "read"],
+    ["account_mapping.manage", "account_mapping", "manage"],
+    ["bank_account.manage", "bank_account", "manage"],
+    ["customer_credit.update", "customer_credit", "update"],
+    ["discount_limit.manage", "discount_limit", "manage"],
+    ["special_price.approve", "special_price", "approve"],
   ] as const;
 
   for (const [code, resource, action] of permissions) {
@@ -185,7 +224,7 @@ async function main() {
       create: {
         companyId: company.id,
         code: roleCode,
-        name: `${roleCode} â€” DATA UJI FIKTIF`,
+        name: `${roleCode} — DATA UJI FIKTIF`,
       },
     });
 
@@ -230,7 +269,7 @@ async function main() {
         valueType: definition.type,
         unit: definition.unit,
         validationSchema: definition.schema,
-        defaultValueSnapshot: definition.default,
+        defaultValueSnapshot: definition.default ?? Prisma.JsonNull,
       },
       create: {
         companyId: company.id,
@@ -242,7 +281,7 @@ async function main() {
         valueType: definition.type,
         unit: definition.unit,
         validationSchema: definition.schema,
-        defaultValueSnapshot: definition.default,
+        defaultValueSnapshot: definition.default ?? Prisma.JsonNull,
       },
     });
 
@@ -252,7 +291,7 @@ async function main() {
         data: {
           policyId: policy.id,
           versionNo: 1,
-          valueSnapshot: definition.default,
+          valueSnapshot: definition.default ?? Prisma.JsonNull,
           state: "ACTIVE",
           savedById: user.id,
         },
@@ -336,8 +375,8 @@ async function main() {
     create: {
       companyId: company.id,
       code: "WH-UTAMA",
-      name: "Gudang Utama â€” DATA UJI FIKTIF",
-      normalizedName: "gudang utama â€” data uji fiktif",
+      name: "Gudang Utama — DATA UJI FIKTIF",
+      normalizedName: "gudang utama — data uji fiktif",
       timezone: company.timezone,
       state: "ACTIVE",
       createdById: user.id,
@@ -351,8 +390,8 @@ async function main() {
       companyId: company.id,
       warehouseId: warehouse.id,
       code: "STORAGE-A",
-      name: "Rak Penyimpanan A â€” DATA UJI FIKTIF",
-      normalizedName: "rak penyimpanan a â€” data uji fiktif",
+      name: "Rak Penyimpanan A — DATA UJI FIKTIF",
+      normalizedName: "rak penyimpanan a — data uji fiktif",
       locatorType: "STORAGE",
       state: "ACTIVE",
       createdById: user.id,

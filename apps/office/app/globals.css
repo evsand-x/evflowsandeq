@@ -477,6 +477,32 @@
   width: var(--radix-popover-trigger-width);
   max-width: calc(100vw - 32px);
 }
+/* Searchable single choice: the field is the search box (SearchSelectField). */
+.web-search-select-box {
+  position: relative;
+  width: 100%;
+}
+.web-search-select-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  color: var(--ev-color-text-muted);
+  pointer-events: none;
+}
+.web-form .web-search-select-box [data-slot="input"] {
+  padding-left: 36px;
+}
+.web-search-select-popup {
+  width: var(--radix-popover-trigger-width);
+}
+.web-search-select-code {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ev-color-text-muted);
+}
 :is([data-slot="command-input"], [data-slot="command-item"], [data-slot="command-empty"]) {
   font-size: var(--ev-font-size-sm);
   line-height: 18px;

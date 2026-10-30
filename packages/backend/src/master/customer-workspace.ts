@@ -1,4 +1,5 @@
-import { NotFoundException } from "@nestjs/common";
+import { ForbiddenException, NotFoundException } from "@nestjs/common";
+import { hasCreditInput } from "../sales/customer-credit";
 import { prisma, type Prisma } from "@evflow/database";
 import { z } from "zod";
 import { isAccessAdministrator, type AuthPrincipal } from "@evflow/contracts";
@@ -23,12 +24,34 @@ export function customerAllowed(auth: AuthPrincipal, code: string) {
     )
   );
 }
-const policySelect = {
-  mode: true,
-  topDays: true,
+/** Credit limit, freeze and grace are restricted to customer credit editors (IAM per submenu). */
+export const CUSTOMER_CREDIT_PERMISSION = "customer_credit.update";
+const creditSelect = {
   creditLimit: true,
-  effectiveFrom: true,
-} satisfies Prisma.CustomerPaymentPolicySelect;
+  creditFrozen: true,
+  freezeReason: true,
+  pastDueGraceDays: true,
+} as const;
+export function canEditCustomerCredit(auth: AuthPrincipal) {
+  return customerAllowed(auth, CUSTOMER_CREDIT_PERMISSION);
+}
+/** Backend authority: credit attributes in a customer update need customer_credit.update. */
+export function assertCustomerCreditEdit(auth: AuthPrincipal, input: Record<string, unknown>) {
+  if (hasCreditInput(input) && !canEditCustomerCredit(auth))
+    throw new ForbiddenException(
+      "Izin kredit pelanggan diperlukan untuk mengubah termin, limit, status beku atau toleransi jatuh tempo.",
+    );
+}
+/** Removes restricted credit values from a customer row for readers without the permission. */
+export function redactCustomerCredit<T extends Record<string, unknown>>(
+  auth: AuthPrincipal,
+  row: T,
+) {
+  if (canEditCustomerCredit(auth)) return row;
+  const copy: Record<string, unknown> = { ...row };
+  for (const key of Object.keys(creditSelect)) delete copy[key];
+  return copy as Omit<T, keyof typeof creditSelect>;
+}
 export function customerWhere(
   companyId: string,
   q: z.infer<typeof customerListSchema>,
@@ -45,7 +68,7 @@ export function customerWhere(
 export async function customerPage(auth: AuthPrincipal, input: unknown) {
   const q = customerListSchema.parse(input),
     where = customerWhere(auth.company_id, q);
-  const finance = customerAllowed(auth, "customer.payment_policy.manage");
+  const finance = canEditCustomerCredit(auth);
   const [data, total] = await prisma.$transaction(
     [
       prisma.customer.findMany({
@@ -59,16 +82,8 @@ export async function customerPage(auth: AuthPrincipal, input: unknown) {
           onboardingState: true,
           channel: { select: { id: true, name: true } },
           rayon: { select: { id: true, name: true } },
-          ...(finance
-            ? {
-                paymentPolicies: {
-                  where: { active: true, effectiveFrom: { lte: new Date() } },
-                  orderBy: { effectiveFrom: "desc" as const },
-                  take: 1,
-                  select: policySelect,
-                },
-              }
-            : {}),
+          defaultTermCode: true,
+          ...(finance ? creditSelect : {}),
         },
         orderBy: [{ name: "asc" }, { id: "asc" }],
         take: 20,
@@ -89,20 +104,10 @@ export async function customerDetail(auth: AuthPrincipal, id: string) {
       ...(customerAllowed(auth, "crm_contact.read")
         ? { contacts: { orderBy: { fullName: "asc" as const } } }
         : {}),
-      ...(customerAllowed(auth, "customer.payment_policy.manage")
-        ? {
-            paymentPolicies: {
-              where: { active: true, effectiveFrom: { lte: new Date() } },
-              orderBy: { effectiveFrom: "desc" as const },
-              take: 1,
-              select: policySelect,
-            },
-          }
-        : {}),
     },
   });
   if (!row) throw new NotFoundException("Pelanggan tidak ditemukan.");
-  return row;
+  return redactCustomerCredit(auth, row);
 }
 export async function customerHistory(auth: AuthPrincipal, id: string) {
   if (

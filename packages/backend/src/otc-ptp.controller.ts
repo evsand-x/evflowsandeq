@@ -7,14 +7,15 @@ import {
   pickListCheckSchema,
   pickListConfirmSchema,
   postInvoiceSchema,
+  createInvoiceFromDeliveryNoteSchema,
   invoiceDraftSchema,
-  paymentPolicySchema,
   createSupplierInvoiceSchema,
   createCustomerReceiptSchema,
   allocateCustomerReceiptSchema,
   createCustomerReturnSchema,
   postCustomerRefundSchema,
   idempotencySchema,
+  isAccessAdministrator,
 } from "@evflow/contracts";
 import {
   BadRequestException,
@@ -34,8 +35,10 @@ import { AuthGuard } from "./identity/auth.guard";
 import { PermissionGuard } from "./identity/permission.guard";
 import { RequirePermissions } from "./identity/permissions.decorator";
 import { OtcPtpService } from "./otc-ptp.service";
+import { recordOrderPrint } from "./sales/order-print";
 import { closeRemainder, releaseBatch, resolvePick, reviseOrder } from "./sales/o2c-lifecycle";
 import { issueProforma } from "./sales/proforma";
+import { invoiceWithoutPrices } from "./finance/invoice-privacy";
 
 const parse = <T>(
   schema: { safeParse: (value: unknown) => { success: boolean; data?: T; error?: unknown } },
@@ -53,6 +56,31 @@ const commandKey = (value: string | undefined) => {
 @UseGuards(AuthGuard, PermissionGuard)
 export class OtcPtpController {
   constructor(@Inject(OtcPtpService) private readonly service: OtcPtpService) {}
+  @Post("sales-orders/:id/print-events")
+  @RequirePermissions("sales_order.print")
+  async printOrder(@Param("id") id:string,@Req() r:AuthenticatedRequest) {
+    return {data:await recordOrderPrint(r.auth.company_id,r.auth.user_id,id)};
+  }
+  @Post("sales-orders/:id/duplicate")
+  @RequirePermissions("sales_order.create")
+  async duplicateOrder(@Param("id") id:string,@Headers("idempotency-key") key:string|undefined,@Req() r:AuthenticatedRequest) {
+    return {data:await this.service.duplicateSalesOrder(r.auth.company_id,r.auth.user_id,id,commandKey(key))};
+  }
+  @Post("sales-orders/:id/advances")
+  @RequirePermissions("sales_order_advance.create")
+  async recordAdvance(@Param("id") id: string, @Body() input: unknown, @Headers("idempotency-key") key: string | undefined, @Req() r: AuthenticatedRequest) {
+    return {data: await this.service.recordSalesOrderAdvance(r.auth.company_id,r.auth.user_id,id,input,commandKey(key))};
+  }
+  @Post("sales-order-advances/:id/verify")
+  @RequirePermissions("sales_order_advance.verify")
+  async verifyAdvance(@Param("id") id: string, @Body() input: unknown, @Req() r: AuthenticatedRequest) {
+    return {data: await this.service.verifySalesOrderAdvance(r.auth.company_id,r.auth.user_id,id,input)};
+  }
+  @Post("sales-order-advances/:id/reject")
+  @RequirePermissions("sales_order_advance.verify")
+  async rejectAdvance(@Param("id") id: string, @Body() input: unknown, @Req() r: AuthenticatedRequest) {
+    return {data: await this.service.rejectSalesOrderAdvance(r.auth.company_id,r.auth.user_id,id,input)};
+  }
   @Post("fulfillment-batches/:id/issue-proforma")
   @RequirePermissions("proforma.issue")
   async proforma(
@@ -214,13 +242,6 @@ export class OtcPtpController {
       )
       .then((data) => ({ data }));
   }
-  @Post("customers/:id/payment-policies")
-  @RequirePermissions("customer.payment_policy.manage")
-  policy(@Param("id") id: string, @Body() body: unknown, @Req() req: AuthenticatedRequest) {
-    return this.service
-      .setPaymentPolicy(req.auth.company_id, req.auth.user_id, id, parse(paymentPolicySchema, body))
-      .then((data) => ({ data }));
-  }
   @Post("sales-orders/:id/submit")
   @RequirePermissions("sales_order.submit")
   submit(
@@ -326,6 +347,22 @@ export class OtcPtpController {
       )
       .then((data) => ({ data }));
   }
+  @Post("sales-invoices/from-delivery-note")
+  @RequirePermissions("sales_invoice.post", "sales_invoice.view_price")
+  invoiceFromDeliveryNote(
+    @Body() body: unknown,
+    @Headers("idempotency-key") key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service
+      .createInvoiceFromDeliveryNote(
+        req.auth.company_id,
+        req.auth.user_id,
+        parse(createInvoiceFromDeliveryNoteSchema, body),
+        commandKey(key),
+      )
+      .then((data) => ({ data }));
+  }
   @Post("sales-invoice-drafts")
   @RequirePermissions("sales_invoice.post")
   async createInvoiceDraft(
@@ -397,7 +434,15 @@ export class OtcPtpController {
         parse(allocateCustomerReceiptSchema, body),
         commandKey(key),
       )
-      .then((data) => ({ data }));
+      .then((data) => {
+        const prices = isAccessAdministrator(req.auth) || req.auth.permissions.some(p =>
+          p.code === "sales_invoice.view_price" && ["company", "privileged"].includes(p.scope_type) &&
+          (!p.scope_id || p.scope_id === req.auth.company_id));
+        if (prices) return { data };
+        return { data: "invoice" in data
+          ? { invoice: invoiceWithoutPrices(data.invoice), allocation: { id: data.allocation.id } }
+          : invoiceWithoutPrices(data) };
+      });
   }
 
   @Post("purchase-requests/:id/approve")

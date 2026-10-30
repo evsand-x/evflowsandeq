@@ -453,49 +453,69 @@ export class FinanceControlsController {
     };
   }
   @Get("configuration")
-  @RequirePermissions("posting_profile.read")
   async configuration(@Req() r: AuthenticatedRequest) {
     const companyId = r.auth.company_id;
-    const [accounts, periods, profiles] = await Promise.all([
-      prisma.financeAccount.findMany({
-        where: { companyId },
-        orderBy: { code: "asc" },
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          category: true,
-          active: true,
-          accountType: true,
-          controlKind: true,
-        },
-      }),
-      prisma.financePeriod.findMany({ where: { companyId }, orderBy: { startsOn: "desc" } }),
-      prisma.financePostingProfile.findMany({
-        where: { companyId },
-        orderBy: { effectiveFrom: "desc" },
-      }),
+    // Each section needs its own read permission; Pemetaan Akun alone never exposes periods or the chart.
+    const mayProfiles = hasResourcePermission(r.auth, "account_mapping.read");
+    const mayAccounts = hasResourcePermission(r.auth, "account.read");
+    const mayPeriods = hasResourcePermission(r.auth, "finance_period.close");
+    if (!mayProfiles && !mayAccounts && !mayPeriods)
+      throw new ForbiddenException("Izin konfigurasi keuangan diperlukan.");
+    const [accounts, accountOptions, periods, profiles] = await Promise.all([
+      mayAccounts
+        ? prisma.financeAccount.findMany({
+            where: { companyId },
+            orderBy: { code: "asc" },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              category: true,
+              active: true,
+              accountType: true,
+              controlKind: true,
+            },
+          })
+        : [],
+      // Pickers for the mapping screen: active DETAIL accounts, id/code/name only.
+      mayProfiles
+        ? prisma.financeAccount.findMany({
+            where: { companyId, active: true, accountType: "DETAIL" },
+            orderBy: { code: "asc" },
+            select: { id: true, code: true, name: true },
+          })
+        : [],
+      mayPeriods
+        ? prisma.financePeriod.findMany({ where: { companyId }, orderBy: { startsOn: "desc" } })
+        : [],
+      mayProfiles
+        ? prisma.financePostingProfile.findMany({
+            where: { companyId },
+            orderBy: { effectiveFrom: "desc" },
+          })
+        : [],
     ]);
-    return { data: { accounts, periods, profiles } };
+    return { data: { accounts, account_options: accountOptions, periods, profiles } };
   }
   @Post("configuration/:kind")
-  @RequirePermissions("posting_profile.manage")
   async configure(
     @Param("kind") kind: string,
     @Body() body: unknown,
     @Req() r: AuthenticatedRequest,
     @Headers("idempotency-key") k?: string,
   ) {
-    if (kind === "account" && !hasResourcePermission(r.auth, "account.create"))
-      throw new ForbiddenException("Izin membuat akun diperlukan.");
+    const parsed = z.enum(["account", "period", "profile", "bank"]).parse(kind);
+    // One permission per kind: mapping, chart of accounts, period (Closing) and bank setup stay independent.
+    const required = {
+      profile: "account_mapping.manage",
+      account: "account.create",
+      period: "finance_period.close",
+      bank: "bank_account.manage",
+    }[parsed];
+    if (!hasResourcePermission(r.auth, required))
+      throw new ForbiddenException("Izin konfigurasi keuangan tidak mencukupi.");
     return {
-      data: await financeConfigure(
-        r.auth.company_id,
-        r.auth.user_id,
-        z.enum(["account", "period", "profile", "bank"]).parse(kind),
-        body,
-        key(k),
-      ),
+      data: await financeConfigure(r.auth.company_id, r.auth.user_id, parsed, body, key(k)),
     };
   }
   @Get("banks")
@@ -504,7 +524,7 @@ export class FinanceControlsController {
       !isAccessAdministrator(r.auth) &&
       !r.auth.permissions.some(
         (p) =>
-          ["customer_receipt.post", "bank_statement.import", "bank_reconciliation.read"].includes(
+          ["customer_receipt.post", "sales_order_advance.create", "sales_order_advance.verify", "bank_statement.import", "bank_reconciliation.read"].includes(
             p.code,
           ) &&
           ["company", "privileged"].includes(p.scope_type) &&
