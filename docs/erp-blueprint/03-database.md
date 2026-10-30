@@ -472,6 +472,7 @@ IAM-01/04: migration `20261016210000_independent_submenu_permissions` memetakan 
 
 - `20261024110000_setting_permissions`: izin per submenu Setting; grant lama dipetakan tanpa memperluas hak.
 - `20261024120000_numbering_format`: `document_number_rules.year_format`, `reset_period` menggantikan `reset_yearly`; counter tanpa reset dilanjutkan pada kunci tahunan.
+- `20261030170000_numbering_month_format`: menambah `document_number_rules.month_format` (`ARABIC` default atau `ROMAN`) dengan constraint nilai.
 - `20261024130000_default_tax`: `operational_taxes.dpp_factor`, `is_default_sales`, `is_default_purchase` (indeks unik parsial satu bawaan per arah).
 - `20261024140000_customer_credit` dan `20261024150000_customer_credit_unmapped`: `customers.credit_limit`, `credit_frozen`, `freeze_reason`, `past_due_grace_days`, `default_term_code`, `default_tax_invoice_code`; `customer_payment_policies` menjadi arsip baca saja.
 - `20261024160000_deduction_types`: tabel `deduction_types`.

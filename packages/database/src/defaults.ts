@@ -42,6 +42,7 @@ export type NumberingDefault = {
   prefix: string;
   digits: number;
   year_format: "YYYY" | "YY";
+  month_format?: "ARABIC" | "ROMAN";
   reset_period: "YEARLY" | "MONTHLY";
 };
 

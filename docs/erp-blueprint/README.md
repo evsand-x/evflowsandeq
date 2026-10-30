@@ -30,7 +30,7 @@ Acuan: [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengatur
 - **Potongan pembayaran:** Terima Pembayaran memuat baris potongan (jenis, nilai, akun, bukti). Jenis Potongan di Setting menentukan akun penyelesaian dan bukti (bukti potong atau SSP/NTPN). Nilai yang wajib bukti tetap piutang berstatus Menunggu bukti potong, dihitung dalam limit kredit, dan invoice baru lunas setelah bukti diunggah.
 - **Harga dan diskon:** harga otomatis = harga khusus pelanggan yang disetujui bila ada, selain itu harga jual umum; dapat diganti di SO. Batas diskon per peran, per orang (menggantikan peran) dan per produk (plafon); berlaku yang terkecil; melebihi batas tidak dapat disimpan. Harga khusus diajukan dan disetujui di Sales & Marketing.
 - **Persetujuan di tempat dokumen;** pengaturan umumnya di Setting. Dashboard hanya menautkan.
-- **Format nomor:** `Prefix.FormatTahun.FormatBulan.NomorUrut` (contoh `SO-SSM.2026.10.0001`), toggle reset bulanan/tahunan; perubahan mode reset berlaku periode berikutnya.
+- **Format nomor:** `Prefix.FormatTahun.FormatBulan.NomorUrut` (contoh `SO-SSM.2026.10.0001`), dengan format bulan Angka (01–12) atau Romawi (I–XII); default Angka. Toggle reset bulanan/tahunan; perubahan mode reset berlaku periode berikutnya.
 - **Identitas perusahaan** (zona waktu, tahun buku, mata uang) hanya di data perusahaan; limit kredit, freeze dan toleransi menjadi atribut Master Data › Pelanggan.
 
 

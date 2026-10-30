@@ -156,7 +156,7 @@ Pengajuan: Draft → Menunggu Persetujuan → Disetujui / Perlu Revisi / Ditolak
 
 Template memiliki jenis dokumen, versi, layout/kolom, status draft/published/retired, default dan preview. Publikasi menghasilkan versi baru. Dokumen issued menyimpan snapshot data, template dan file; perubahan default tidak mengubah histori. XML Coretax memakai generator/schema khusus.
 
-Penomoran memiliki jenis, prefix, komponen periode, panjang urutan, reset policy, preview, counter atomik dan audit. Draft memakai referensi sementara; nomor resmi diambil pada penerbitan sesuai jenis. Nomor void tidak didaur ulang. Nomor faktur pajak dan nomor eksternal terpisah dari counter internal.
+Penomoran memiliki jenis, prefix, format tahun, format bulan (Angka 01–12 atau Romawi I–XII; default Angka), panjang urutan, reset policy, preview, counter atomik dan audit. Draft memakai referensi sementara; nomor resmi diambil pada penerbitan sesuai jenis. Nomor void tidak didaur ulang. Nomor faktur pajak dan nomor eksternal terpisah dari counter internal.
 
 ## 7. Referensi, periode, impor dan audit
 

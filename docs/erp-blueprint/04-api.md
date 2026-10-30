@@ -529,7 +529,7 @@ GET /crm/workspace/opportunities memerlukan crm_opportunity.read (scope perusaha
 ## Kontrak tahap 2b — konsolidasi pengaturan (24 Oktober 2026)
 
 - `GET /settings/general` (`setting_general.read`) dan `PATCH /settings/general` (`setting_general.update`, `If-Match` versi): zona waktu (IANA) dan awal tahun buku.
-- `GET /settings/numbering` mengembalikan `year_format` (`YYYY`|`YY`) dan `reset_period` (`MONTHLY`|`YEARLY`) sebagai pengganti `reset_yearly`; `PUT /settings/numbering/:kind` menerima `prefix`, `digits`, `year_format`, `reset_period`. Format nomor `Prefix.YYYY|YY.MM.Urutan`; perubahan reset berlaku periode berikutnya.
+- `GET /settings/numbering` mengembalikan `year_format` (`YYYY`|`YY`), `month_format` (`ARABIC`|`ROMAN`) dan `reset_period` (`MONTHLY`|`YEARLY`) sebagai pengganti `reset_yearly`; `PUT /settings/numbering/:kind` menerima `prefix`, `digits`, `year_format`, `month_format`, `reset_period`. Format nomor `Prefix.YYYY|YY.MM.Urutan`, dengan `MM` berupa `01–12` atau `I–XII`; `ARABIC` adalah default. Perubahan reset berlaku periode berikutnya.
 - `POST /tax/master/:id/default` (`tax_setting.update`, `If-Match`): menandai pajak bawaan penjualan atau pembelian (satu per arah per perusahaan). Pajak memiliki `dpp_factor`. Pajak per baris dokumen penjualan ditolak dengan `LINE_TAX_NOT_ALLOWED`.
 - Atribut kredit pelanggan (`credit_limit`, `credit_frozen`, `freeze_reason`, `past_due_grace_days`, `default_term_code`, `default_tax_invoice_code`) diubah dengan izin `customer_credit.update`; `default_term_code` juga memerlukan izin ini. Halaman Termin & Kredit memakai `terms_credit.*`.
 - `GET|POST /settings/deduction-types`, `GET /settings/deduction-types/accounts`, `PATCH /settings/deduction-types/:id` (`deduction_type.read|manage`).

@@ -89,6 +89,28 @@ describe("numbering settings revision", () => {
     expect(await next()).toBe(`SO.${y}.${m}.0001`);
   });
 
+  it("supports Roman month format and exposes it in the list", async () => {
+    await reviseNumbering(
+      companyId,
+      actorId,
+      "sales_order",
+      {
+        prefix: "SO",
+        year_format: "YYYY",
+        month_format: "ROMAN",
+        digits: 4,
+        reset_period: "YEARLY",
+      },
+      randomUUID(),
+    );
+    const [y] = companyToday().split("-");
+    expect(await next()).toBe(`SO.${y}.X.0001`);
+    const listed = (await listNumberingSettings(companyId)).find(
+      (r) => r.document_kind === "sales_order",
+    )!;
+    expect(listed.month_format).toBe("ROMAN");
+  });
+
   it("monthly reset restarts next month", async () => {
     await setRule("MONTHLY");
     await next("sales_order", "2026-10-10");

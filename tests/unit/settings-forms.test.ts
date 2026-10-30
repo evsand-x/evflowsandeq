@@ -33,6 +33,9 @@ describe("settings form helpers", () => {
       "SO-SSM.2026.10.0003",
     );
     expect(previewDocumentNumber("SO-SSM", "YY", 4, "2026-10-24", "3")).toBe("SO-SSM.26.10.0003");
+    expect(previewDocumentNumber("SO", "YYYY", 4, "2026-10-24", "1", "ROMAN")).toBe(
+      "SO.2026.X.0001",
+    );
   });
   it("dialog starts from the scheduled reset period", () => {
     expect(

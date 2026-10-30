@@ -26,10 +26,15 @@ type Row = {
   prefix: string | null;
   digits: number | null;
   year_format: "YYYY" | "YY" | null;
+  month_format: "ARABIC" | "ROMAN" | null;
   reset_period: "YEARLY" | "MONTHLY" | null;
   effective_from: string | null;
   next_preview: string | null;
-  pending: { reset_period: "YEARLY" | "MONTHLY"; effective_from: string } | null;
+  pending: {
+    reset_period: "YEARLY" | "MONTHLY";
+    month_format: "ARABIC" | "ROMAN";
+    effective_from: string;
+  } | null;
   active: boolean;
 };
 const key = ["settings", "numbering"] as const;
@@ -80,7 +85,7 @@ export default function NumberingPage() {
                     <td>
                       {row.active ? (
                         <>
-                          {`${row.prefix}.${row.year_format === "YY" ? "TT" : "TTTT"}.BB.${"0".repeat(row.digits ?? 0)}`}
+                          {`${row.prefix}.${row.year_format === "YY" ? "TT" : "TTTT"}.${row.month_format === "ROMAN" ? "R" : "BB"}.${"0".repeat(row.digits ?? 0)}`}
                           <span className="page-frame-subtitle block">
                             {row.reset_period ? resetLabel[row.reset_period] : ""}
                             {row.pending
@@ -118,6 +123,7 @@ function EditDialog({ row, onClose }: { row: Row; onClose: () => void }) {
   const [prefix, setPrefix] = useState(row.prefix ?? ""),
     [digits, setDigits] = useState(String(row.digits ?? 4)),
     [yearFormat, setYearFormat] = useState<"YYYY" | "YY">(row.year_format ?? "YYYY"),
+    [monthFormat, setMonthFormat] = useState<"ARABIC" | "ROMAN">(row.month_format ?? "ARABIC"),
     [resetPeriod, setResetPeriod] = useState<"YEARLY" | "MONTHLY">(initialResetPeriod(row)),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -142,6 +148,7 @@ function EditDialog({ row, onClose }: { row: Row; onClose: () => void }) {
         body: JSON.stringify({
           prefix,
           year_format: yearFormat,
+          month_format: monthFormat,
           digits: digitCount,
           reset_period: resetPeriod,
         }),
@@ -193,6 +200,16 @@ function EditDialog({ row, onClose }: { row: Row; onClose: () => void }) {
               <option value="YY">2 digit (26)</option>
             </select>
           </label>
+          <label>
+            Format bulan
+            <select
+              value={monthFormat}
+              onChange={(e) => setMonthFormat(e.target.value as "ARABIC" | "ROMAN")}
+            >
+              <option value="ARABIC">Angka (01–12)</option>
+              <option value="ROMAN">Romawi (I–XII)</option>
+            </select>
+          </label>
           <label className="setting-inline">
             <Checkbox
               checked={resetPeriod === "MONTHLY"}
@@ -206,7 +223,9 @@ function EditDialog({ row, onClose }: { row: Row; onClose: () => void }) {
           <p className="text-sm">
             Contoh nomor berikutnya:{" "}
             <strong>
-              {valid ? previewDocumentNumber(prefix, yearFormat, digitCount, today, next) : "—"}
+              {valid
+                ? previewDocumentNumber(prefix, yearFormat, digitCount, today, next, monthFormat)
+                : "—"}
             </strong>
           </p>
           {error && <PageNotice tone="error">{error}</PageNotice>}

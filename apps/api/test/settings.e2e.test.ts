@@ -76,6 +76,7 @@ describe("settings HTTP authorization", () => {
       active: true,
       prefix: expect.any(String),
       year_format: expect.any(String),
+      month_format: expect.any(String),
       reset_period: expect.any(String),
     });
   });

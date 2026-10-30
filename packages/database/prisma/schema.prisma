@@ -2245,6 +2245,7 @@ model DocumentNumberRule {
   prefix String
   digits Int
   yearFormat String @default("YYYY") @map("year_format")
+  monthFormat String @default("ARABIC") @map("month_format")
   resetPeriod String @default("YEARLY") @map("reset_period")
   effectiveFrom DateTime @map("effective_from") @db.Date
   effectiveTo DateTime @map("effective_to") @db.Date

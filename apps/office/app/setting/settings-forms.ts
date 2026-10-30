@@ -45,9 +45,12 @@ export function previewDocumentNumber(
   digits: number,
   day: string,
   next: string,
+  monthFormat: "ARABIC" | "ROMAN" = "ARABIC",
 ) {
   const year = yearFormat === "YY" ? day.slice(2, 4) : day.slice(0, 4);
-  return `${prefix}.${year}.${day.slice(5, 7)}.${next.padStart(digits, "0")}`;
+  const roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+  const month = monthFormat === "ROMAN" ? roman[Number(day.slice(5, 7)) - 1] : day.slice(5, 7);
+  return `${prefix}.${year}.${month}.${next.padStart(digits, "0")}`;
 }
 
 /** The dialog starts from the scheduled reset period when one exists, so saving does not cancel it. */

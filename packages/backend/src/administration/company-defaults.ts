@@ -88,6 +88,7 @@ export async function provisionCompanyDefaults(
         prefix: rule.prefix,
         digits: rule.digits,
         yearFormat: rule.year_format,
+        monthFormat: rule.month_format ?? "ARABIC",
         resetPeriod: rule.reset_period,
         effectiveFrom: day,
         effectiveTo: openEnded,

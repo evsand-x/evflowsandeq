@@ -14,6 +14,15 @@ describe("document number format", () => {
       formatDocumentNumber({ prefix: "SO-SSM", yearFormat: "YY", digits: 4 }, "2026-10-24", 1n),
     ).toBe("SO-SSM.26.10.0001");
   });
+  it("formats the month as Roman numerals when configured", () => {
+    expect(
+      formatDocumentNumber(
+        { prefix: "SO", yearFormat: "YYYY", monthFormat: "ROMAN", digits: 4 },
+        "2026-10-24",
+        1n,
+      ),
+    ).toBe("SO.2026.X.0001");
+  });
   it("rejects overflow", () => {
     expect(() =>
       formatDocumentNumber({ prefix: "SO", yearFormat: "YYYY", digits: 5 }, "2026-10-24", 100000n),

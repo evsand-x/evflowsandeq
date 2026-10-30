@@ -18,7 +18,7 @@ Arah layar mengikuti desain SO mudah 25 Oktober. Backend telah menyediakan kolom
 
 ## Keputusan 24 Oktober 2026 — konsolidasi
 
-Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Navigasi: setiap menu di satu modul; Setting berisi Profil Perusahaan, Pengguna, Peran, Kebijakan Umum, Penomoran Dokumen, Pajak, Termin & Kredit, Jenis Potongan, Pemetaan Akun. Form SO menampilkan "Diskon maks. untuk Anda" per baris. Form Terima Pembayaran memuat tabel Potongan. Dialog penomoran memuat prefix, format tahun, format bulan, panjang urut dan toggle reset bulanan/tahunan dengan pratinjau. Tombol persetujuan tampil di halaman dokumen.
+Mengikuti [desain konsolidasi](../superpowers/specs/2026-10-24-konsolidasi-pengaturan-design.md). Navigasi: setiap menu di satu modul; Setting berisi Profil Perusahaan, Pengguna, Peran, Kebijakan Umum, Penomoran Dokumen, Pajak, Termin & Kredit, Jenis Potongan, Pemetaan Akun. Form SO menampilkan "Diskon maks. untuk Anda" per baris. Form Terima Pembayaran memuat tabel Potongan. Dialog penomoran memuat prefix, format tahun, format bulan (Angka 01–12 atau Romawi I–XII), panjang urut dan toggle reset bulanan/tahunan dengan pratinjau. Tombol persetujuan tampil di halaman dokumen.
 
 
 ## Keputusan 24 Oktober 2026 — kemudahan pakai

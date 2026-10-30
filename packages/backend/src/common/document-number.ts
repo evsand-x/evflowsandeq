@@ -5,8 +5,16 @@ import { transactionCommand } from "./transaction-command";
 import { AuditService } from "./audit.service";
 
 export type YearFormat = "YYYY" | "YY";
+export type MonthFormat = "ARABIC" | "ROMAN";
 export type ResetPeriod = "YEARLY" | "MONTHLY";
-type FormatRule = { prefix: string; yearFormat: YearFormat; digits: number };
+type FormatRule = {
+  prefix: string;
+  yearFormat: YearFormat;
+  monthFormat?: MonthFormat;
+  digits: number;
+};
+
+const romanMonths = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 
 function dayOf(timezone: string, at: Date) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -85,7 +93,9 @@ export function formatDocumentNumber(rule: FormatRule, day: string, value: bigin
   const digits = value.toString();
   if (digits.length > rule.digits) throw new ConflictException("DOCUMENT_NUMBER_EXHAUSTED");
   const year = rule.yearFormat === "YY" ? day.slice(2, 4) : day.slice(0, 4);
-  return `${rule.prefix}.${year}.${day.slice(5, 7)}.${digits.padStart(rule.digits, "0")}`;
+  const month =
+    rule.monthFormat === "ROMAN" ? romanMonths[Number(day.slice(5, 7)) - 1] : day.slice(5, 7);
+  return `${rule.prefix}.${year}.${month}.${digits.padStart(rule.digits, "0")}`;
 }
 
 export async function configureNumbering(c: string, a: string, body: unknown, key: string) {
@@ -98,6 +108,7 @@ export async function configureNumbering(c: string, a: string, body: unknown, ke
       prefix: z.string().trim().min(1).max(40),
       digits: z.number().int().min(1).max(18),
       year_format: z.enum(["YYYY", "YY"]).default("YYYY"),
+      month_format: z.enum(["ARABIC", "ROMAN"]).default("ARABIC"),
       reset_period: z.enum(["YEARLY", "MONTHLY"]).default("YEARLY"),
       effective_from: z.string().date(),
       effective_to: z.string().date(),
@@ -127,6 +138,7 @@ export async function configureNumbering(c: string, a: string, body: unknown, ke
         prefix: i.prefix,
         digits: i.digits,
         yearFormat: i.year_format,
+        monthFormat: i.month_format,
         resetPeriod: i.reset_period,
         effectiveFrom: from,
         effectiveTo: to,
@@ -153,6 +165,7 @@ export const numberingRevisionSchema = z
       .trim()
       .regex(/^[A-Z0-9/._-]{1,20}$/),
     year_format: z.enum(["YYYY", "YY"]),
+    month_format: z.enum(["ARABIC", "ROMAN"]).default("ARABIC"),
     digits: z.number().int().min(3).max(10),
     reset_period: z.enum(["YEARLY", "MONTHLY"]),
   })
@@ -218,6 +231,7 @@ export async function reviseNumbering(
     const data = {
       prefix: i.prefix,
       yearFormat: i.year_format,
+      monthFormat: i.month_format,
       digits: i.digits,
       resetPeriod: currentPeriod,
     };
@@ -225,6 +239,7 @@ export async function reviseNumbering(
       !current ||
       current.prefix !== i.prefix ||
       current.yearFormat !== i.year_format ||
+      current.monthFormat !== i.month_format ||
       current.digits !== i.digits;
     let row = current;
     if (!row || changed) {
@@ -305,6 +320,7 @@ export async function listNumberingSettings(c: string) {
           ...base,
           prefix: null,
           year_format: null,
+          month_format: null,
           digits: null,
           reset_period: null,
           effective_from: null,
@@ -331,6 +347,7 @@ export async function listNumberingSettings(c: string) {
         ...base,
         prefix: rule.prefix,
         year_format: rule.yearFormat,
+        month_format: rule.monthFormat,
         digits: rule.digits,
         reset_period: rule.resetPeriod,
         effective_from: rule.effectiveFrom.toISOString().slice(0, 10),
@@ -339,6 +356,7 @@ export async function listNumberingSettings(c: string) {
           ? {
               prefix: later.prefix,
               year_format: later.yearFormat,
+              month_format: later.monthFormat,
               digits: later.digits,
               reset_period: later.resetPeriod,
               effective_from: later.effectiveFrom.toISOString().slice(0, 10),
