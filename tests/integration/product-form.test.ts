@@ -208,6 +208,37 @@ describe("product form backend", () => {
       ).rejects.toThrow("PRODUCT_CODE_LOCKED");
     }));
 
+  it("adds an optional permit from the edit form as pending", async () =>
+    inRollback(async (f) => {
+      const product = await service.createProduct(f.c, f.actor, input(f));
+      const updated = await service.updateProduct(
+        f.c,
+        f.actor,
+        product.id,
+        updateProductSchema.parse({
+          ...input(f),
+          version: product.version,
+          permit_type: "AKL",
+          permit_number: "AKL 20901234567",
+          permit_holder: "PT Uji Pemegang Izin",
+          permit_status: "VALID",
+        }),
+      );
+      expect(updated.registrations).toHaveLength(1);
+      expect(updated.registrations[0]).toMatchObject({
+        permitType: "AKL",
+        status: "PENDING",
+      });
+      // Tanpa isian izin tidak ada registrasi baru.
+      const again = await service.updateProduct(
+        f.c,
+        f.actor,
+        product.id,
+        updateProductSchema.parse({ ...input(f), version: updated.version }),
+      );
+      expect(again.registrations).toHaveLength(1);
+    }));
+
   it("requires lot tracking before expiry can be required", () => {
     const base = {
       code: "X1",

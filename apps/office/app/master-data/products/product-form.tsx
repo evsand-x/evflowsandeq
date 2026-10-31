@@ -165,7 +165,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
       tMax = parseTemperature(values.max_temp);
     if (tMin !== null && tMax !== null && Number(tMax) <= Number(tMin))
       found.max_temp = "Suhu maksimum harus lebih tinggi dari minimum.";
-    const permitResult = creating ? permitPayload(permit) : { body: {} };
+    const permitResult = permitPayload(permit);
     if (permitResult.error) found.permit = permitResult.error;
     const buy = values.purchase_price ? parseMoney(values.purchase_price) : null,
       sell = values.sale_price ? parseMoney(values.sale_price) : null;
@@ -214,7 +214,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
             ...(buy ? { purchase_price: buy } : {}),
             ...(sell ? { sale_price: sell } : {}),
           }
-        : { version: initial.version }),
+        : { ...permitResult.body, version: initial.version }),
     };
     setBusy(true);
     setError("");
@@ -471,7 +471,7 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
     </div>
   );
 
-  const permitSection = creating ? (
+  const permitFields = (
     <div className="page-frame-fields">
       <div className="pf-field">
         <span className="pf-label" id="pf-permit-type">
@@ -540,19 +540,38 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
         </div>
       )}
     </div>
-  ) : (
-    <Hint>
-      {initial.registrations.length
-        ? initial.registrations
-            .map(
-              (r) =>
-                `${r.permit_type} ${r.permit_number} · ${registrationLabel[r.status] ?? r.status}`,
-            )
-            .join(" · ")
-        : "Belum ada izin edar"}
-      . Izin edar ditambahkan dan diverifikasi dari tab Izin edar di detail produk.
-    </Hint>
   );
+  // Ubah produk: izin yang sudah ada tampil sebagai daftar; isian di bawahnya menambah izin baru (PENDING).
+  const permitSection =
+    creating || !initial.registrations.length ? (
+      permitFields
+    ) : (
+      <>
+        <ul className="pf-permits">
+          {initial.registrations.map((r) => (
+            <li key={r.id}>
+              <span className="pf-mono">
+                {r.permit_number.toUpperCase().startsWith(r.permit_type)
+                  ? r.permit_number
+                  : `${r.permit_type} ${r.permit_number}`}
+              </span>
+              <span className="page-frame-subtitle">
+                {r.holder}
+                {r.expires_on ? ` · berlaku sampai ${date(r.expires_on)}` : ""}
+              </span>
+              <span className="pf-permit-status" data-status={r.status}>
+                {registrationLabel[r.status] ?? r.status}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div className="pf-sub">
+          <h3>Tambah izin edar</h3>
+          <Hint>Opsional. Izin baru menunggu verifikasi; izin lama tetap tersimpan.</Hint>
+          {permitFields}
+        </div>
+      </>
+    );
 
   const priceSection = (
     <div className="page-frame-fields pf-three">

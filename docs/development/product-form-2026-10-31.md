@@ -29,3 +29,8 @@ Form `/master-data/products/new` dan `/master-data/products/:id/edit` dibangun u
 - `tests/integration/product-form.test.ts` (5) dan `tests/unit/product-form-utils.test.ts` (5) lulus.
 - Suite penuh: 40 kegagalan sama persis dengan sebelum perubahan (proforma, otc-controls, milestone IAM, dashboard unit).
 - Browser (Admin Demo): produk baru dengan kode diketik huruf kecil (otomatis kapital), konversi Kit 0,01 Box, kedaluwarsa + masa simpan 730 hari, harga 125.000/150.000 (margin 16,7%) tersimpan sebagai Draft lalu berhasil diaktifkan tanpa izin edar; di form ubah, kode dan satuan dasar terkunci setelah aktif.
+
+## Lanjutan 31 Oktober 2026
+
+- Simpan perubahan produk sebelumnya ditolak "Jenis master tidak dapat diubah melalui endpoint ini." karena `PATCH master-data/:resource/:id` terdaftar sebelum `PATCH master-data/products/:id`. Rute produk dipindah ke atas; test `submenu-permissions.e2e` memastikan simpan produk sampai ke endpoint produk.
+- Form ubah kini menampilkan isian izin edar seperti mockup (opsional). Izin yang sudah ada tampil sebagai daftar dengan status; isian menambah izin baru berstatus Menunggu verifikasi dalam transaksi PATCH yang sama (`updateProductSchema` menerima `permit_evidence_object_key`).

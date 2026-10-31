@@ -20,7 +20,11 @@ import { OtcPtpService } from "../../../packages/backend/src/otc-ptp.service";
 describe("independent submenu HTTP permissions", () => {
   let app: INestApplication;
   const crm = { list: vi.fn(async () => []) };
-  const master = { listMasters: vi.fn(async () => []), listReference: vi.fn(async () => []) };
+  const master = {
+    listMasters: vi.fn(async () => []),
+    listReference: vi.fn(async () => []),
+    updateProduct: vi.fn(async () => ({ id: "product" })),
+  };
   beforeAll(async () => {
     const module = await Test.createTestingModule({
       controllers: [
@@ -463,6 +467,26 @@ describe("independent submenu HTTP permissions", () => {
       .get("/crm/options?resource=contacts")
       .set("x-permissions", "crm_prospect.create")
       .expect(403);
+  });
+  it("routes product edits to the product endpoint, not the generic master PATCH", async () => {
+    const id = "00000000-0000-4000-8000-0000000000aa";
+    const response = await request(app.getHttpServer())
+      .patch(`/master-data/products/${id}`)
+      .set("x-permissions", "master_product.update")
+      .send({
+        name: "Spuit Uji",
+        category_id: "00000000-0000-4000-8000-0000000000bb",
+        base_uom_id: "00000000-0000-4000-8000-0000000000cc",
+        version: 1,
+      })
+      .expect(200);
+    expect(response.body.data).toEqual({ id: "product" });
+    expect(master.updateProduct).toHaveBeenCalledWith(
+      "company-a",
+      "test",
+      id,
+      expect.objectContaining({ name: "Spuit Uji", version: 1 }),
+    );
   });
   it("rejects arbitrary resource keys, including prototype properties", async () => {
     for (const resource of ["__proto__", "constructor", "unknown"]) {

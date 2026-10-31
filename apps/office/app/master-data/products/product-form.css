@@ -266,3 +266,39 @@
     grid-column: auto;
   }
 }
+.pf-permits {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  border: 1px solid var(--ev-color-border);
+  border-radius: 8px;
+}
+.pf-permits li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.pf-permits li + li {
+  border-top: 1px solid #eef1f6;
+}
+.pf-permit-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #fff1d6;
+  color: #8a5300;
+  white-space: nowrap;
+}
+.pf-permit-status[data-status="VALID"] {
+  background: #e5f4ec;
+  color: #17663f;
+}
+.pf-permit-status[data-status="EXPIRED"],
+.pf-permit-status[data-status="INVALID"] {
+  background: #fdecea;
+  color: #b42318;
+}

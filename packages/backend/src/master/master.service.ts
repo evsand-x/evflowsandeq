@@ -434,6 +434,33 @@ export class MasterService {
       ]);
       if (!category || !uom)
         throw new NotFoundException("Kategori atau satuan dasar tidak tersedia.");
+      // Izin edar opsional dapat ditambahkan dari form ubah; selalu PENDING sampai diverifikasi.
+      const evidence = nullable(input.permit_evidence_object_key);
+      const withPermit = !!(input.permit_number && input.permit_type && input.permit_holder);
+      if (
+        evidence &&
+        (!withPermit ||
+          !(await tx.transactionEvidence.findFirst({
+            where: { id: evidence, companyId, purpose: "PRODUCT_MASTER" },
+            select: { id: true },
+          })))
+      )
+        throw new ConflictException("BUKTI_IZIN_EDAR_TIDAK_VALID");
+      if (withPermit)
+        await tx.productRegistration.create({
+          data: {
+            companyId,
+            productId: id,
+            permitType: String(input.permit_type),
+            permitNumber: String(input.permit_number).trim(),
+            holder: String(input.permit_holder).trim(),
+            issuedOn: input.permit_issued_on ? new Date(String(input.permit_issued_on)) : null,
+            expiresOn: input.permit_expires_on ? new Date(String(input.permit_expires_on)) : null,
+            evidenceObjectKey: evidence,
+            status: "PENDING",
+            createdById: actorId,
+          },
+        });
       const updated = await tx.product.update({
         where: { id },
         data: {

@@ -310,6 +310,8 @@ export const updateProductSchema = productBaseSchema
   .extend({
     /** Kosongkan untuk mempertahankan kode; kode lama di luar pola tetap sah sampai diganti. */
     code: productCodeSchema.optional(),
+    /** Bukti izin edar baru yang ditambahkan dari form ubah (purpose PRODUCT_MASTER). */
+    permit_evidence_object_key: z.string().uuid().optional(),
     version: z.number().int().positive(),
   })
   .strict()

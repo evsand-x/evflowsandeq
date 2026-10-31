@@ -324,6 +324,25 @@ export class MasterController {
     };
   }
 
+  // Rute produk harus terdaftar sebelum PATCH generik master-data/:resource/:id; Nest memakai rute
+  // pertama yang cocok, sehingga urutan terbalik membuat simpan produk ditolak endpoint generik.
+  @Patch("master-data/products/:id")
+  @RequirePermissions("master_product.update")
+  async updateProduct(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = updateProductSchema.safeParse(body);
+    if (!input.success) throw new BadRequestException(input.error.flatten());
+    assertDiscountLimitEdit(req.auth, input.data);
+    return {
+      data: serialize(
+        await this.master.updateProduct(req.auth.company_id, req.auth.user_id, id, input.data),
+      ),
+    };
+  }
+
   @Patch("master-data/:resource/:id")
   @RequireResourcePermission("master", "update")
   async updateSimple(
@@ -409,23 +428,6 @@ export class MasterController {
   @RequirePermissions("master_product.read")
   async product(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return { data: serialize(await this.master.getProduct(req.auth.company_id, id)) };
-  }
-
-  @Patch("master-data/products/:id")
-  @RequirePermissions("master_product.update")
-  async updateProduct(
-    @Param("id") id: string,
-    @Body() body: unknown,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    const input = updateProductSchema.safeParse(body);
-    if (!input.success) throw new BadRequestException(input.error.flatten());
-    assertDiscountLimitEdit(req.auth, input.data);
-    return {
-      data: serialize(
-        await this.master.updateProduct(req.auth.company_id, req.auth.user_id, id, input.data),
-      ),
-    };
   }
 
   @Post("master-data/products/duplicate-check")
