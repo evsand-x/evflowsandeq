@@ -461,6 +461,39 @@ export class MasterService {
             createdById: actorId,
           },
         });
+      // Harga acuan per satuan dasar: nilai baru menutup harga berjalan dan berlaku mulai sekarang;
+      // riwayat tetap tersimpan. Nilai kosong tidak mengubah harga.
+      const now = new Date();
+      const currency = String(input.price_currency ?? "IDR");
+      for (const [kind, value] of [
+        ["PURCHASE", input.purchase_price],
+        ["SALE", input.sale_price],
+      ] as const) {
+        if (value == null || value === "") continue;
+        const price = new Prisma.Decimal(String(value));
+        const scope = { companyId, productId: id, uomId: baseUomId, kind, currency };
+        if (
+          await tx.productReferencePrice.count({ where: { ...scope, effectiveFrom: { gt: now } } })
+        )
+          throw new ConflictException("PRICE_POLICY_OVERLAP");
+        const running = await tx.productReferencePrice.findFirst({
+          where: {
+            ...scope,
+            effectiveFrom: { lte: now },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gt: now } }],
+          },
+          orderBy: { effectiveFrom: "desc" },
+        });
+        if (running?.unitPrice.eq(price)) continue;
+        if (running)
+          await tx.productReferencePrice.update({
+            where: { id: running.id },
+            data: { effectiveTo: now },
+          });
+        await tx.productReferencePrice.create({
+          data: { ...scope, unitPrice: price, effectiveFrom: now, createdById: actorId },
+        });
+      }
       const updated = await tx.product.update({
         where: { id },
         data: {

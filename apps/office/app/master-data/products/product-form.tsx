@@ -50,6 +50,22 @@ function useOptions(resource: "product-categories" | "uoms", permission: string)
   });
 }
 
+/** Harga acuan berjalan per satuan dasar (IDR) untuk diisi ulang di form ubah. */
+function runningPrice(product: Product | undefined, kind: "PURCHASE" | "SALE") {
+  if (!product) return undefined;
+  const now = Date.now();
+  return (product.reference_prices ?? [])
+    .filter(
+      (p) =>
+        p.kind === kind &&
+        p.uom.id === product.base_uom.id &&
+        p.currency === "IDR" &&
+        Date.parse(p.effective_from) <= now &&
+        (!p.effective_to || Date.parse(p.effective_to) > now),
+    )
+    .sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0];
+}
+
 function Hint({ children, error }: { children: ReactNode; error?: boolean }) {
   return (
     <span className={error ? "page-frame-field-error" : "page-frame-subtitle"}>{children}</span>
@@ -81,8 +97,8 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
     max_temp: text(profile.max_temp),
     humidity_limits: text(profile.humidity_limits),
     source_document: text(profile.source_document),
-    purchase_price: "",
-    sale_price: "",
+    purchase_price: formatDecimal(runningPrice(initial, "PURCHASE")?.unit_price) ?? "",
+    sale_price: formatDecimal(runningPrice(initial, "SALE")?.unit_price) ?? "",
     discount_limit: text(initial?.discount_limit),
   });
   const [flags, setFlags] = useState({
@@ -214,7 +230,17 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
             ...(buy ? { purchase_price: buy } : {}),
             ...(sell ? { sale_price: sell } : {}),
           }
-        : { ...permitResult.body, version: initial.version }),
+        : {
+            ...permitResult.body,
+            // Harga dikirim hanya bila berubah; backend menutup harga berjalan dan membuat versi baru.
+            ...(buy && buy !== runningPrice(initial, "PURCHASE")?.unit_price
+              ? { purchase_price: buy }
+              : {}),
+            ...(sell && sell !== runningPrice(initial, "SALE")?.unit_price
+              ? { sale_price: sell }
+              : {}),
+            version: initial.version,
+          }),
     };
     setBusy(true);
     setError("");
@@ -573,54 +599,50 @@ export function ProductForm({ initial }: { initial?: Product | undefined }) {
       </>
     );
 
+  const purchaseSince = runningPrice(initial, "PURCHASE"),
+    saleSince = runningPrice(initial, "SALE");
   const priceSection = (
     <div className="page-frame-fields pf-three">
-      {creating ? (
-        <>
-          <label>
-            Harga beli acuan
-            {money("purchase_price")}
-          </label>
-          <label>
-            Harga jual standar
-            {money("sale_price")}
-            <Hint error={!!errors.prices}>
-              {errors.prices || marginNote(values.purchase_price, values.sale_price)}
-            </Hint>
-          </label>
-        </>
-      ) : (
-        <div className="span-two">
+      <label>
+        Harga beli acuan
+        {money("purchase_price")}
+        {purchaseSince && <Hint>Berlaku sejak {date(purchaseSince.effective_from)}.</Hint>}
+      </label>
+      <label>
+        Harga jual standar
+        {money("sale_price")}
+        <Hint error={!!errors.prices}>
+          {errors.prices || marginNote(values.purchase_price, values.sale_price)}
+        </Hint>
+      </label>
+      <label>
+        Batas diskon produk
+        <span className="pf-affix" data-side="right">
+          <Input
+            inputMode="decimal"
+            placeholder="Tanpa batas"
+            value={values.discount_limit}
+            disabled={!canDiscountLimit}
+            aria-invalid={!!errors.discount_limit}
+            onChange={(e) => set("discount_limit", e.target.value)}
+          />
+          <span aria-hidden="true">%</span>
+        </span>
+        <Hint error={!!errors.discount_limit}>
+          {errors.discount_limit ||
+            (canDiscountLimit
+              ? "Plafon produk; batas efektif SO adalah yang terkecil dari peran, orang dan produk."
+              : "Hanya dapat diubah pemegang izin kelola batas diskon.")}
+        </Hint>
+      </label>
+      {!creating && (
+        <div className="span-full">
           <Hint>
-            {(initial.reference_prices ?? [])
-              .filter((p) => !p.effective_to)
-              .map(
-                (p) =>
-                  `${p.kind === "PURCHASE" ? "Harga beli acuan" : "Harga jual standar"} ${formatDecimal(p.unit_price, p.currency)} per ${p.uom.name} sejak ${date(p.effective_from)}`,
-              )
-              .join(" · ") || "Belum ada harga acuan"}
-            . Harga acuan bertanggal dikelola dari tab Harga di detail produk.
+            Harga baru berlaku mulai disimpan; harga lama tetap tercatat di tab Harga acuan pada
+            detail produk.
+            {saleSince ? ` Harga jual berjalan sejak ${date(saleSince.effective_from)}.` : ""}
           </Hint>
         </div>
-      )}
-      {canDiscountLimit && (
-        <label>
-          Batas diskon produk
-          <span className="pf-affix" data-side="right">
-            <Input
-              inputMode="decimal"
-              placeholder="Tanpa batas"
-              value={values.discount_limit}
-              aria-invalid={!!errors.discount_limit}
-              onChange={(e) => set("discount_limit", e.target.value)}
-            />
-            <span aria-hidden="true">%</span>
-          </span>
-          <Hint error={!!errors.discount_limit}>
-            {errors.discount_limit ||
-              "Plafon produk; batas efektif SO adalah yang terkecil dari peran, orang dan produk."}
-          </Hint>
-        </label>
       )}
     </div>
   );

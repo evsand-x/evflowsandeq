@@ -184,6 +184,8 @@ export function translateProblem(problem: { detail?: string; message?: string } 
     PRODUCT_UOM_INVALID:
       "Konversi satuan tidak boleh memakai satuan dasar atau satuan yang sama dua kali.",
     PRODUCT_UOM_EFFECTIVE_OVERLAP: "Satuan ini sudah punya konversi yang masih berlaku.",
+    PRICE_POLICY_OVERLAP:
+      "Sudah ada harga acuan terjadwal untuk produk ini. Ubah harga dari tab Harga acuan di detail produk.",
     BUKTI_IZIN_EDAR_TIDAK_VALID:
       "Bukti izin edar tidak valid. Isi nomor dan pemegang izin, lalu unggah ulang buktinya.",
     PRODUK_STORAGE_PROFILE_REQUIRED:

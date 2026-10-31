@@ -239,6 +239,43 @@ describe("product form backend", () => {
       expect(again.registrations).toHaveLength(1);
     }));
 
+  it("versions reference prices from the edit form", async () =>
+    inRollback(async (f) => {
+      const product = await service.createProduct(
+        f.c,
+        f.actor,
+        input(f, { purchase_price: "125000", sale_price: "150000" }),
+      );
+      const edit = (version: number, extra: Record<string, unknown>) =>
+        service.updateProduct(
+          f.c,
+          f.actor,
+          product.id,
+          updateProductSchema.parse({ ...input(f), version, ...extra }),
+        );
+      const changed = await edit(product.version, { sale_price: "160000" });
+      const sales = await prisma.productReferencePrice.findMany({
+        where: { productId: product.id, kind: "SALE" },
+        orderBy: { effectiveFrom: "asc" },
+      });
+      expect(sales.map((p) => [p.unitPrice.toString(), p.effectiveTo === null])).toEqual([
+        ["150000", false],
+        ["160000", true],
+      ]);
+      // Harga sama atau kosong tidak membuat versi baru; harga beli tidak tersentuh.
+      await edit(changed.version, { sale_price: "160000" });
+      expect(
+        await prisma.productReferencePrice.count({
+          where: { productId: product.id, kind: "SALE" },
+        }),
+      ).toBe(2);
+      expect(
+        await prisma.productReferencePrice.count({
+          where: { productId: product.id, kind: "PURCHASE" },
+        }),
+      ).toBe(1);
+    }));
+
   it("requires lot tracking before expiry can be required", () => {
     const base = {
       code: "X1",
