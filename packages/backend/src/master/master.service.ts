@@ -197,96 +197,142 @@ export class MasterService {
     const name = String(input.name).trim();
     const categoryId = String(input.category_id);
     const baseUomId = String(input.base_uom_id);
-    const code = await this.nextCode(companyId, entityTypes.product, actorId);
-    const product = await prisma.$transaction(async (tx) => {
-      const [category, uom] = await Promise.all([
-        tx.productCategory.findFirst({ where: { id: categoryId, companyId, state: "ACTIVE" } }),
-        tx.uom.findFirst({ where: { id: baseUomId, companyId, state: "ACTIVE" } }),
-      ]);
-      if (!category || !uom)
-        throw new NotFoundException("Kategori atau satuan dasar tidak tersedia.");
-      const created = await tx.product.create({
-        data: {
-          companyId,
-          code,
-          name,
-          normalizedName: normalize(name),
-          categoryId,
-          baseUomId,
-          batchRequired: Boolean(input.batch_required),
-          expiryRequired: Boolean(input.expiry_required),
-          serialRequired: Boolean(input.serial_required),
-          storageNotes: nullable(input.storage_notes),
-          storageProfile: jsonOrNull(input.storage_profile),
-          shelfLifeDays: input.shelf_life_days == null ? null : Number(input.shelf_life_days),
-          minimumStock:
-            input.minimum_stock == null ? null : new Prisma.Decimal(String(input.minimum_stock)),
-          ...(input.discount_limit !== undefined
-            ? { discountLimit: parseDiscountLimit(input.discount_limit as string | null) }
-            : {}),
-          createdById: actorId,
-          updatedById: actorId,
-          uoms: {
-            create: {
-              companyId,
-              uomId: baseUomId,
-              factorToBase: new Prisma.Decimal("1"),
-              createdById: actorId,
-            },
-          },
-          ...(input.permit_number && input.permit_type && input.permit_holder
-            ? {
-                registrations: {
-                  create: {
-                    companyId,
-                    permitType: String(input.permit_type),
-                    permitNumber: String(input.permit_number),
-                    holder: String(input.permit_holder),
-                    issuedOn: input.permit_issued_on
-                      ? new Date(String(input.permit_issued_on))
-                      : null,
-                    expiresOn: input.permit_expires_on
-                      ? new Date(String(input.permit_expires_on))
-                      : null,
-                    // Izin edar baru selalu menunggu verifikasi berwenang; status dari input diabaikan.
-                    status: "PENDING",
-                    createdById: actorId,
-                  },
+    // Kode produk diisi pengguna (unik per perusahaan); tidak lagi dari sequence.
+    const code = String(input.code).trim();
+    const conversions = (input.uoms ?? []) as { uom_id: string; factor_to_base: string }[];
+    const evidence = nullable(input.permit_evidence_object_key);
+    const withPermit = !!(input.permit_number && input.permit_type && input.permit_holder);
+    const product = await prisma
+      .$transaction(async (tx) => {
+        const [category, uom] = await Promise.all([
+          tx.productCategory.findFirst({ where: { id: categoryId, companyId, state: "ACTIVE" } }),
+          tx.uom.findFirst({ where: { id: baseUomId, companyId, state: "ACTIVE" } }),
+        ]);
+        if (!category || !uom)
+          throw new NotFoundException("Kategori atau satuan dasar tidak tersedia.");
+        if (await tx.product.findFirst({ where: { companyId, code }, select: { id: true } }))
+          throw new ConflictException("PRODUCT_CODE_TAKEN");
+        // Konversi: satuan aktif, bukan satuan dasar, tidak ganda, faktor > 0.
+        const conversionUomIds = conversions.map((c) => c.uom_id);
+        if (
+          conversionUomIds.includes(baseUomId) ||
+          new Set(conversionUomIds).size !== conversionUomIds.length
+        )
+          throw new ConflictException("PRODUCT_UOM_INVALID");
+        if (
+          conversionUomIds.length &&
+          (await tx.uom.count({
+            where: { companyId, state: "ACTIVE", id: { in: conversionUomIds } },
+          })) !== conversionUomIds.length
+        )
+          throw new NotFoundException("Satuan konversi tidak tersedia.");
+        if (conversions.some((c) => new Prisma.Decimal(c.factor_to_base).lte(0)))
+          throw new ConflictException("Faktor konversi harus lebih besar dari nol.");
+        // Bukti harus berkas privat milik perusahaan yang sama dengan purpose master produk.
+        if (
+          evidence &&
+          (!withPermit ||
+            !(await tx.transactionEvidence.findFirst({
+              where: { id: evidence, companyId, purpose: "PRODUCT_MASTER" },
+              select: { id: true },
+            })))
+        )
+          throw new ConflictException("BUKTI_IZIN_EDAR_TIDAK_VALID");
+        const created = await tx.product.create({
+          data: {
+            companyId,
+            code,
+            name,
+            normalizedName: normalize(name),
+            categoryId,
+            baseUomId,
+            batchRequired: Boolean(input.batch_required),
+            expiryRequired: Boolean(input.expiry_required),
+            serialRequired: Boolean(input.serial_required),
+            storageNotes: nullable(input.storage_notes),
+            storageProfile: jsonOrNull(input.storage_profile),
+            shelfLifeDays: input.shelf_life_days == null ? null : Number(input.shelf_life_days),
+            minimumStock:
+              input.minimum_stock == null ? null : new Prisma.Decimal(String(input.minimum_stock)),
+            ...(input.discount_limit !== undefined
+              ? { discountLimit: parseDiscountLimit(input.discount_limit as string | null) }
+              : {}),
+            createdById: actorId,
+            updatedById: actorId,
+            uoms: {
+              create: [
+                {
+                  companyId,
+                  uomId: baseUomId,
+                  factorToBase: new Prisma.Decimal("1"),
+                  createdById: actorId,
                 },
-              }
-            : {}),
-          referencePrices: {
-            createMany: {
-              data: ["PURCHASE", "SALE"].flatMap((kind) => {
-                const value = kind === "PURCHASE" ? input.purchase_price : input.sale_price;
-                if (!value) return [];
-                return [
-                  {
-                    companyId,
-                    uomId: baseUomId,
-                    kind: kind as "PURCHASE" | "SALE",
-                    currency: String(input.price_currency ?? "IDR"),
-                    unitPrice: new Prisma.Decimal(String(value)),
-                    effectiveFrom: new Date(),
-                    createdById: actorId,
+                ...conversions.map((c) => ({
+                  companyId,
+                  uomId: c.uom_id,
+                  factorToBase: new Prisma.Decimal(c.factor_to_base),
+                  createdById: actorId,
+                })),
+              ],
+            },
+            ...(withPermit
+              ? {
+                  registrations: {
+                    create: {
+                      companyId,
+                      permitType: String(input.permit_type),
+                      permitNumber: String(input.permit_number),
+                      holder: String(input.permit_holder),
+                      issuedOn: input.permit_issued_on
+                        ? new Date(String(input.permit_issued_on))
+                        : null,
+                      expiresOn: input.permit_expires_on
+                        ? new Date(String(input.permit_expires_on))
+                        : null,
+                      evidenceObjectKey: evidence,
+                      // Izin edar baru selalu menunggu verifikasi berwenang; status dari input diabaikan.
+                      status: "PENDING",
+                      createdById: actorId,
+                    },
                   },
-                ];
-              }),
+                }
+              : {}),
+            referencePrices: {
+              createMany: {
+                data: ["PURCHASE", "SALE"].flatMap((kind) => {
+                  const value = kind === "PURCHASE" ? input.purchase_price : input.sale_price;
+                  if (!value) return [];
+                  return [
+                    {
+                      companyId,
+                      uomId: baseUomId,
+                      kind: kind as "PURCHASE" | "SALE",
+                      currency: String(input.price_currency ?? "IDR"),
+                      unitPrice: new Prisma.Decimal(String(value)),
+                      effectiveFrom: new Date(),
+                      createdById: actorId,
+                    },
+                  ];
+                }),
+              },
             },
           },
-        },
-        include: { category: true, baseUom: true, registrations: true, referencePrices: true },
+          include: { category: true, baseUom: true, registrations: true, referencePrices: true },
+        });
+        await this.audit.recordWith(tx, {
+          companyId,
+          actorId,
+          action: "master.product.created",
+          resourceType: "product",
+          resourceId: created.id,
+          after: { code, name, state: created.state },
+        });
+        return created;
+      })
+      .catch((error: unknown) => {
+        if (isUniqueViolation(error)) throw new ConflictException("PRODUCT_CODE_TAKEN");
+        throw error;
       });
-      await this.audit.recordWith(tx, {
-        companyId,
-        actorId,
-        action: "master.product.created",
-        resourceType: "product",
-        resourceId: created.id,
-        after: { code, name, state: created.state },
-      });
-      return created;
-    });
     return product;
   }
 
@@ -343,14 +389,30 @@ export class MasterService {
     return prisma.$transaction(async (tx) => {
       const current = await tx.product.findFirst({ where: { id, companyId, version } });
       if (!current) throw new PreconditionFailedException("Produk berubah atau tidak ditemukan.");
-      // Satuan dasar menjadi dasar qty transaksi; hanya boleh diganti saat draf dan belum dipakai.
-      if (baseUomId !== current.baseUomId) {
+      const code = input.code == null ? current.code : String(input.code).trim();
+      const used = async () => {
         const [lots, orders, purchases] = await Promise.all([
           tx.stockLot.count({ where: { companyId, productId: id } }),
           tx.salesOrderLine.count({ where: { companyId, productId: id } }),
           tx.purchaseOrderLine.count({ where: { productId: id, purchaseOrder: { companyId } } }),
         ]);
-        if (current.state !== "DRAFT" || lots + orders + purchases > 0)
+        return lots + orders + purchases > 0;
+      };
+      // Kode tercetak di dokumen; hanya boleh diganti saat draf dan belum dipakai transaksi.
+      if (code !== current.code) {
+        if (current.state !== "DRAFT" || (await used()))
+          throw new ConflictException("PRODUCT_CODE_LOCKED");
+        if (
+          await tx.product.findFirst({
+            where: { companyId, code, id: { not: id } },
+            select: { id: true },
+          })
+        )
+          throw new ConflictException("PRODUCT_CODE_TAKEN");
+      }
+      // Satuan dasar menjadi dasar qty transaksi; hanya boleh diganti saat draf dan belum dipakai.
+      if (baseUomId !== current.baseUomId) {
+        if (current.state !== "DRAFT" || (await used()))
           throw new ConflictException("PRODUCT_BASE_UOM_LOCKED");
         await tx.productUom.updateMany({
           where: { productId: id, uomId: { in: [current.baseUomId, baseUomId] }, active: true },
@@ -375,6 +437,7 @@ export class MasterService {
       const updated = await tx.product.update({
         where: { id },
         data: {
+          code,
           name,
           normalizedName: normalize(name),
           categoryId,
@@ -1094,12 +1157,9 @@ export class MasterService {
         const current = await tx.product.findFirst({ where, include: { registrations: true } });
         if (!current)
           throw new PreconditionFailedException("Data sudah berubah atau tidak ditemukan.");
+        // Izin edar opsional (keputusan 31 Okt 2026): aktivasi hanya menuntut profil
+        // penyimpanan dan masa simpan bila kedaluwarsa dilacak.
         if (state === "ACTIVE") {
-          const validRegistration = current.registrations.some(
-            (item) => item.status === "VALID" && (!item.expiresOn || item.expiresOn >= new Date()),
-          );
-          if (!validRegistration)
-            throw new ConflictException("Produk belum memiliki izin edar yang valid.");
           const storage = current.storageProfile;
           if (
             !current.storageNotes?.trim() ||

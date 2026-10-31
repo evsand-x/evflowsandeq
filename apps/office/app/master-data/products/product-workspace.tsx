@@ -58,6 +58,7 @@ export type Product = {
   storage_notes?: string | null;
   storage_profile?: Record<string, unknown> | null;
   shelf_life_days?: number | null;
+  minimum_stock?: string | null;
   uoms?: {
     id: string;
     uom: Ref;
@@ -130,11 +131,9 @@ const references: Record<string, ReferenceConfig> = {
 };
 
 // Kesiapan aktivasi ditampilkan sebagai bantuan; backend tetap memutuskan saat Aktifkan.
+// Izin edar opsional sejak 31 Okt 2026, jadi tidak lagi menjadi syarat aktivasi.
 export function activationGaps(row: Product) {
   const gaps: string[] = [];
-  const now = new Date();
-  if (!row.registrations.some((r) => r.status === "VALID" && (!r.expires_on || new Date(r.expires_on) >= now)))
-    gaps.push("Izin edar valid belum tersedia.");
   if (!row.storage_notes?.trim() || !row.storage_profile) gaps.push("Profil penyimpanan belum lengkap.");
   if (row.expiry_required && !row.shelf_life_days) gaps.push("Masa simpan wajib untuk produk dengan expiry.");
   return gaps;
@@ -184,7 +183,12 @@ export function ProductWorkspace({ path }: { path: string[] }) {
           { label: row ? "Ubah" : "Baru" },
         ]}
         title={row ? `Ubah ${row.name}` : "Produk baru"}
-        subtitle={row ? row.code : "Kode dibuat otomatis. Izin edar, konversi satuan dan harga acuan ditambahkan dari detail produk."}
+        status={<RecordBadge state={row?.state ?? "DRAFT"} />}
+        subtitle={
+          row
+            ? row.code
+            : "Produk tersimpan sebagai Draft dan baru bisa dipakai di SO, saldo awal dan SJ setelah diaktifkan."
+        }
       >
         {allowed ? (
           <ProductForm key={row?.id ?? "new"} initial={row} />

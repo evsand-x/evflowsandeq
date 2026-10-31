@@ -328,9 +328,15 @@
   gap: 20px 24px;
   align-items: start;
 }
-.page-frame-form-nav {
+.page-frame-form-side {
   position: sticky;
   top: calc(var(--ev-topbar-height, 0px) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.page-frame-form-nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -448,8 +454,10 @@
   .page-frame-form.web-form {
     grid-template-columns: minmax(0, 1fr);
   }
-  .page-frame-form-nav {
+  .page-frame-form-side {
     position: static;
+  }
+  .page-frame-form-nav {
     flex-direction: row;
     overflow-x: auto;
   }

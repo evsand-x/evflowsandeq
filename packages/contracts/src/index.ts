@@ -247,8 +247,18 @@ export const discountLimitSchema = z
 
 export const discountLimitUpdateSchema = z.object({ discount_limit: discountLimitSchema }).strict();
 
-export const createProductSchema = z
+/** Kode produk diisi pengguna: unik per perusahaan, huruf besar, angka atau . _ / - (maks. 50). */
+export const productCodeSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^[A-Z0-9][A-Z0-9._/-]{0,49}$/,
+    "Kode produk: huruf besar, angka, atau . _ / - (maks. 50).",
+  );
+
+const productBaseSchema = z
   .object({
+    code: productCodeSchema,
     name: z.string().trim().min(2).max(200),
     category_id: z.string().uuid(),
     base_uom_id: z.string().uuid(),
@@ -275,11 +285,35 @@ export const createProductSchema = z
   })
   .strict();
 
-export const updateProductSchema = createProductSchema
+// Kedaluwarsa dilacak per lot, jadi tanggal kedaluwarsa hanya boleh wajib bila lot/batch dilacak.
+const expiryNeedsBatch = (value: { batch_required?: boolean; expiry_required?: boolean }) =>
+  !value.expiry_required || value.batch_required !== false;
+const expiryNeedsBatchIssue = {
+  message: "Tanggal kedaluwarsa hanya dapat diwajibkan bila lot/batch dilacak.",
+  path: ["expiry_required"],
+};
+
+export const createProductSchema = productBaseSchema
   .extend({
+    /** Konversi satuan selain satuan dasar: 1 satuan = factor_to_base satuan dasar. */
+    uoms: z
+      .array(z.object({ uom_id: z.string().uuid(), factor_to_base: decimalStringSchema }).strict())
+      .max(20)
+      .optional(),
+    /** Bukti izin edar (TransactionEvidence purpose PRODUCT_MASTER); hanya dipakai bila izin diisi. */
+    permit_evidence_object_key: z.string().uuid().optional(),
+  })
+  .strict()
+  .refine(expiryNeedsBatch, expiryNeedsBatchIssue);
+
+export const updateProductSchema = productBaseSchema
+  .extend({
+    /** Kosongkan untuk mempertahankan kode; kode lama di luar pola tetap sah sampai diganti. */
+    code: productCodeSchema.optional(),
     version: z.number().int().positive(),
   })
-  .strict();
+  .strict()
+  .refine(expiryNeedsBatch, expiryNeedsBatchIssue);
 
 export const createProductRegistrationSchema = z
   .object({

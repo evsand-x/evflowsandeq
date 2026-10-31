@@ -397,6 +397,7 @@ export function FormFrame({
   dirty,
   submitLabel = "Simpan",
   aside,
+  navAside,
   extraActions,
   footerNote,
 }: {
@@ -407,6 +408,8 @@ export function FormFrame({
   dirty: boolean;
   submitLabel?: string;
   aside?: ReactNode;
+  /** Panel di bawah navigasi bagian (mis. kesiapan aktivasi); ikut menempel saat menggulir. */
+  navAside?: ReactNode;
   extraActions?: ReactNode;
   footerNote?: ReactNode;
 }) {
@@ -442,18 +445,21 @@ export function FormFrame({
         onSubmit();
       }}
     >
-      <nav className="page-frame-form-nav" aria-label="Bagian formulir">
-        {sections.map((section) => (
-          <a
-            key={section.id}
-            href={`#${section.id}`}
-            aria-current={active === section.id ? "true" : undefined}
-            onClick={() => setActive(section.id)}
-          >
-            {section.title}
-          </a>
-        ))}
-      </nav>
+      <div className="page-frame-form-side">
+        <nav className="page-frame-form-nav" aria-label="Bagian formulir">
+          {sections.map((section) => (
+            <a
+              key={section.id}
+              href={`#${section.id}`}
+              aria-current={active === section.id ? "true" : undefined}
+              onClick={() => setActive(section.id)}
+            >
+              {section.title}
+            </a>
+          ))}
+        </nav>
+        {navAside}
+      </div>
       <div className="page-frame-form-body">
         {sections.map((section) => (
           <section

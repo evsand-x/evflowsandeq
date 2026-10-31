@@ -175,5 +175,22 @@ export function translateProblem(problem: { detail?: string; message?: string } 
     TAX_ACCOUNT_INVALID: "Akun pajak harus akun rincian yang aktif.",
   };
   if (taxMessages[detail]) return { message: taxMessages[detail] };
+  const productMessages: Record<string, string> = {
+    PRODUCT_CODE_TAKEN: "Kode produk sudah dipakai produk lain. Gunakan kode lain.",
+    PRODUCT_CODE_LOCKED:
+      "Kode produk tidak dapat diganti karena produk sudah aktif atau dipakai transaksi.",
+    PRODUCT_BASE_UOM_LOCKED:
+      "Satuan dasar tidak dapat diganti karena produk sudah aktif atau dipakai transaksi.",
+    PRODUCT_UOM_INVALID:
+      "Konversi satuan tidak boleh memakai satuan dasar atau satuan yang sama dua kali.",
+    PRODUCT_UOM_EFFECTIVE_OVERLAP: "Satuan ini sudah punya konversi yang masih berlaku.",
+    BUKTI_IZIN_EDAR_TIDAK_VALID:
+      "Bukti izin edar tidak valid. Isi nomor dan pemegang izin, lalu unggah ulang buktinya.",
+    PRODUK_STORAGE_PROFILE_REQUIRED:
+      "Lengkapi profil penyimpanan (suhu dan catatan penyimpanan) sebelum mengaktifkan produk.",
+    PRODUK_SHELF_LIFE_REQUIRED:
+      "Isi masa simpan sebelum mengaktifkan produk yang wajib mencatat tanggal kedaluwarsa.",
+  };
+  if (productMessages[detail]) return { message: productMessages[detail] };
   return { message: detail };
 }
