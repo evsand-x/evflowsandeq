@@ -501,18 +501,21 @@ function CustomerStatusActions({ row }: { row: Customer }) {
   }
   if (row.state === "ARCHIVED") return null;
   const labels = {
-    activate: { title: "Aktifkan kembali", done: "Pelanggan diaktifkan" },
+    activate: {
+      title: row.state === "INACTIVE" ? "Aktifkan kembali" : "Aktifkan",
+      done: "Pelanggan diaktifkan",
+    },
     deactivate: { title: "Nonaktifkan", done: "Pelanggan dinonaktifkan" },
     archive: { title: "Arsipkan", done: "Pelanggan diarsipkan" },
   };
   return (
     <>
-      {can("master_customer.activate") && row.state === "INACTIVE" && (
+      {can("master_customer.activate") && row.state !== "ACTIVE" && (
         <Button variant="outline" onClick={() => setAction("activate")}>
           Aktifkan kembali
         </Button>
       )}
-      {can("master_customer.update") && row.state !== "INACTIVE" && (
+      {can("master_customer.update") && row.state === "ACTIVE" && (
         <Button variant="outline" onClick={() => setAction("deactivate")}>
           Nonaktifkan
         </Button>
