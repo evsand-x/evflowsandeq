@@ -90,7 +90,7 @@ export default function TaxSettingPage() {
   const pages = Math.max(1, Math.ceil((list.data?.total ?? 0) / 20));
   return (
     <SettingFrame
-      title="Pajak"
+      title="Daftar Tarif Pajak"
       subtitle="Daftar pajak dan pajak bawaan. Setiap invoice penjualan memakai PPN bawaan; perubahan hanya berlaku untuk dokumen baru."
       permission="tax_setting.read"
       actions={

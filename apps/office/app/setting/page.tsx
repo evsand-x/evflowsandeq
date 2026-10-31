@@ -59,7 +59,7 @@ export default function SettingHubPage() {
           allowed: can("terms_credit.read"),
         },
         {
-          label: "Pajak",
+          label: "Daftar Tarif Pajak",
           description: "Daftar pajak, PPN penjualan bawaan dan pajak pembelian bawaan.",
           href: "/setting/tax",
           allowed: can("tax_setting.read"),
